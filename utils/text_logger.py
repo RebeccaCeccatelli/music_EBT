@@ -68,7 +68,7 @@ class JsonlLogger(logging.Logger):
         self.log_filename = os.path.join(base_log_dir, log_filename)
         os.makedirs(base_log_dir, exist_ok=True)  # Ensure the base log directory exists
         
-        # Open the file in append mode to ensure no data is overwritten
+        # Open the file in write mode to ensure all existing data is overwritten
         self.file = open(self.log_filename, 'w', encoding='utf-8') #NOTE can set to append mode if preferred instead of overwriting
 
     def log_data(self, data):
