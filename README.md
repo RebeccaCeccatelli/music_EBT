@@ -18,11 +18,23 @@ conda activate ebt
 pip install -r requirements.txt
 ```
 
-You may want to set the $HF_HOME env variable so that your data/models cache to a desired directory and posssibly the $HF_TOKEN env variable
+<details>
+<summary>Help! I'm having issues installing the requirements</summary>
+
+If there are issues with PyTorch or any other packages you may also use the `gh200_requirements.txt` or `loose_requirements.txt` for requirements for GH200s and without nvidia, pytorch, and triton packages respectively. You can also create a conda environment using the `environment.yml`.
+
+</details>
+
+
+You may want to set the $HF_HOME env variable so that your data/models cache to a desired directory and posssibly the $HF_TOKEN env variable for authenticating with HF:
+
+```
+export HF_HOME=/path/to/cache                                                              
+export HF_TOKEN=your_token_here
+```
 
 [Login](https://docs.wandb.ai/ref/cli/wandb-login) to wandb using `wandb login` inside of that environment.
 
-If there are issues with PyTorch or any other packages you may also use the `gh200_requirements.txt` or `loose_requirements.txt` for requirements for GH200s and without nvidia, pytorch, and triton packages respectively. You can also create a conda environment using the `environment.yml`
 
 For the video dataset setup please see the README at [/data/vid/](/data/vid/README.md) for dataset installation and FFPROBE installation; similarly for video inference setup please see the README at [/inference/vid/](/inference/vid/README.md).
 
