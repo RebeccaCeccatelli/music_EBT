@@ -1,8 +1,5 @@
 ### ADDITIONAL RUN INFO ###
 #SBATCH --array=0
-#SBATCH --time=48:00:00
-#SBATCH --nodes=1
-#SBATCH --gpus-per-node=4
 
 ### LOG INFO ###
 #SBATCH --job-name=ebt-xxs-bs_256_s1_lr_
