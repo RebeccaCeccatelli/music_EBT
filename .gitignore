@@ -129,7 +129,7 @@ dmypy.json
 .pyre/
 
 
-logs/**
+logs/
 lightnings_logs/*
 pretrained_models/*
 core.*
