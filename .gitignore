@@ -129,7 +129,6 @@ dmypy.json
 .pyre/
 
 
-logs/**
 lightnings_logs/*
 pretrained_models/*
 core.*
@@ -156,3 +155,7 @@ work.sh
 **/.nfs000*
 inference_results/**
 logs
+
+# --- Project Specific Dependencies ---
+# Ignore the forked anticipation library (handled by setup_env.sh)
+data/mus/symbolic/tokenization/anticipation/
