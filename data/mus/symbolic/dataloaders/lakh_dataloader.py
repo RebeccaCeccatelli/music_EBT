@@ -47,7 +47,7 @@ class LakhDataset:
         # Create the tokens folder now so it's ready for the Master Script
         get_subset_path(self.dataset_name, "tokens")
         
-        print(f"✨ Lakh Dataset successfully moved to {self.midi_path}")
+        print(f"✨ Lakh Dataset successfully downloaded to {self.midi_path}")
 
     def get_stats(self):
         """Verify the download."""

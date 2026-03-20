@@ -8,7 +8,7 @@ DEFAULT_LOCAL_DATA = REPO_ROOT / "datasets"
 
 def get_data_root() -> Path:
     """Determine the 'Mother' directory based on Environment Variables."""
-    remote_mother_dir = os.getenv("MUSIC_DATA_ROOT")
+    remote_mother_dir = os.getenv("REMOTE_DATA_STORAGE")
     
     if remote_mother_dir:
         path = Path(remote_mother_dir)
