@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from miditok import REMI, TokenizerConfig
 from path_utils import get_dataset_path
-from tokenization.constants import DatasetType
+from dataloaders.constants import DatasetType
 
 class MidiTokTokenizer:
     def __init__(self, dataset_name: str, encoding="REMI"):
