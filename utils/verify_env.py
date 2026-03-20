@@ -1,38 +1,38 @@
-"""
-Diagnostic utility to verify the Music_EBT environment.
-Checks for GPU availability, library versions, and data paths.
-Usage: python utils/verify_env.py
-"""
-
 import sys
 import torch
-import anticipation
-from transformers import AutoTokenizer
+import os
 
 def run_diagnostics():
-    print("--- 🛠️ Music_EBT Environment Diagnostics ---")
+    print("--- 🛠️ Music_EBT Final Environment Check ---")
     
-    # 1. Check Package Path
-    print(f"📍 Anticipation Path: {anticipation.__file__}")
+    # Debugging the physical path
+    repo_path = os.path.join(os.getcwd(), "data/mus/symbolic/tokenization/anticipation")
+    print(f"📂 Checking folder: {repo_path}")
     
-    # 2. Check GPU (Crucial for Cluster Users)
-    cuda_available = torch.cuda.is_available()
-    print(f"🎮 GPU Available: {'✅ Yes' if cuda_available else '❌ No (CPU Mode)'}")
-    if cuda_available:
-        print(f"   - Device: {torch.cuda.get_device_name(0)}")
+    if os.path.exists(repo_path):
+        print(f"📄 Folder contents: {os.listdir(repo_path)}")
+    else:
+        print("❌ ERROR: The anticipation folder does not exist!")
 
-    # 3. Check Transformer Logic
     try:
-        tokenizer = AutoTokenizer.from_pretrained('gpt2')
-        print("✅ Transformers/Tokenizers: Functional")
-    except Exception as e:
-        print(f"❌ Transformers Error: {e}")
+        # Based on your discovery: tokenization -> anticipation (submodule) -> anticipation (package)
+        from tokenization.anticipation.anticipation import config
+        import tokenization.anticipation.anticipation as anticipation
+        
+        print(f"✅ Import Success!")
+        print(f"📍 Package Location: {anticipation.__file__}")
+        print(f"🎼 MIDI Resolution: {config.TIME_RESOLUTION} bins/sec")
+        
+    except ImportError as e:
+        print(f"❌ Import Failed: {e}")
+        print(f"🔍 Current sys.path: {sys.path[-3:]}")
+        sys.exit(1)
 
-    # 4. Check Config
-    from anticipation import config
-    print(f"🎼 MIDI Resolution: {config.TIME_RESOLUTION} bins/sec")
+    # Check for GPU
+    cuda = torch.cuda.is_available()
+    print(f"🎮 GPU Available: {'✅ Yes' if cuda else '❌ No (Standard for Login Node)'}")
     
-    print("\nEnvironment is VALIDATED for research.")
+    print("\n🚀 Environment is officially READY.")
 
 if __name__ == "__main__":
     run_diagnostics()
