@@ -156,7 +156,3 @@ work.sh
 inference_results/**
 logs
 data/mus/symbolic/datasets/**
-
-# --- Project Specific Dependencies ---
-# Ignore the forked anticipation library (handled by setup_env.sh)
-data/mus/symbolic/tokenization/anticipation/
