@@ -2,7 +2,7 @@ import kagglehub
 import shutil
 import os
 from pathlib import Path
-from tokenization.constants import get_dataset_path, get_subset_path
+from path_utils import get_dataset_path, get_subset_path
 
 class LakhDataset:
     def __init__(self):
