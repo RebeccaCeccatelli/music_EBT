@@ -1,87 +1,57 @@
 import os
 from argparse import Namespace
+from tokenization.constants import DatasetType, get_subset_path
 
-from constants import DatasetType, get_dataset_path
-
-# Import the main logic from existing scripts
-from anticipation.train.midi_preprocess import main as preprocess_main
-from anticipation.finetune.tokenize_custom import main as custom_main
-from anticipation.train.tokenize_lakh import main as lakh_main
+# Import the main logic from your sub-modules
+from tokenization.anticipation.train.midi_preprocess import main as preprocess_main
+from tokenization.anticipation.finetune.tokenize_custom import main as custom_main
+from tokenization.anticipation.train.tokenize_lakh import main as lakh_main
 
 class AnticipationTokenizer:
-    def __init__(self, dataset_name: DatasetType, datadir: str, augment: int = 1, interarrival: bool = False):
-        """
-        Args:
-            dataset_name: DatasetType enum instance (e.g., DatasetType.CUSTOM)
-            datadir: Path to the specific dataset folder
-            augment: -k factor (default 1)
-            interarrival: Use -i encoding (default False)
-        """
-        # Ensure we are working with the Enum type
-        self.dataset_name = DatasetType(dataset_name)
-        self.datadir = datadir
+    def __init__(self, dataset_name: str, dataset_type: DatasetType, augment: int = 1, interarrival: bool = False):
+        self.dataset_name = dataset_name
+        self.dataset_type = DatasetType(dataset_type)
+        
+        # Resolve clean subfolders
+        self.midi_dir = get_subset_path(self.dataset_name, "midi")
+        self.token_dir = get_subset_path(self.dataset_name, "tokens")
+        
         self.augment = augment
         self.interarrival = interarrival
 
     def preprocess(self, add_drum: bool = False):
-        print(f"\n--- [1/2] Preprocessing MIDI files in: {self.datadir} ---")
-        
-        preproc_args = Namespace(
-            dir=self.datadir,
-            add_drum=add_drum
-        )
+        print(f"\n--- [1/2] Preprocessing MIDI files in: {self.midi_dir} ---")
+        preproc_args = Namespace(dir=self.midi_dir, add_drum=add_drum)
         preprocess_main(preproc_args)
 
     def tokenize(self):
-        print(f"\n--- [2/2] Tokenizing into Anticipation format ---")
+        print(f"\n--- [2/2] Tokenizing results into: {self.token_dir} ---")
         
-        if self.dataset_name == DatasetType.LAKH:
-            # Lakh expects a specific folder structure (train/val/test)
-            # and relies on anticipation.config for split names.
-            lakh_args = Namespace(
-                datadir=self.datadir,
-                augment=self.augment,
-                interarrival=self.interarrival
-            )
-            print(f"Calling Lakh Tokenizer logic on {self.datadir}...")
-            lakh_main(lakh_args)
+        token_args = Namespace(
+            midi_dir=self.midi_dir,    # Input for worker
+            token_dir=self.token_dir,  # Output for worker
+            dataset_name=self.dataset_name,
+            augment=self.augment,
+            interarrival=self.interarrival
+        )
+
+        if self.dataset_type == DatasetType.LAKH:
+            lakh_main(token_args)
         else:
-            # Default to custom tokenization logic
-            token_args = Namespace(
-                datadir=self.datadir,
-                augment=self.augment,
-                interarrival=self.interarrival
-            )
             custom_main(token_args)
 
     def run_full_pipeline(self, add_drum: bool = False):
-        """Runs Preprocessing followed by Tokenization."""
-        # .upper() works because DatasetType inherits from str
         print(f"=== Starting Full Pipeline for {self.dataset_name.upper()} ===")
-        
-        # Step 1: Preprocess (MIDI -> Compound TXT)
         self.preprocess(add_drum=add_drum)
-        
-        # Step 2: Tokenize (Compound TXT -> Anticipation Tokens)
         self.tokenize()
-        
-        print("=== Pipeline Finished Successfully ===")
+        print(f"=== Finished. Data is in: {self.token_dir} ===")
 
 if __name__ == "__main__":
-    # 1. Define your dataset name as a string (or use the Enum directly)
-    MY_DATASET_NAME = "jordan-progrock-dataset"
-    
-    # 2. Use your new path helper
-    PATH = get_dataset_path(MY_DATASET_NAME)
-    
-    print(f"Targeting Absolute Path: {PATH}")
-    
-    # 3. Instantiate using the Enum
+    # Example usage for your Jordan dataset
     master = AnticipationTokenizer(
-        dataset_name=DatasetType.CUSTOM, 
-        datadir=PATH, 
+        dataset_name="jordan-progrock-dataset", 
+        dataset_type=DatasetType.CUSTOM, 
         augment=10, 
         interarrival=False
     )
-    
     master.run_full_pipeline(add_drum=True)
