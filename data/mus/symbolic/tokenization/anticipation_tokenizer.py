@@ -2,7 +2,8 @@ import sys
 import os
 from argparse import Namespace
 from pathlib import Path
-from tokenization.constants import DatasetType, get_subset_path, get_dataset_path
+from path_utils import get_dataset_path, get_subset_path
+from tokenization.constants import DatasetType
 
 # Import the main logic from your sub-modules
 from tokenization.anticipation.train.midi_preprocess import main as preprocess_main
