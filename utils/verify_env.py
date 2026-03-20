@@ -32,7 +32,7 @@ def run_diagnostics():
     cuda = torch.cuda.is_available()
     print(f"🎮 GPU Available: {'✅ Yes' if cuda else '❌ No (Standard for Login Node)'}")
     
-    print("\n🚀 Environment is officially READY.")
+    print("\n🚀 Environment is officially VALIDATED.")
 
 if __name__ == "__main__":
     run_diagnostics()
