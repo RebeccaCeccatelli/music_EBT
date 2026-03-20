@@ -1,6 +1,6 @@
 import os
 from argparse import Namespace
-from tokenization.constants import DatasetType, get_subset_path
+from tokenization.constants import DatasetType, get_subset_path, get_dataset_path
 
 # Import the main logic from your sub-modules
 from tokenization.anticipation.train.midi_preprocess import main as preprocess_main
@@ -14,7 +14,10 @@ class AnticipationTokenizer:
         
         # Resolve clean subfolders
         self.midi_dir = get_subset_path(self.dataset_name, "midi")
-        self.token_dir = get_subset_path(self.dataset_name, "tokens")
+        self.token_dir = os.path.join(get_dataset_path(self.dataset_name), "tokens", "anticipation")
+
+        # Ensure the directory exists before any workers try to write to it
+        os.makedirs(self.token_dir, exist_ok=True)
         
         self.augment = augment
         self.interarrival = interarrival
