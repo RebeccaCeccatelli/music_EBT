@@ -101,6 +101,7 @@ yarl==1.11.1
 zipp==3.21.0
 
 miditok>=3.0.0
+kagglehub>=0.2.0
 
 # --- External Dependencies ---
 -e git+https://github.com/RebeccaCeccatelli/anticipation-musicEBT.git#egg=anticipation
