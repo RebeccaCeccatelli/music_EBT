@@ -5,7 +5,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
-#SBATCH --time=08:00:00              # Increased to allow for LAKH scale + Download
+#SBATCH --time=06:00:00            
 #SBATCH --output=lakh_full_pipe_%j.out
 
 # ==============================================================================
