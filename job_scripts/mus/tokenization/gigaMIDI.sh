@@ -9,8 +9,21 @@
 # ==============================================================================
 # USER CONFIGURATION
 # ------------------------------------------------------------------------------
-# Set your Hugging Face Token here (Required for GigaMIDI)
-export HUGGING_FACE_HUB_TOKEN="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"
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+    
+    # Check if the variable is now set
+    if [ -z "$HUGGING_FACE_HUB_TOKEN" ]; then
+        echo "❌ Error: .env file found, but HUGGING_FACE_HUB_TOKEN is empty."
+        exit 1
+    else
+        # Print only the first 4 characters to confirm it loaded the right thing safely
+        echo "✅ Token loaded successfully (Starts with: ${HUGGING_FACE_HUB_TOKEN:0:4}...)"
+    fi
+else
+    echo "❌ Error: .env file not found. Please create it with your token."
+    exit 1
+fi
 
 # Path where your datasets are stored
 CUSTOM_STORAGE_PATH="/orcd/home/002/rebcecca/orcd/pool/music_datasets"

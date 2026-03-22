@@ -156,3 +156,4 @@ work.sh
 inference_results/**
 logs
 data/mus/symbolic/datasets/**
+echo ".env" >> .gitignore
