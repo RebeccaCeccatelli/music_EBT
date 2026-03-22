@@ -46,9 +46,11 @@ class AnticipationTokenizer:
         )
 
         # Lakh uses a specific hash-based splitting logic, Custom uses a simpler folder-based one
-        if self.dataset_type == DatasetType.LAKH:
+        if self.dataset_type in [DatasetType.LAKH, DatasetType.GIGA_MIDI]:
+            print(f"Using hash-based splitting logic for {self.dataset_type.value}")
             lakh_main(token_args)
         elif self.dataset_type == DatasetType.CUSTOM:
+            print(f"Using simple folder-based logic for {self.dataset_type.value}")
             custom_main(token_args)
 
     def run_full_pipeline(self, add_drum: bool = False):
