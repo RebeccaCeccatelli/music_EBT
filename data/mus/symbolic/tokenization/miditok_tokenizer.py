@@ -6,10 +6,14 @@ from path_utils import get_dataset_path
 from dataloaders.constants import DatasetType
 
 class MidiTokTokenizer:
-    def __init__(self, dataset_name: str, encoding="REMI"):
+    def __init__(self, dataset_name: str, dataset_type: DatasetType, encoding="REMI"):
         self.dataset_name = dataset_name
+        self.dataset_type = dataset_type
         self.root_datadir = get_dataset_path(dataset_name)
         self.token_base_dir = os.path.join(self.root_datadir, "tokens", "miditok")
+        
+        config = TokenizerConfig(num_velocities=32, use_chords=True, use_programs=True)
+        self.tokenizer = REMI(config)
         
         config = TokenizerConfig(num_velocities=32, use_chords=True, use_programs=True)
         self.tokenizer = REMI(config)
@@ -54,26 +58,34 @@ class MidiTokTokenizer:
         self.tokenize()
 
 if __name__ == "__main__":
-    # Mirrored Logic from anticipation_tokenizer
+    # 1. Validation & Help Message
     if len(sys.argv) < 2:
-        print("Usage: python3 -m tokenization.miditok_tokenizer [LAKH | GIGAMIDI | CUSTOM] [dataset_name_if_custom]")
+        options = ", ".join(DatasetType.list())
+        print(f"Usage: python3 -m tokenization.miditok_tokenizer [{options}] [dataset_name_if_custom]")
         sys.exit(1)
 
-    mode = sys.argv[1].upper()
-    
-    if mode == "LAKH":
+    # 2. Safe Enum Conversion
+    try:
+        mode = DatasetType(sys.argv[1].lower())
+    except ValueError:
+        print(f"❌ Error: '{sys.argv[1]}' is not a valid DatasetType.")
+        print(f"Valid options are: {DatasetType.list()}")
+        sys.exit(1)
+
+    # 3. Resolve Dataset Name based on Enum
+    if mode == DatasetType.LAKH:
         dataset_name = "lakh-midi-clean"
-    elif mode == "GIGAMIDI":
+    elif mode == DatasetType.GIGA_MIDI:
         dataset_name = "giga-midi"
-    elif mode == "CUSTOM":
+    elif mode == DatasetType.CUSTOM:
         if len(sys.argv) < 3:
-            print("Error: CUSTOM mode requires a dataset name (e.g., jordan-progrock-dataset)")
+            print("❌ Error: CUSTOM mode requires a dataset name (e.g., jordan-progrock-dataset)")
             sys.exit(1)
         dataset_name = sys.argv[2]
     else:
-        print(f"Unknown mode: {mode}")
-        sys.exit(1)
+        # For MAESTRO or others added to Enum but not logic
+        dataset_name = mode.value 
 
-    # Initialize and run
-    master = MidiTokTokenizer(dataset_name=dataset_name)
+    # 4. Initialize and run
+    master = MidiTokTokenizer(dataset_name=dataset_name, dataset_type=mode)
     master.run_full_pipeline()

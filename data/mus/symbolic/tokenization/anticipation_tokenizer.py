@@ -48,7 +48,7 @@ class AnticipationTokenizer:
         # Lakh uses a specific hash-based splitting logic, Custom uses a simpler folder-based one
         if self.dataset_type == DatasetType.LAKH:
             lakh_main(token_args)
-        else:
+        elif self.dataset_type == DatasetType.CUSTOM:
             custom_main(token_args)
 
     def run_full_pipeline(self, add_drum: bool = False):
@@ -59,38 +59,45 @@ class AnticipationTokenizer:
         print(f"=== Finished. Data is in: {self.token_dir} ===")
 
 if __name__ == "__main__":
-    # Expecting: python3 -m ...anticipation_tokenizer [MODE] [OPTIONAL_NAME]
-    # Example 1: python3 -m ... LAKH
-    # Example 2: python3 -m ... CUSTOM jordan-progrock-dataset
-    
+    # 1. Basic validation
     if len(sys.argv) < 2:
-        print("Usage: python3 -m ... [LAKH | GIGAMIDI | CUSTOM] [dataset_name_if_custom]")
+        print(f"Usage: python3 -m ... [{', '.join(DatasetType.list())}] [dataset_name_if_custom]")
         sys.exit(1)
 
-    mode = sys.argv[1].upper()
-    
-    if mode == "LAKH":
+    # 2. Convert input string to Enum safely
+    try:
+        # sys.argv[1].lower() matches the Enum values like "lakh" or "custom"
+        mode = DatasetType(sys.argv[1].lower())
+    except ValueError:
+        print(f"❌ Error: '{sys.argv[1]}' is not a valid dataset type.")
+        print(f"Valid options: {DatasetType.list()}")
+        sys.exit(1)
+
+    # 3. Set parameters based on the Enum
+    if mode == DatasetType.LAKH:
         dataset_name = "lakh-midi-clean"
-        dataset_type = DatasetType.LAKH
         augment = 1
-    elif mode == "GIGAMIDI":
-        dataset_name = "giga-midi" # Ensure this matches your folder name
-        dataset_type = DatasetType.LAKH # Giga usually follows Lakh structure
+    
+    elif mode == DatasetType.GIGA_MIDI:
+        dataset_name = "giga-midi"
         augment = 1
-    elif mode == "CUSTOM":
+        
+    elif mode == DatasetType.CUSTOM:
         if len(sys.argv) < 3:
-            print("Error: CUSTOM mode requires a dataset name (e.g., jordan-progrock-dataset)")
+            print("❌ Error: CUSTOM mode requires a dataset name.")
             sys.exit(1)
         dataset_name = sys.argv[2]
-        dataset_type = DatasetType.CUSTOM
-        augment = 10 # Default higher augmentation for custom sets
+        augment = 10 
+        
     else:
-        print(f"Unknown mode: {mode}")
+        # This handles MAESTRO or others that are not yet implemented
+        print(f"⚠️ Mode {mode} logic is not yet implemented.")
         sys.exit(1)
 
+    # 4. Pass the Enum object directly
     master = AnticipationTokenizer(
         dataset_name=dataset_name, 
-        dataset_type=dataset_type, 
+        dataset_type=mode,
         augment=augment, 
         interarrival=False
     )
