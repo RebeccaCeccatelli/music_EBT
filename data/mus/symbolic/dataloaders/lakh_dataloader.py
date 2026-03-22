@@ -3,19 +3,20 @@ import shutil
 import os
 from pathlib import Path
 from path_utils import get_dataset_path, get_subset_path
+from dataloaders.constants import DatasetType
 
 class LakhDataset:
-    def __init__(self):
-        """
-        Initializes the Lakh Dataset handler. 
-        Organizes data into a 'midi' subfolder to stay consistent with the pipeline.
-        """
-        self.dataset_name = "lakh-midi-clean"
+    def __init__(
+        self, 
+        kaggle_id: str = "imsparsh/lakh-midi-clean",
+        version_suffix: str = "clean"
+    ):
+        self.kaggle_id = kaggle_id
         
-        # The 'Mother' path for the whole dataset
+        # Create a unique name like "lakh-clean" or "lakh-matched"
+        self.dataset_name = f"{DatasetType.LAKH.value}-{version_suffix}"
+        
         self.root_path = Path(get_dataset_path(self.dataset_name))
-        
-        # The specific folder where raw MIDI files will live
         self.midi_path = Path(get_subset_path(self.dataset_name, "midi"))
         
     def is_installed(self) -> bool:
@@ -33,7 +34,7 @@ class LakhDataset:
         print(f"🚀 Starting download for {self.dataset_name}...")
         
         # Download to Kaggle's temporary cache
-        tmp_path = kagglehub.dataset_download("imsparsh/lakh-midi-clean")
+        tmp_path = kagglehub.dataset_download(self.kaggle_id)
         
         print(f"📦 Moving dataset from cache to: {self.midi_path}")
         
