@@ -9,8 +9,10 @@
 # ==============================================================================
 # USER CONFIGURATION
 # ------------------------------------------------------------------------------
-if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
+ENV_PATH="../../../.env"
+
+if [ -f "$ENV_PATH" ]; then
+    export $(grep -v '^#' "$ENV_PATH" | xargs)
     
     # Check if the variable is now set
     if [ -z "$HUGGING_FACE_HUB_TOKEN" ]; then
