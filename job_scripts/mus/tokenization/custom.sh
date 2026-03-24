@@ -40,11 +40,12 @@ else
     echo "⚠️ Warning: .env not found. Using shell environment or defaults."
 fi
 
+# --- 4. Resolve Paths & Environment ---
 SYMBOLIC_ROOT="$PROJECT_ROOT/data/mus/symbolic"
 
 cd "$PROJECT_ROOT" || { echo "❌ Could not enter $PROJECT_ROOT"; exit 1; }
 
-# --- 5. DYNAMIC STORAGE LOGIC (Your Logic Intact) ---
+# --- 5. DYNAMIC STORAGE LOGIC: if custom storage path not provided, default to local directory ---
 if [ -n "$CUSTOM_STORAGE_PATH" ]; then
     export REMOTE_DATA_STORAGE="$CUSTOM_STORAGE_PATH"
 elif [ -n "$REMOTE_DATA_STORAGE" ]; then
