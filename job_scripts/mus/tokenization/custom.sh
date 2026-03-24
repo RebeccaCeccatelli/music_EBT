@@ -20,12 +20,14 @@ if [ -z "$DATASET_NAME" ] || [ -z "$TOKENIZER_TYPE" ]; then
 fi
 
 # --- 2. DYNAMIC NAMING (Self-Re-Submission) ---
-# Construct a clean name like: tok_jordan-progrock_miditok
 JOB_NAME="tok_${DATASET_NAME}_${TOKENIZER_TYPE}"
 
-if [[ "$SLURM_JOB_NAME" == "custom_tok.sh" || -z "$SLURM_JOB_NAME" ]]; then
+# We check if a special flag 'SUBMITTED' is NOT set
+if [ -z "$SUBMITTED" ]; then
     echo "🔄 Re-submitting with personalized name: $JOB_NAME"
-    sbatch --job-name="$JOB_NAME" --output="${JOB_NAME}_%j.out" "$0" "$DATASET_NAME" "$TOKENIZER_TYPE"
+    # We export SUBMITTED=1 so the next instance knows to skip this block
+    export SUBMITTED=1
+    sbatch --job-name="$JOB_NAME" --output="${JOB_NAME}_%j.out" --export=ALL,SUBMITTED=1 "$0" "$DATASET_NAME" "$TOKENIZER_TYPE"
     exit 0
 fi
 
