@@ -36,7 +36,6 @@ TOKENIZER_TYPE=${1:-anticipation}
 
 # --- 2. Environment & Path Setup ---
 # We need to point PYTHONPATH to the directory that CONTAINS the 'dataloaders' folder
-# Based on your path: /orcd/home/002/rebcecca/music_EBT/data/mus/symbolic
 export PROJECT_ROOT="/orcd/home/002/rebcecca/music_EBT/data/mus/symbolic"
 export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
 
@@ -67,7 +66,8 @@ echo "🚀 [Step 1/2] Downloading & Unzipping GigaMIDI..."
 "$PYTHON_EXEC" -m dataloaders.giga_midi_dataloader
 
 # STEP 2: Tokenize
+export PYTHONPATH=$PYTHONPATH:/orcd/home/002/rebcecca/music_EBT/data/mus/symbolic/tokenization/anticipation
 echo "🎹 [Step 2/2] Starting Tokenization ($MODULE_NAME)..."
-"$PYTHON_EXEC" -m "$MODULE_NAME" giga-midi
+"$PYTHON_EXEC" -m "$MODULE_NAME" gigamidi
 
 echo "✅ GigaMIDI Pipeline Complete."

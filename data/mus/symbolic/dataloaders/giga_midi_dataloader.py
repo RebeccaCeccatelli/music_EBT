@@ -14,54 +14,103 @@ class GigaMIDIDataset:
         
         self.root_path = get_dataset_path(self.dataset_name)
         self.midi_path = os.path.join(self.root_path, "midi")
-        os.makedirs(self.root_path, exist_ok=True)
-
+        os.makedirs(self.midi_path, exist_ok=True)
+    
     def download_and_extract(self):
-        """Downloads the V2.0 ZIP and handles nested extraction."""
-        
-        # 1. Verification Check
-        # We check for 'training' folder specifically because that's where the actual MIDIs live
-        final_check_path = os.path.join(self.midi_path, "training")
-        if os.path.exists(final_check_path) and any(os.scandir(final_check_path)):
-            print(f"✅ GigaMIDI (unzipped) already exists in {self.midi_path}. Skipping.")
+        # 1. Define Mappings (ZIP name in the HF repo : Final Folder Name)
+        splits = {
+            "training-V1.1-80%.zip": "train",
+            "validation-V1.1-10%.zip": "validation",
+            "test-V1.1-10%.zip": "test"
+        }
+
+        # Check if MIDI files exist (don't just check if the folder exists)
+        def has_midi(path):
+            for root, _, files in os.walk(path):
+                if any(f.lower().endswith(('.mid', '.midi')) for f in files):
+                    return True
+            return False
+
+        if all(os.path.exists(os.path.join(self.midi_path, s)) and has_midi(os.path.join(self.midi_path, s)) for s in splits.values()):
+            print("✅ All splits already extracted and contain MIDI. Skipping.")
             return
 
-        # 2. Download from Hugging Face
-        print(f"🚀 [1/3] Downloading {self.zip_filename} from Hugging Face...")
-        local_zip_path = hf_hub_download(
-            repo_id=self.repo_id,
-            filename=self.zip_filename,
-            repo_type="dataset",
-            local_dir=self.root_path,
-            token=os.getenv("HUGGING_FACE_HUB_TOKEN")
-        )
+        # 2. Download Main ZIP (GigaMIDI V2.0 Wrapper)
+        local_zip_path = os.path.join(self.root_path, self.zip_filename)
+        if not os.path.exists(local_zip_path):
+            print(f"🚀 Downloading {self.zip_filename}...")
+            local_zip_path = hf_hub_download(
+                repo_id=self.repo_id,
+                filename=self.zip_filename,
+                repo_type="dataset",
+                local_dir=self.root_path,
+                token=os.getenv("HUGGING_FACE_HUB_TOKEN")
+            )
+        else:
+            print(f"📦 Main ZIP already exists. Skipping download.")
 
-        # 3. First Extraction (The Wrapper ZIP)
-        print(f"📦 [2/3] Extracting Wrapper ZIP to {self.midi_path}...")
-        with zipfile.ZipFile(local_zip_path, 'r') as zip_ref:
-            zip_ref.extractall(self.midi_path)
+        # 3. Extract Wrapper (This yields the 3 split ZIPs)
+        # We extract this into a temporary "raw" folder to keep things clean
+        raw_extract_path = os.path.join(self.midi_path, "raw_zips")
+        if not any(os.path.exists(os.path.join(raw_extract_path, z)) for z in splits.keys()):
+            print("📦 Extracting main wrapper ZIP...")
+            with zipfile.ZipFile(local_zip_path, 'r') as zip_ref:
+                zip_ref.extractall(raw_extract_path)
 
-        # 4. Nested Extraction (The Split ZIPs)
-        # Based on your ls, they are in: midi/Final_GigaMIDI_V1.1_Final/
-        nested_dir = os.path.join(self.midi_path, "Final_GigaMIDI_V1.1_Final")
-        
-        if os.path.exists(nested_dir):
-            print(f"📦 [3/3] Extracting Nested Split ZIPs...")
-            for split_zip in ["training-V1.1-80%.zip", "validation-V1.1-10%.zip", "test-V1.1-10%.zip"]:
-                zip_path = os.path.join(nested_dir, split_zip)
-                if os.path.exists(zip_path):
-                    print(f"   解压 {split_zip}...")
-                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                        # Extract directly into self.midi_path to flatten the structure
-                        zip_ref.extractall(self.midi_path)
+        # 4. Deep Extraction Logic
+        for zip_name, final_name in splits.items():
+            target_path = os.path.join(self.midi_path, final_name)
             
-            # 5. Cleanup Nested Folder to save space and avoid path confusion
-            print("🧹 Cleaning up temporary nested ZIPs...")
-            shutil.rmtree(nested_dir)
-            if os.path.exists(os.path.join(self.midi_path, "__MACOSX")):
-                shutil.rmtree(os.path.join(self.midi_path, "__MACOSX"))
+            if os.path.exists(target_path) and has_midi(target_path):
+                print(f"⏩ {final_name} already processed. Skipping.")
+                continue
+
+            os.makedirs(target_path, exist_ok=True)
+            
+            # Find the split zip (it might be in raw_extract_path or a subfolder)
+            split_zip_path = None
+            for root, _, files in os.walk(raw_extract_path):
+                if zip_name in files:
+                    split_zip_path = os.path.join(root, zip_name)
+                    break
+            
+            if not split_zip_path:
+                print(f"❌ Error: Could not find {zip_name} in the extracted files.")
+                continue
+
+            print(f"📂 Processing split: {final_name}...")
+            temp_split_dir = os.path.join(self.midi_path, f"temp_{final_name}")
+            
+            # Step A: Extract the split zip (e.g., training-V1.1-80%.zip)
+            with zipfile.ZipFile(split_zip_path, 'r') as z:
+                z.extractall(temp_split_dir)
+
+            # Step B: Find and extract any nested ZIPs (the "all-instruments-with-drums.zip")
+            for root, _, files in os.walk(temp_split_dir):
+                for file in files:
+                    if file.endswith(".zip") and "all-instruments-with-drums" in file:
+                        inner_zip_path = os.path.join(root, file)
+                        print(f"  📦 Found nested ZIP: {file}. Extracting to {final_name}...")
+                        with zipfile.ZipFile(inner_zip_path, 'r') as iz:
+                            iz.extractall(target_path)
+                    
+                    # Also catch raw MIDIs if they weren't zipped (common in test/val)
+                    elif file.lower().endswith(('.mid', '.midi')) and "all-instruments-with-drums" in root:
+                        shutil.copy(os.path.join(root, file), os.path.join(target_path, file))
+
+            # Clean up the temporary split directory
+            shutil.rmtree(temp_split_dir)
+            print(f"✅ Finished extracting {final_name}")
+
+        # 5. Final Cleanup
+        if os.path.exists(raw_extract_path):
+            shutil.rmtree(raw_extract_path)
         
-        print(f"✨ GigaMIDI structure ready at: {self.midi_path}")
+        macosx_dir = os.path.join(self.midi_path, "__MACOSX")
+        if os.path.exists(macosx_dir):
+            shutil.rmtree(macosx_dir)
+        
+        print(f"✨ GigaMIDI is fully extracted in {self.midi_path}")
 
 if __name__ == "__main__":
     loader = GigaMIDIDataset()

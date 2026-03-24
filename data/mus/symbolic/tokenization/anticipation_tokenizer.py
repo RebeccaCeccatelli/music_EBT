@@ -9,6 +9,7 @@ from dataloaders.constants import DatasetType
 from tokenization.anticipation.train.midi_preprocess import main as preprocess_main
 from tokenization.anticipation.finetune.tokenize_custom import main as custom_main
 from tokenization.anticipation.train.tokenize_lakh import main as lakh_main
+from tokenization.anticipation.train.tokenize_gigaMIDI import main as giga_main
 
 class AnticipationTokenizer:
     def __init__(self, dataset_name: str, dataset_type: DatasetType, augment: int = 1, interarrival: bool = False):
@@ -27,43 +28,60 @@ class AnticipationTokenizer:
         self.interarrival = interarrival
 
     def preprocess(self, add_drum: bool = False):
-        """Cleans and standardizes MIDI files before tokenization."""
+        """Cleans and standardizes MIDI files, with automatic skip detection."""
+        # Define the path for our "success marker"
+        sentinel_file = os.path.join(self.midi_dir, ".preprocessed_done")
+
+        if os.path.exists(sentinel_file):
+            print(f"✨ Preprocessing already completed (marker found at {sentinel_file}). Skipping...")
+            return
+
         print(f"\n--- [1/2] Preprocessing MIDI files in: {self.midi_dir} ---")
-        # Namespace mimics command line arguments for the underlying script
         preproc_args = Namespace(dir=self.midi_dir, add_drum=add_drum)
+        
+        # Run the actual preprocessing logic
         preprocess_main(preproc_args)
+
+        # After successful completion, create the sentinel file
+        with open(sentinel_file, 'w') as f:
+            f.write(f"Completed on: {os.popen('date').read()}")
+        print(f"✅ Preprocessing marker created: {sentinel_file}")
+
+    def run_full_pipeline(self, add_drum: bool = False):
+        """Convenience method to run both stages back-to-back."""
+        print(f"=== Starting Full Pipeline for {self.dataset_name.upper()} ===")
+        # Preprocess will now decide internally whether to run or skip
+        self.preprocess(add_drum=add_drum)
+        self.tokenize()
+        print(f"=== Finished. Data is in: {self.token_dir} ===")
 
     def tokenize(self):
         """Converts preprocessed MIDIs into text-based event tokens."""
         print(f"\n--- [2/2] Tokenizing results into: {self.token_dir} ---")
         
         token_args = Namespace(
-            midi_dir=self.midi_dir,    # Source of preprocessed files
-            token_dir=self.token_dir,  # Destination for .txt tokens
+            datadir=self.midi_dir,     
+            outdir=self.token_dir,     
             dataset_name=self.dataset_name,
             augment=self.augment,
-            interarrival=self.interarrival
+            interarrival=self.interarrival,
         )
 
-        # Lakh uses a specific hash-based splitting logic, Custom uses a simpler folder-based one
-        if self.dataset_type in [DatasetType.LAKH, DatasetType.GIGA_MIDI]:
+        # Different datasets assume different folder structures
+        if self.dataset_type == DatasetType.LAKH:
             print(f"Using hash-based splitting logic for {self.dataset_type.value}")
             lakh_main(token_args)
+        elif self.dataset_type == DatasetType.GIGA_MIDI:
+            print(f"Using GigaMIDI-specific tokenization for {self.dataset_type.value}")
+            giga_main(token_args)
         elif self.dataset_type == DatasetType.CUSTOM:
             print(f"Using simple folder-based logic for {self.dataset_type.value}")
             custom_main(token_args)
 
-    def run_full_pipeline(self, add_drum: bool = False):
-        """Convenience method to run both stages back-to-back."""
-        print(f"=== Starting Full Pipeline for {self.dataset_name.upper()} ===")
-        self.preprocess(add_drum=add_drum)
-        self.tokenize()
-        print(f"=== Finished. Data is in: {self.token_dir} ===")
-
 if __name__ == "__main__":
-    # 1. Basic validation
+    # 1. Basic validation: Check if a dataset type was provided (e.g., lakh, giga_midi)
     if len(sys.argv) < 2:
-        print(f"Usage: python3 -m ... [{', '.join(DatasetType.list())}] [dataset_name_if_custom]")
+        print(f"Usage: python3 -m tokenization.anticipation_tokenizer [{', '.join(DatasetType.list())}] [optional_custom_name]")
         sys.exit(1)
 
     # 2. Convert input string to Enum safely
@@ -75,33 +93,43 @@ if __name__ == "__main__":
         print(f"Valid options: {DatasetType.list()}")
         sys.exit(1)
 
-    # 3. Set parameters based on the Enum
+    # 3. Set parameters based on the specific dataset requirements
     if mode == DatasetType.LAKH:
-        dataset_name = "lakh-midi-clean"
-        augment = 1
+        # We use 'lakh-full' to distinguish from your previous 'clean' attempts
+        dataset_name = "lakh-full"
+        augment = 1        # LMD-Full usually doesn't need augmentation at tokenization stage
+        interarrival = True # Required for the full Anticipation training pipeline
+        add_drum = False    # Standard LMD-Full preprocessing usually omits this unless specified
     
     elif mode == DatasetType.GIGA_MIDI:
         dataset_name = "giga-midi"
         augment = 1
+        interarrival = True
+        add_drum = False
         
     elif mode == DatasetType.CUSTOM:
         if len(sys.argv) < 3:
-            print("❌ Error: CUSTOM mode requires a dataset name.")
+            print("❌ Error: CUSTOM mode requires a dataset name as the second argument.")
             sys.exit(1)
         dataset_name = sys.argv[2]
-        augment = 10 
+        augment = 10        # Custom small datasets benefit from heavy augmentation
+        interarrival = False
+        add_drum = True
         
     else:
-        # This handles MAESTRO or others that are not yet implemented
-        print(f"⚠️ Mode {mode} logic is not yet implemented.")
+        print(f"⚠️ Mode {mode} logic is not fully defined for the Anticipation pipeline.")
         sys.exit(1)
 
-    # 4. Pass the Enum object directly
+    # 4. Initialize the Tokenizer with the correct paths and settings
     master = AnticipationTokenizer(
         dataset_name=dataset_name, 
         dataset_type=mode,
         augment=augment, 
-        interarrival=False
+        interarrival=interarrival
     )
     
-    master.run_full_pipeline(add_drum=True)
+    # 5. Execute the pipeline
+    # This will: 
+    #   a) Preprocess the MIDI files (cleaning/quantizing)
+    #   b) Tokenize them into the 'anticipation' format (Control/Time/Note events)
+    master.run_full_pipeline(add_drum=add_drum)
