@@ -5,6 +5,7 @@ from datetime import datetime
 import wandb
 from argparse import Namespace
 from pathlib import Path
+from miditok import REMI, TokenizerConfig 
 from path_utils import get_dataset_path, get_subset_path
 from dataloaders.constants import DatasetType
 
