@@ -100,7 +100,7 @@ if __name__ == "__main__":
             print("❌ Error: CUSTOM mode requires a dataset name as the second argument.")
             sys.exit(1)
         dataset_name = sys.argv[2]
-        augment = 10        # Custom small datasets benefit from heavy augmentation
+        augment = 1       
         interarrival = True
         add_drum = True
         
