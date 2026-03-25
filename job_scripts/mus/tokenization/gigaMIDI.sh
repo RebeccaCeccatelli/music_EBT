@@ -7,6 +7,7 @@
 #SBATCH --mem=32G
 #SBATCH --time=06:00:00            
 #SBATCH --output=/dev/null
+#SBATCH --error=/dev/null
 
 # --- 1. Capture Arguments ---
 TOKENIZER_TYPE=$1
