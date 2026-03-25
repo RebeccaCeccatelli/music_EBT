@@ -2,17 +2,35 @@ import sys
 import os
 import shutil
 import logging
+from datetime import datetime
+import wandb
 from pathlib import Path
 from miditok import REMI, TokenizerConfig
 from path_utils import get_dataset_path
 from dataloaders.constants import DatasetType
 
 class MidiTokTokenizer:
-    def __init__(self, dataset_name: str, dataset_type: DatasetType, encoding="REMI"):
+    def __init__(self, dataset_name: str, dataset_type: DatasetType, encoding="REMI", use_wandb=True):
         self.dataset_name = dataset_name
         self.dataset_type = dataset_type
         self.root_datadir = get_dataset_path(dataset_name)
         self.token_base_dir = os.path.join(self.root_datadir, "tokens", "miditok")
+        self.use_wandb = use_wandb
+
+        if self.use_wandb:
+            # Dynamically naming the project based on the dataset (e.g., GigaMIDI-Tokenization)
+            # We capitalize it for a cleaner look on the dashboard
+            project_formatted = f"{self.dataset_name.replace('-', ' ').title().replace(' ', '-')}-Tokenization"
+            
+            wandb.init(
+                project=project_formatted,
+                name=f"miditok-{datetime.now().strftime('%m%d-%H%M')}",
+                settings=wandb.Settings(console="wrap_raw"), 
+                config={
+                    "dataset": dataset_name,
+                    "pipeline": "Miditok",
+                }
+            )
         
         # Define quarantine directory for corrupted files
         self.quarantine_dir = os.path.join(self.root_datadir, "quarantined_midis")
@@ -150,6 +168,9 @@ class MidiTokTokenizer:
         
         # POST CLEANUP
         self._cleanup()
+
+        if self.use_wandb:
+            wandb.finish()
 
     def run_full_pipeline(self):
         self.tokenize()

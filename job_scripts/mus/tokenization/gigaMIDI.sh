@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
 #SBATCH --time=06:00:00            
-#SBATCH --output=giga_full_pipe_%j.out
+#SBATCH --output=/dev/null
 
 # --- 1. Capture Arguments ---
 TOKENIZER_TYPE=$1
@@ -19,9 +19,11 @@ if [ -z "$TOKENIZER_TYPE" ]; then
 fi
 
 # --- 2. DYNAMIC NAMING ---
-# Re-submits with a descriptive name if called generically
 if [[ "$SLURM_JOB_NAME" == "gigaMIDI.sh" || -z "$SLURM_JOB_NAME" ]]; then
-    sbatch --job-name="gigaMIDI_${TOKENIZER_TYPE}" --output="gigaMIDI_${TOKENIZER_TYPE}_%j.out" "$0" "$TOKENIZER_TYPE"
+    # We EXPLICITLY set the --output here for the real job. 
+    # The current 'manager' job will follow the header and send its output to /dev/null.
+    sbatch --job-name="gigaMIDI_${TOKENIZER_TYPE}" \
+           "$0" "$TOKENIZER_TYPE"
     exit 0
 fi
 
@@ -36,6 +38,12 @@ if [ -f "$ENV_PATH" ]; then
     
     if [ -n "$HUGGING_FACE_HUB_TOKEN" ]; then
         echo "✅ HF Token loaded (Starts with: ${HUGGING_FACE_HUB_TOKEN:0:4}...)"
+    fi
+
+    # Ensure WandB can log in automatically on the compute node
+    if [ -n "$WANDB_API_KEY" ]; then
+        export WANDB_API_KEY="$WANDB_API_KEY"
+        echo "✅ WandB API Key exported."
     fi
 else
     echo "❌ Error: .env file not found at $ENV_PATH."
@@ -58,6 +66,10 @@ cd "$PROJECT_ROOT" || { echo "❌ Failed to enter $PROJECT_ROOT"; exit 1; }
 
 # Add both the symbolic root and the anticipation sub-dir to PYTHONPATH
 export PYTHONPATH="$SYMBOLIC_ROOT:$SYMBOLIC_ROOT/tokenization/anticipation:$PYTHONPATH"
+export PYTHONUNBUFFERED=1 # Force real-time logging
+export TQDM_ISATTY=1
+export TQDM_MININTERVAL=0.1
+export WANDB_CONSOLE=wrap_raw
 
 LOADER_MODULE="dataloaders.giga_midi_dataloader"
 TOKEN_MODULE="tokenization.${TOKENIZER_TYPE}_tokenizer"
