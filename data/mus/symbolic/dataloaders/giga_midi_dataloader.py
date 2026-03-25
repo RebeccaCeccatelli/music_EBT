@@ -83,7 +83,9 @@ class GigaMIDIDataset:
             
             # Step A: Extract the split zip (e.g., training-V1.1-80%.zip)
             with zipfile.ZipFile(split_zip_path, 'r') as z:
-                z.extractall(temp_split_dir)
+                # Only extract files that don't start with ._ or __MACOSX
+                member_list = [m for m in z.namelist() if "__MACOSX" not in m and not os.path.basename(m).startswith("._")]
+                z.extractall(temp_split_dir, members=member_list)
 
             # Step B: Find and extract any nested ZIPs (the "all-instruments-with-drums.zip")
             for root, _, files in os.walk(temp_split_dir):

@@ -8,7 +8,6 @@ from dataloaders.constants import DatasetType
 # Import the main logic from your sub-modules
 from tokenization.anticipation.train.midi_preprocess import main as preprocess_main
 from tokenization.anticipation.finetune.tokenize_custom import main as custom_main
-from tokenization.anticipation.train.tokenize_lakh import main as lakh_main
 from tokenization.anticipation.train.tokenize_gigaMIDI import main as giga_main
 
 class AnticipationTokenizer:
@@ -16,10 +15,10 @@ class AnticipationTokenizer:
         self.dataset_name = dataset_name
         self.dataset_type = DatasetType(dataset_type)
         
-        # 1. Resolve MIDI source directory (e.g., datasets/lakh-midi-clean/midi)
+        # 1. Resolve MIDI source directory (e.g., datasets/giga-midi/midi)
         self.midi_dir = get_subset_path(self.dataset_name, "midi")
         
-        # 2. Define and CREATE the token destination (e.g., datasets/lakh-midi-clean/tokens/anticipation)
+        # 2. Define and CREATE the token destination (e.g., datasets/giga-midi/tokens/anticipation)
         # This prevents the FileNotFoundError during multiprocessing
         self.token_dir = os.path.join(get_dataset_path(self.dataset_name), "tokens", "anticipation")
         os.makedirs(self.token_dir, exist_ok=True)
@@ -68,10 +67,7 @@ class AnticipationTokenizer:
         )
 
         # Different datasets assume different folder structures
-        if self.dataset_type == DatasetType.LAKH:
-            print(f"Using hash-based splitting logic for {self.dataset_type.value}")
-            lakh_main(token_args)
-        elif self.dataset_type == DatasetType.GIGA_MIDI:
+        if self.dataset_type == DatasetType.GIGA_MIDI:
             print(f"Using GigaMIDI-specific tokenization for {self.dataset_type.value}")
             giga_main(token_args)
         elif self.dataset_type == DatasetType.CUSTOM:
@@ -79,29 +75,21 @@ class AnticipationTokenizer:
             custom_main(token_args)
 
 if __name__ == "__main__":
-    # 1. Basic validation: Check if a dataset type was provided (e.g., lakh, giga_midi)
+    # 1. Basic validation: Check if a dataset type was provided (e.g. giga_midi)
     if len(sys.argv) < 2:
         print(f"Usage: python3 -m tokenization.anticipation_tokenizer [{', '.join(DatasetType.list())}] [optional_custom_name]")
         sys.exit(1)
 
     # 2. Convert input string to Enum safely
     try:
-        # sys.argv[1].lower() matches the Enum values like "lakh" or "custom"
+        # sys.argv[1].lower() matches the Enum values like "giga-midi" or "custom"
         mode = DatasetType(sys.argv[1].lower())
     except ValueError:
         print(f"❌ Error: '{sys.argv[1]}' is not a valid dataset type.")
         print(f"Valid options: {DatasetType.list()}")
         sys.exit(1)
-
-    # 3. Set parameters based on the specific dataset requirements
-    if mode == DatasetType.LAKH:
-        # We use 'lakh-full' to distinguish from your previous 'clean' attempts
-        dataset_name = "lakh-full"
-        augment = 1        # LMD-Full usually doesn't need augmentation at tokenization stage
-        interarrival = True # Required for the full Anticipation training pipeline
-        add_drum = False    # Standard LMD-Full preprocessing usually omits this unless specified
     
-    elif mode == DatasetType.GIGA_MIDI:
+    if mode == DatasetType.GIGA_MIDI:
         dataset_name = "giga-midi"
         augment = 1
         interarrival = True
@@ -113,11 +101,11 @@ if __name__ == "__main__":
             sys.exit(1)
         dataset_name = sys.argv[2]
         augment = 10        # Custom small datasets benefit from heavy augmentation
-        interarrival = False
+        interarrival = True
         add_drum = True
         
     else:
-        print(f"⚠️ Mode {mode} logic is not fully defined for the Anticipation pipeline.")
+        print(f"⚠️ Mode {mode} logic is not defined for the Anticipation pipeline.")
         sys.exit(1)
 
     # 4. Initialize the Tokenizer with the correct paths and settings

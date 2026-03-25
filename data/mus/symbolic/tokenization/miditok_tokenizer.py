@@ -139,10 +139,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # 3. Resolve Dataset Name based on Enum
-    if mode == DatasetType.LAKH:
-        # Changed from "lakh-clean" to "lakh-full" to match your new download
-        dataset_name = "lakh-full"
-    elif mode == DatasetType.GIGA_MIDI:
+    if mode == DatasetType.GIGA_MIDI:
         dataset_name = "giga-midi"
     elif mode == DatasetType.CUSTOM:
         if len(sys.argv) < 3:

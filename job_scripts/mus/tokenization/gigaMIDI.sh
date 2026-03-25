@@ -1,73 +1,85 @@
 #!/bin/bash
-#SBATCH --job-name=giga_full_pipe
+#SBATCH --account=mit_general
 #SBATCH --partition=mit_normal
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
-#SBATCH --time=06:00:00             
+#SBATCH --time=06:00:00            
 #SBATCH --output=giga_full_pipe_%j.out
 
-# ==============================================================================
-# USER CONFIGURATION
-# ------------------------------------------------------------------------------
+# --- 1. Capture Arguments ---
+TOKENIZER_TYPE=$1
+
+if [ -z "$TOKENIZER_TYPE" ]; then
+    echo "❌ Error: No tokenizer type provided."
+    echo "Usage: sbatch $0 [tokenizer-type]"
+    echo "Example: sbatch $0 anticipation_tokenizer"
+    exit 1
+fi
+
+# --- 2. DYNAMIC NAMING ---
+# Re-submits with a descriptive name if called generically
+if [[ "$SLURM_JOB_NAME" == "gigaMIDI.sh" || -z "$SLURM_JOB_NAME" ]]; then
+    sbatch --job-name="gigaMIDI_${TOKENIZER_TYPE}" --output="gigaMIDI_${TOKENIZER_TYPE}_%j.out" "$0" "$TOKENIZER_TYPE"
+    exit 0
+fi
+
+# --- 3. LOAD ENVIRONMENT VARIABLES ---
+# Locates .env relative to the script's directory (matches lakh.sh logic)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 ENV_PATH="../../../.env"
 
 if [ -f "$ENV_PATH" ]; then
     export $(grep -v '^#' "$ENV_PATH" | xargs)
+    echo "✅ Environment variables loaded from .env"
     
-    # Check if the variable is now set
-    if [ -z "$HUGGING_FACE_HUB_TOKEN" ]; then
-        echo "❌ Error: .env file found, but HUGGING_FACE_HUB_TOKEN is empty."
-        exit 1
-    else
-        # Print only the first 4 characters to confirm it loaded the right thing safely
-        echo "✅ Token loaded successfully (Starts with: ${HUGGING_FACE_HUB_TOKEN:0:4}...)"
+    if [ -n "$HUGGING_FACE_HUB_TOKEN" ]; then
+        echo "✅ HF Token loaded (Starts with: ${HUGGING_FACE_HUB_TOKEN:0:4}...)"
     fi
 else
-    echo "❌ Error: .env file not found. Please create it with your token."
+    echo "❌ Error: .env file not found at $ENV_PATH."
     exit 1
 fi
 
-# Path where your datasets are stored
-CUSTOM_STORAGE_PATH="/orcd/home/002/rebcecca/orcd/pool/music_datasets"
-# ==============================================================================
-
-# --- 1. Capture Arguments ---
-TOKENIZER_TYPE=${1:-anticipation} 
-
-# --- 2. Environment & Path Setup ---
-# We need to point PYTHONPATH to the directory that CONTAINS the 'dataloaders' folder
-export PROJECT_ROOT="/orcd/home/002/rebcecca/music_EBT/data/mus/symbolic"
-export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
-
-# Move to the project root so Python can resolve 'dataloaders' and 'tokenization' modules
-cd "$PROJECT_ROOT"
-
-# --- 3. Dynamic Storage Logic ---
+# --- 4. DYNAMIC STORAGE LOGIC ---
+# Priority: 1. .env CUSTOM_STORAGE_PATH, 2. Existing REMOTE_DATA_STORAGE
 if [ -n "$CUSTOM_STORAGE_PATH" ]; then
     export REMOTE_DATA_STORAGE="$CUSTOM_STORAGE_PATH"
+elif [ -n "$REMOTE_DATA_STORAGE" ]; then
+    export REMOTE_DATA_STORAGE
 fi
 
-# Construct the module name
-MODULE_NAME="tokenization.${TOKENIZER_TYPE}_tokenizer"
+# --- 5. Resolve Paths & Environment ---
+# Standardize the Root to match the location of your modules
+SYMBOLIC_ROOT="$PROJECT_ROOT/data/mus/symbolic"
 
-# --- 4. Execution ---
+cd "$PROJECT_ROOT" || { echo "❌ Failed to enter $PROJECT_ROOT"; exit 1; }
+
+# Add both the symbolic root and the anticipation sub-dir to PYTHONPATH
+export PYTHONPATH="$SYMBOLIC_ROOT:$SYMBOLIC_ROOT/tokenization/anticipation:$PYTHONPATH"
+
+LOADER_MODULE="dataloaders.giga_midi_dataloader"
+TOKEN_MODULE="tokenization.${TOKENIZER_TYPE}_tokenizer"
 PYTHON_EXEC=$(which python3)
 
 echo "--- GigaMIDI Full Pipeline Metadata ---"
-echo "User:           $USER"
 echo "Project Root:   $PROJECT_ROOT"
-echo "Data Storage:   ${REMOTE_DATA_STORAGE}"
-echo "Tokenizer Mode: $TOKENIZER_TYPE"
+echo "Data Storage:   ${REMOTE_DATA_STORAGE:-Local Project Directory}"
+echo "Module:         $TOKEN_MODULE"
 echo "---------------------------------------"
 
+# --- 6. Execution ---
+
 # STEP 1: Download/Extract GigaMIDI
-echo "🚀 [Step 1/2] Downloading & Unzipping GigaMIDI..."
-# Running as a module requires the parent dir to be in PYTHONPATH
-"$PYTHON_EXEC" -m dataloaders.giga_midi_dataloader
+echo "🚀 [Step 1/2] Checking/Downloading GigaMIDI..."
+"$PYTHON_EXEC" -m "$LOADER_MODULE"
 
 # STEP 2: Tokenize
-export PYTHONPATH=$PYTHONPATH:/orcd/home/002/rebcecca/music_EBT/data/mus/symbolic/tokenization/anticipation
-echo "🎹 [Step 2/2] Starting Tokenization ($MODULE_NAME)..."
-"$PYTHON_EXEC" -m "$MODULE_NAME" gigamidi
-
-echo "✅ GigaMIDI Pipeline Complete."
+echo "🎹 [Step 2/2] Starting Tokenization ($TOKEN_MODULE)..."
+if "$PYTHON_EXEC" -m "$TOKEN_MODULE" gigamidi; then
+    echo "✅ GigaMIDI Pipeline Complete."
+else
+    echo "❌ Error: Tokenization failed."
+    exit 1
+fi
