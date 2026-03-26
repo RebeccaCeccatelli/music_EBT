@@ -1,0 +1,94 @@
+#!/bin/bash
+#SBATCH --account=mit_general
+#SBATCH --partition=mit_normal
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=16G
+#SBATCH --time=01:00:00
+#SBATCH --output=/dev/null
+#SBATCH --error=/dev/null
+
+# --- 1. Capture Arguments ---
+DATASET_NAME=$1
+TOKENIZER_TYPE=$2
+
+if [ -z "$DATASET_NAME" ] || [ -z "$TOKENIZER_TYPE" ]; then
+    echo "❌ Error: Missing required arguments."
+    echo "Usage: sbatch $0 [dataset-name] [tokenizer-type]"
+    echo "Example: sbatch $0 jordan-progrock-dataset miditok"
+    exit 1
+fi
+
+# --- 2. DYNAMIC NAMING (Self-Re-Submission) ---
+JOB_NAME="tok_${DATASET_NAME}_${TOKENIZER_TYPE}"
+
+# We check if a special flag 'SUBMITTED' is NOT set
+if [ -z "$SUBMITTED" ]; then
+    echo "🔄 Re-submitting with personalized name: $JOB_NAME"
+    
+    # We export SUBMITTED=1 so the next instance knows to skip this block
+    # CRITICAL: We explicitly set --output here to override the /dev/null in the header
+    export SUBMITTED=1
+    sbatch --job-name="$JOB_NAME" \
+           --export=ALL,SUBMITTED=1 \
+           "$0" "$DATASET_NAME" "$TOKENIZER_TYPE"
+    
+    exit 0
+fi
+# --- 3. LOAD ENVIRONMENT VARIABLES ---
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+ENV_PATH="../../../.env"
+
+if [ -f "$ENV_PATH" ]; then
+    export $(grep -v '^#' "$ENV_PATH" | xargs)
+    echo "✅ Configuration loaded from .env"
+
+    # Ensure WandB can log in automatically on the compute node
+    if [ -n "$WANDB_API_KEY" ]; then
+        export WANDB_API_KEY="$WANDB_API_KEY"
+        echo "✅ WandB API Key exported."
+    fi
+else
+    echo "⚠️ Warning: .env not found. Using shell environment or defaults."
+fi
+
+# --- 4. Resolve Paths & Environment ---
+SYMBOLIC_ROOT="$PROJECT_ROOT/data/mus/symbolic"
+
+cd "$PROJECT_ROOT" || { echo "❌ Could not enter $PROJECT_ROOT"; exit 1; }
+
+# --- 5. DYNAMIC STORAGE LOGIC: if custom storage path not provided, default to local directory ---
+if [ -n "$CUSTOM_STORAGE_PATH" ]; then
+    export REMOTE_DATA_STORAGE="$CUSTOM_STORAGE_PATH"
+elif [ -n "$REMOTE_DATA_STORAGE" ]; then
+    export REMOTE_DATA_STORAGE
+else
+    unset REMOTE_DATA_STORAGE
+fi
+
+# --- 6. Environment Setup ---
+export PYTHONPATH="$SYMBOLIC_ROOT:$SYMBOLIC_ROOT/tokenization/anticipation:$PYTHONPATH"
+export PYTHONUNBUFFERED=1 # Force real-time logging
+export TQDM_ISATTY=1
+export TQDM_MININTERVAL=0.1
+export WANDB_CONSOLE=wrap_raw
+
+MODULE_NAME="tokenization.${TOKENIZER_TYPE}_tokenizer"
+PYTHON_EXEC=$(which python3)
+
+echo "--- Tokenization Metadata ---"
+echo "Job Name:       $SLURM_JOB_NAME"
+echo "Project Root:   $PROJECT_ROOT"
+echo "Data Storage:   ${REMOTE_DATA_STORAGE:-Local Project Directory}"
+echo "Dataset:        $DATASET_NAME"
+echo "Module:         $MODULE_NAME"
+echo "-----------------------------"
+
+# --- 7. Execution ---
+if "$PYTHON_EXEC" -m "$MODULE_NAME" CUSTOM "$DATASET_NAME"; then
+    echo "✅ Tokenization Complete for $DATASET_NAME."
+else
+    echo "❌ Error: Tokenization failed for $DATASET_NAME."
+    exit 1
+fi

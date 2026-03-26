@@ -129,7 +129,6 @@ dmypy.json
 .pyre/
 
 
-logs/**
 lightnings_logs/*
 pretrained_models/*
 core.*
@@ -156,3 +155,5 @@ work.sh
 **/.nfs000*
 inference_results/**
 logs
+data/mus/symbolic/datasets/**
+echo ".env" >> .gitignore
