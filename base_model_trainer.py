@@ -109,6 +109,9 @@ class ModelTrainer(L.LightningModule):
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True)
             ])
+        if self.hparams.modality == "MUS":
+            # TODO: add logic here for MUS
+            pass
 
         self.to_pil = ToPILImage()
         self.full_ds = None
@@ -128,6 +131,9 @@ class ModelTrainer(L.LightningModule):
                         self.model = EBT_IMG_Denoise(self.hparams)
                     else:
                         raise ValueError(f"task type: {self.hparams.image_task} not supported in base model trainer as a model as of now")
+                elif self.hparams.modality == "MUS":
+                    #TODO: add logic here for MUS
+                    pass
                 else:
                     raise ValueError(f"Modality: {self.hparams.modality} not supported as a base model trainer model as of now")
             elif self.hparams.model_name == "baseline_transformer":
@@ -135,6 +141,9 @@ class ModelTrainer(L.LightningModule):
                     self.model = Baseline_Transformer_VID(self.hparams)
                 elif self.hparams.modality == "NLP":
                     self.model = Baseline_Transformer_NLP(self.hparams)
+                elif self.hparams.modality == "MUS":
+                    #TODO: add logic here for MUS
+                    pass
                 else:
                     raise ValueError(f"Modality: {self.hparams.modality} not supported as a base model trainer model as of now")
             elif self.hparams.model_name == "dit":
@@ -143,6 +152,7 @@ class ModelTrainer(L.LightningModule):
                         self.model = Diffusion_Transformer_IMG_T2I(self.hparams) # this is bidirectional not AR
                     elif self.hparams.image_task == "denoising":
                         self.model = Diffusion_Transformer_IMG_Denoise(self.hparams) # this is bidirectional not AR
+                #TODO: maybe add logic here for MUS (consider difference between smybolic and neural approaches)
                 else:
                     raise ValueError(f"Modality: {self.hparams.modality} not supported as a base model trainer model as of now")
             else:
@@ -174,6 +184,7 @@ class ModelTrainer(L.LightningModule):
                 if param.requires_grad and "image_encoder" not in name: # NOTE need to modify this code to exclude specific frozen portions
                     print(f"registering param - {name}")
                     param.register_hook(self.create_hook(name))
+                    # TODO: consider adding exclusion logic for audio_encoder freezing in the future (if audio mus modality is added)
                 else:
                     self.model.parameters_not_to_check.add(name)
 
@@ -302,6 +313,9 @@ class ModelTrainer(L.LightningModule):
             elif self.hparams.modality == "IMG":
                 outputs = generate_image(self.model, batch, self.hparams)
                 self.log_metrics(outputs, "test")
+            elif self.hparams.modality == "MUS":
+                # TODO: add logic here for MUS
+                pass
             else:
                 raise NotImplementedError(f"Inference mode not supported for modality {self.hparams.modality} yet")
         else: # all other modes just get metrics
@@ -329,7 +343,9 @@ class ModelTrainer(L.LightningModule):
         elif self.hparams.modality == "VID":
             return self.configure_optimizers_vid()
         elif self.hparams.modality == "IMG":
-            return self.configure_optimizers_img()
+            return self.configure_optimizers_img()     
+        elif self.hparams.modality == "MUS":
+            return self.configure_optimizers_mus()
         else:
             raise NotImplementedError(f"Modality {self.hparams.modality} does not have configure optimizers supported yet")
         
@@ -453,6 +469,9 @@ class ModelTrainer(L.LightningModule):
         else:
             raise NotImplementedError(f"havent implemented configure optimizers for model {self.hparams.model_name}")
 
+    def configure_optimizers_mus(self):
+        # TODO: add logic for mus here
+        pass
 
     def create_full_ds(self):
         if self.hparams.dataset_name == "coco_tiny":
@@ -512,7 +531,8 @@ class ModelTrainer(L.LightningModule):
                 self.val_ds = AI2ArcDataset(self.hparams, split = 'validation')
             elif self.hparams.dataset_name == "squad":
                 self.train_ds = SQuADDataset(self.hparams, split = 'train')
-                self.val_ds = SQuADDataset(self.hparams, split = 'validation')
+                self.val_ds = SQuADDataset(self.hparams, split = 'validation')          
+            # TODO: add logic here for MUS
             else:
                 raise NotImplementedError("Haven't implemented this dataset yet")
             print(f"{self.hparams.dataset_name} length of train_dataset: {len(self.train_ds)} and val_dataset: {len(self.val_ds)}")
@@ -553,6 +573,7 @@ class ModelTrainer(L.LightningModule):
                 raise NotImplementedError(f"no planbench test split")
             elif self.hparams.dataset_name == "ai2arc":
                 self.test_ds = AI2ArcDataset(self.hparams, split = "test")
+            # TODO: add logic here for MUS
             else:
                 raise NotImplementedError("haven't implemented this dataset yet")
             print(f"{self.hparams.dataset_name} length of test_ds: {len(self.test_ds)}")
@@ -563,6 +584,7 @@ class ModelTrainer(L.LightningModule):
         collate_fn = None if not self.hparams.modality == "NLP" else NLP_HF_Collator(self.hparams) #NOTE this assumes all modalities except NLP DONT have collator, may not be true in the future
         if self.hparams.dataset_name == "nlp_synthetic": #NOTE this is a hack to get around the fact that synthetic dataset cant return real text and thus cant use collate_fn
             collate_fn = None
+        # TODO: maybe add logic here for MUS collator, only if needed
         return collate_fn
     
     def train_dataloader(self):
@@ -605,6 +627,7 @@ class ModelTrainer(L.LightningModule):
                 wandb_video = wandb.Video(video_np, fps=4, format="mp4")
                 self.logger.experiment.log({f'{phase}_{key}': wandb_video})
 
+            # TODO: maybe add here logic for mus (audio codec)
             elif isinstance(value, torch.Tensor) and value.numel() > 1: # histogram
                 self.logger.experiment.log({f"{phase}_{key}": wandb.Histogram(value.detach().cpu())})
 
