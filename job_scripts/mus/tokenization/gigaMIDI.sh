@@ -4,8 +4,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=32G
-#SBATCH --time=06:00:00            
+#SBATCH --mem=64G
+#SBATCH --time=12:00:00            
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
