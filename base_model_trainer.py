@@ -26,14 +26,17 @@ from data.nlp.squad_dataloader import SQuADDataset
 from data.nlp.ai2arc_dataloader import AI2ArcDataset
 from data.nlp.planbench_dataloader import PlanBenchDataset
 from data.nlp.synthetic_dataset import NLPSyntheticDataset
+from data.mus.symbolic.dataloaders.giga_midi_dataloader import GigaMidiDataset
 
 from model.vid.ebt import EBT_VID
 from model.nlp.ebt import EBT_NLP
+from model.mus.ebt import EBT_MUS
 from model.img.ebt_t2i import EBT_IMG_T2I
 from model.img.ebt_denoise import EBT_IMG_Denoise
 
 from model.vid.baseline_transformer import Baseline_Transformer_VID
 from model.nlp.baseline_transformer import Baseline_Transformer_NLP
+from model.mus.baseline_transformer import Baseline_Transformer_MUS
 
 from model.img.dit_t2i import Diffusion_Transformer_IMG_T2I
 from model.img.dit_denoise import Diffusion_Transformer_IMG_Denoise
@@ -42,6 +45,7 @@ from model.model_utils import save_frames, denormalize, load_image_encoder, cent
 from inference.nlp.generate_text import generate_text, get_ppl
 from inference.vid.generate_video import generate_video
 from inference.img.generate_image import generate_image
+from inference.mus.generate_music import generate_music
 from optimization import (WarmUpCosineAnnealingLR, LARS, exclude_bias_and_norm, StableAdamW, StableAdamWUnfused)
 from utils import text_logger
 from utils.metrics_calculator import get_torchmetrics
@@ -573,7 +577,7 @@ class ModelTrainer(L.LightningModule):
                 raise NotImplementedError(f"no planbench test split")
             elif self.hparams.dataset_name == "ai2arc":
                 self.test_ds = AI2ArcDataset(self.hparams, split = "test")
-            # TODO: add logic here for MUS
+            # TODO: add logic here for MUS (both GigaMIDI dataset and custom ones)
             else:
                 raise NotImplementedError("haven't implemented this dataset yet")
             print(f"{self.hparams.dataset_name} length of test_ds: {len(self.test_ds)}")
