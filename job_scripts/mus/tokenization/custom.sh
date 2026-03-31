@@ -12,16 +12,31 @@
 # --- 1. Capture Arguments ---
 DATASET_NAME=$1
 TOKENIZER_TYPE=$2
+VANILLA_FLAG=$3  # Optional: pass --vanilla to use vanilla vocabulary (only for anticipation)
 
 if [ -z "$DATASET_NAME" ] || [ -z "$TOKENIZER_TYPE" ]; then
     echo "❌ Error: Missing required arguments."
-    echo "Usage: sbatch $0 [dataset-name] [tokenizer-type]"
+    echo "Usage: sbatch $0 [dataset-name] [tokenizer-type] [--vanilla]"
     echo "Example: sbatch $0 jordan-progrock-dataset miditok"
+    echo "Example: sbatch $0 jordan-progrock-dataset anticipation --vanilla"
+    exit 1
+fi
+
+# Validate that --vanilla is only used with anticipation
+if [ "$VANILLA_FLAG" = "--vanilla" ] && [ "$TOKENIZER_TYPE" != "anticipation" ]; then
+    echo "❌ Error: --vanilla flag is only supported for anticipation tokenizer"
+    echo "Usage: sbatch $0 [dataset-name] [tokenizer-type] [--vanilla]"
+    echo "Example: sbatch $0 jordan-progrock-dataset anticipation --vanilla"
     exit 1
 fi
 
 # --- 2. DYNAMIC NAMING (Self-Re-Submission) ---
-JOB_NAME="tok_${DATASET_NAME}_${TOKENIZER_TYPE}"
+# Build job name, appending "vanilla" if that flag is set
+if [ "$VANILLA_FLAG" = "--vanilla" ]; then
+    JOB_NAME="tok_${DATASET_NAME}_${TOKENIZER_TYPE}_vanilla"
+else
+    JOB_NAME="tok_${DATASET_NAME}_${TOKENIZER_TYPE}"
+fi
 
 # We check if a special flag 'SUBMITTED' is NOT set
 if [ -z "$SUBMITTED" ]; then
@@ -32,7 +47,7 @@ if [ -z "$SUBMITTED" ]; then
     export SUBMITTED=1
     sbatch --job-name="$JOB_NAME" \
            --export=ALL,SUBMITTED=1 \
-           "$0" "$DATASET_NAME" "$TOKENIZER_TYPE"
+           "$0" "$DATASET_NAME" "$TOKENIZER_TYPE" "$VANILLA_FLAG"
     
     exit 0
 fi
@@ -83,10 +98,15 @@ echo "Project Root:   $PROJECT_ROOT"
 echo "Data Storage:   ${REMOTE_DATA_STORAGE:-Local Project Directory}"
 echo "Dataset:        $DATASET_NAME"
 echo "Module:         $MODULE_NAME"
+if [ "$VANILLA_FLAG" = "--vanilla" ]; then
+    echo "Vocabulary:     Vanilla (no anticipation control block)"
+else
+    echo "Vocabulary:     Default (no vanilla flag)"
+fi
 echo "-----------------------------"
 
 # --- 7. Execution ---
-if "$PYTHON_EXEC" -m "$MODULE_NAME" CUSTOM "$DATASET_NAME"; then
+if "$PYTHON_EXEC" -m "$MODULE_NAME" CUSTOM "$DATASET_NAME" $VANILLA_FLAG; then
     echo "✅ Tokenization Complete for $DATASET_NAME."
 else
     echo "❌ Error: Tokenization failed for $DATASET_NAME."
