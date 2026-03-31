@@ -9,17 +9,31 @@ from miditok import REMI, TokenizerConfig
 from path_utils import get_dataset_path, get_subset_path
 from dataloaders.constants import DatasetType
 
+# NOTE: vocab import moved to __init__ to allow dynamic selection via use_vanilla flag
+
 # Import the main logic from your sub-modules
 from tokenization.anticipation.train.midi_preprocess import main as preprocess_main
 from tokenization.anticipation.finetune.tokenize_custom import main as custom_main
 from tokenization.anticipation.train.tokenize_gigaMIDI import main as giga_main
 
 class AnticipationTokenizer:
-    def __init__(self, dataset_name: str, dataset_type: DatasetType, augment: int = 1, interarrival: bool = False, use_wandb = True):
+    def __init__(self, dataset_name: str, dataset_type: DatasetType, augment: int = 1, interarrival: bool = False, use_vanilla: bool = False, use_wandb = True):
+        # Set environment variable BEFORE importing vocab to enable dynamic selection
+        if use_vanilla:
+            os.environ['ANTICIPATION_VANILLA'] = 'true'
+        else:
+            os.environ['ANTICIPATION_VANILLA'] = 'false'
+        
+        # Import vocab after setting the flag
+        from tokenization.anticipation.anticipation.vocab_selector import (
+            VOCAB_SIZE, MIDI_VOCAB_SIZE, REST, MIDI_SEPARATOR
+        )
+        
         self.dataset_name = dataset_name
         self.dataset_type = dataset_type
         self.augment = augment
         self.interarrival = interarrival
+        self.use_vanilla = use_vanilla
         self.use_wandb = use_wandb
         
         if self.use_wandb:
@@ -27,15 +41,17 @@ class AnticipationTokenizer:
             # We capitalize it for a cleaner look on the dashboard
             project_formatted = f"{self.dataset_name.replace('-', ' ').title().replace(' ', '-')}-Tokenization"
             
+            vocab_mode = "vanilla" if self.use_vanilla else "anticipation"
             wandb.init(
                 project=project_formatted,
-                name=f"anticipation-{datetime.now().strftime('%m%d-%H%M')}",
+                name=f"{vocab_mode}-{datetime.now().strftime('%m%d-%H%M')}",
                 settings=wandb.Settings(console="wrap_raw"), 
                 config={
                     "dataset": dataset_name,
-                    "pipeline": "Anticipation",
+                    "pipeline": vocab_mode,
                     "augment": self.augment,
-                    "interarrival": self.interarrival
+                    "interarrival": self.interarrival,
+                    "use_vanilla": self.use_vanilla
                 }
             )
         
@@ -51,6 +67,7 @@ class AnticipationTokenizer:
         
         # Initialize a basic tokenizer just for the "Mirror Validation" check
         self.validator = REMI(TokenizerConfig())
+
 
     def _pre_cleanup_and_validate(self):
         """
@@ -148,10 +165,45 @@ class AnticipationTokenizer:
         self.preprocess(add_drum=add_drum)
         self.tokenize()
         print(f"=== Finished. Data is in: {self.token_dir} ===")
+    
+    def get_vocab_size(self) -> int:
+        """
+        Returns the vocabulary size for the anticipation tokenizer.
+        Different based on encoding type (interarrival vs arrival-time), and anticipation capability.
+        
+        Returns:
+            int: Vocabulary size
+        """
+        # Import here to respect the use_vanilla flag set in __init__
+        from tokenization.anticipation.anticipation.vocab_selector import VOCAB_SIZE, MIDI_VOCAB_SIZE
+        
+        if self.interarrival:
+            return MIDI_VOCAB_SIZE
+        else:
+            return VOCAB_SIZE
+    
+    def get_pad_token_id(self) -> int:
+        """
+        Returns the padding token ID for the anticipation tokenizer.
+        Different based on encoding type (interarrival vs arrival-time), and anticipation capability.
+        
+        Interarrival uses MIDI_SEPARATOR (for HuggingFace generation compatibility).
+        Arrival-time uses REST (for event padding).
+        
+        Returns:
+            int: Padding token ID
+        """
+        # Import here to respect the use_vanilla flag set in __init__
+        from tokenization.anticipation.anticipation.vocab_selector import REST, MIDI_SEPARATOR
+        
+        if self.interarrival:
+            return MIDI_SEPARATOR
+        else:
+            return REST
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(f"Usage: python3 -m tokenization.anticipation_tokenizer [{', '.join(DatasetType.list())}]")
+        print(f"Usage: python3 -m tokenization.anticipation_tokenizer [{', '.join(DatasetType.list())}] [--vanilla]")
         sys.exit(1)
 
     try:
@@ -160,6 +212,9 @@ if __name__ == "__main__":
         print(f"❌ Error: '{sys.argv[1]}' is not a valid dataset type.")
         sys.exit(1)
     
+    # Check for --vanilla flag
+    use_vanilla = '--vanilla' in sys.argv
+    
     # Defaults for GigaMIDI
     if mode == DatasetType.GIGA_MIDI:
         dataset_name = "giga-midi"
@@ -167,7 +222,7 @@ if __name__ == "__main__":
         interarrival = True
         add_drum = False
     elif mode == DatasetType.CUSTOM:
-        dataset_name = sys.argv[2] if len(sys.argv) > 2 else "custom"
+        dataset_name = sys.argv[2] if len(sys.argv) > 2 and not sys.argv[2].startswith('--') else "custom"
         augment = 1       
         interarrival = True
         add_drum = True
@@ -179,7 +234,8 @@ if __name__ == "__main__":
         dataset_name=dataset_name, 
         dataset_type=mode,
         augment=augment, 
-        interarrival=interarrival
+        interarrival=interarrival,
+        use_vanilla=use_vanilla
     )
     
     master.run_full_pipeline(add_drum=add_drum)
