@@ -30,7 +30,8 @@ from data.mus.symbolic.dataloaders.giga_midi_dataloader import GigaMidiDataset
 
 from model.vid.ebt import EBT_VID
 from model.nlp.ebt import EBT_NLP
-from model.mus.ebt import EBT_MUS
+from model.mus.ebt_symbolic import EBT_MUS_SYMB
+from model.mus.ebt_neural import EBT_MUS_NEUR
 from model.img.ebt_t2i import EBT_IMG_T2I
 from model.img.ebt_denoise import EBT_IMG_Denoise
 
@@ -113,8 +114,8 @@ class ModelTrainer(L.LightningModule):
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True)
             ])
-        if self.hparams.modality == "MUS":
-            # TODO: add logic here for MUS
+        if self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+            # Music-specific setup handled in model initialization
             pass
 
         self.to_pil = ToPILImage()
@@ -135,9 +136,10 @@ class ModelTrainer(L.LightningModule):
                         self.model = EBT_IMG_Denoise(self.hparams)
                     else:
                         raise ValueError(f"task type: {self.hparams.image_task} not supported in base model trainer as a model as of now")
-                elif self.hparams.modality == "MUS":
-                    #TODO: add logic here for MUS
-                    pass
+                elif self.hparams.modality == "MUS_SYMB":
+                    self.model = EBT_MUS_SYMB(self.hparams)
+                elif self.hparams.modality == "MUS_NEUR":
+                    self.model = EBT_MUS_NEUR(self.hparams)
                 else:
                     raise ValueError(f"Modality: {self.hparams.modality} not supported as a base model trainer model as of now")
             elif self.hparams.model_name == "baseline_transformer":
@@ -145,9 +147,8 @@ class ModelTrainer(L.LightningModule):
                     self.model = Baseline_Transformer_VID(self.hparams)
                 elif self.hparams.modality == "NLP":
                     self.model = Baseline_Transformer_NLP(self.hparams)
-                elif self.hparams.modality == "MUS":
-                    #TODO: add logic here for MUS
-                    pass
+                elif self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+                    self.model = Baseline_Transformer_MUS(self.hparams)
                 else:
                     raise ValueError(f"Modality: {self.hparams.modality} not supported as a base model trainer model as of now")
             elif self.hparams.model_name == "dit":
@@ -317,9 +318,9 @@ class ModelTrainer(L.LightningModule):
             elif self.hparams.modality == "IMG":
                 outputs = generate_image(self.model, batch, self.hparams)
                 self.log_metrics(outputs, "test")
-            elif self.hparams.modality == "MUS":
-                # TODO: add logic here for MUS
-                pass
+            elif self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+                outputs = generate_music(self.model, batch, self.hparams)
+                self.log_metrics(outputs, "test")
             else:
                 raise NotImplementedError(f"Inference mode not supported for modality {self.hparams.modality} yet")
         else: # all other modes just get metrics
@@ -348,7 +349,7 @@ class ModelTrainer(L.LightningModule):
             return self.configure_optimizers_vid()
         elif self.hparams.modality == "IMG":
             return self.configure_optimizers_img()     
-        elif self.hparams.modality == "MUS":
+        elif self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
             return self.configure_optimizers_mus()
         else:
             raise NotImplementedError(f"Modality {self.hparams.modality} does not have configure optimizers supported yet")
@@ -474,8 +475,26 @@ class ModelTrainer(L.LightningModule):
             raise NotImplementedError(f"havent implemented configure optimizers for model {self.hparams.model_name}")
 
     def configure_optimizers_mus(self):
-        # TODO: add logic for mus here
-        pass
+        if self.hparams.model_name == "ebt":
+            alpha_param = self.model.alpha
+            other_params = [param for name, param in self.model.named_parameters() if not any(keyword in name for keyword in ['alpha'])]
+            assert len(other_params) > 1, "Could not gather model params correctly please investigate"
+
+            optimizer_parameters = [
+                {'params': alpha_param, 'weight_decay': 0.0, 'lr': self.hparams.mcmc_step_size_lr_multiplier*self.hparams.peak_learning_rate},  # No weight decay for alpha
+                {'params': other_params, 'weight_decay': self.hparams.weight_decay, 'lr': self.hparams.peak_learning_rate}  # Weight decay for other parameters
+            ]
+            return self.get_optimizer_scheduler_dict(optimizer_parameters)
+            
+        elif self.hparams.model_name == "baseline_transformer":
+            all_params = [param for _, param in self.model.named_parameters()]
+            optimizer_parameters = [
+                {'params': all_params, 'weight_decay': self.hparams.weight_decay, 'lr': self.hparams.peak_learning_rate}  # Weight decay for other parameters
+            ]
+            return self.get_optimizer_scheduler_dict(optimizer_parameters)
+        
+        else:
+            raise NotImplementedError(f"havent implemented configure optimizers for model {self.hparams.model_name}")
 
     def create_full_ds(self):
         if self.hparams.dataset_name == "coco_tiny":
@@ -535,8 +554,12 @@ class ModelTrainer(L.LightningModule):
                 self.val_ds = AI2ArcDataset(self.hparams, split = 'validation')
             elif self.hparams.dataset_name == "squad":
                 self.train_ds = SQuADDataset(self.hparams, split = 'train')
-                self.val_ds = SQuADDataset(self.hparams, split = 'validation')          
-            # TODO: add logic here for MUS
+                self.val_ds = SQuADDataset(self.hparams, split = 'validation')
+            elif self.hparams.dataset_name == "giga_midi":
+                self.full_ds = GigaMidiDataset(self.hparams)
+                train_samples = int(len(self.full_ds) * (1 - self.hparams.validation_split_pct))
+                valid_samples = len(self.full_ds) - train_samples
+                self.train_ds, self.val_ds = random_split(self.full_ds, [train_samples, valid_samples])
             else:
                 raise NotImplementedError("Haven't implemented this dataset yet")
             print(f"{self.hparams.dataset_name} length of train_dataset: {len(self.train_ds)} and val_dataset: {len(self.val_ds)}")
@@ -577,7 +600,11 @@ class ModelTrainer(L.LightningModule):
                 raise NotImplementedError(f"no planbench test split")
             elif self.hparams.dataset_name == "ai2arc":
                 self.test_ds = AI2ArcDataset(self.hparams, split = "test")
-            # TODO: add logic here for MUS (both GigaMIDI dataset and custom ones)
+            elif self.hparams.dataset_name == "giga_midi":
+                full_ds = GigaMidiDataset(self.hparams)
+                train_samples = int(len(full_ds) * (1 - self.hparams.validation_split_pct))
+                test_samples = len(full_ds) - train_samples
+                _, self.test_ds = random_split(full_ds, [train_samples, test_samples])
             else:
                 raise NotImplementedError("haven't implemented this dataset yet")
             print(f"{self.hparams.dataset_name} length of test_ds: {len(self.test_ds)}")
@@ -631,7 +658,12 @@ class ModelTrainer(L.LightningModule):
                 wandb_video = wandb.Video(video_np, fps=4, format="mp4")
                 self.logger.experiment.log({f'{phase}_{key}': wandb_video})
 
-            # TODO: maybe add here logic for mus (audio codec)
+            elif 'audio' in key and self.hparams.modality == "MUS_NEUR":  # audio for neural music modality only
+                audio_np = value.cpu().numpy() if isinstance(value, torch.Tensor) else value
+                sample_rate = self.hparams.get('audio_sample_rate', 16000)
+                wandb_audio = wandb.Audio(audio_np, sample_rate=sample_rate)
+                self.logger.experiment.log({f'{phase}_{key}': wandb_audio})
+
             elif isinstance(value, torch.Tensor) and value.numel() > 1: # histogram
                 self.logger.experiment.log({f"{phase}_{key}": wandb.Histogram(value.detach().cpu())})
 
