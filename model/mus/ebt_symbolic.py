@@ -14,7 +14,7 @@ import math
 import os
 from model.model_utils import *
 from model.replay_buffer import CausalReplayBuffer
-from model.mus.tokenizer_utils import load_tokenizer
+from data.mus.symbolic.tokenization.tokenizer_utils import load_tokenizer
 
 
 class EBT_MUS_SYMB(nn.Module):
@@ -241,8 +241,12 @@ class EBT_MUS_SYMB(nn.Module):
         """
         Compute loss for MCMC music generation.
         
-        Supervises the model at EVERY refinement step, encouraging
+        Supervises the model at refinement steps, encouraging
         gradual improvement of predictions through MCMC iterations.
+        
+        Supports:
+        - Label smoothing: soften supervision early MCMC steps
+        - Truncated loss: only supervise final MCMC step
         
         Args:
             batch: Dict with 'input_ids' (MIDI tokens)
@@ -281,7 +285,7 @@ class EBT_MUS_SYMB(nn.Module):
         
         next_token_indices = next_token_indices.reshape(-1)  # (B*S,)
         
-        # ===== Compute loss at EVERY MCMC step =====
+        # ===== Compute loss (with optional label smoothing) =====
         reconstruction_loss = 0
         total_mcmc_steps = len(predicted_energies)
         
@@ -293,28 +297,56 @@ class EBT_MUS_SYMB(nn.Module):
         for mcmc_step, (predicted_dist, energy) in enumerate(
             zip(predicted_distributions, predicted_energies)):
             
-            # Cross-entropy loss: how different from ground truth?
+            # Reshape logits for loss computation
             if isinstance(predicted_dist, torch.Tensor) and predicted_dist.dim() > 2:
                 predicted_dist = predicted_dist.reshape(-1, self.vocab_size)
             
-            ce_loss = F.cross_entropy(
-                predicted_dist,
-                next_token_indices,
-                ignore_index=self.pad_token_id
-            )
+            # ===== Apply label smoothing if enabled =====
+            # Progressively harden supervision from first to last MCMC step
+            if hasattr(self.hparams, 'soften_target_prob_dist') and self.hparams.soften_target_prob_dist != 0.0:
+                if total_mcmc_steps <= 1:
+                    label_smoothing = 0.0
+                else:
+                    # Early steps: looser (higher label_smoothing)
+                    # Later steps: tighter (lower label_smoothing)
+                    label_smoothing = ((total_mcmc_steps - 1) - mcmc_step) / (total_mcmc_steps - 1) * self.hparams.soften_target_prob_dist
+                
+                ce_loss = F.cross_entropy(
+                    predicted_dist,
+                    next_token_indices,
+                    ignore_index=self.pad_token_id,
+                    label_smoothing=label_smoothing
+                )
+            else:
+                # Standard cross-entropy without label smoothing
+                ce_loss = F.cross_entropy(
+                    predicted_dist,
+                    next_token_indices,
+                    ignore_index=self.pad_token_id
+                )
             
-            reconstruction_loss += ce_loss
+            # ===== Accumulate loss (with truncate_mcmc option) =====
+            # If truncate_mcmc: only use final step loss
+            # Otherwise: accumulate all steps and average
+            if hasattr(self.hparams, 'truncate_mcmc') and self.hparams.truncate_mcmc:
+                if mcmc_step == (total_mcmc_steps - 1):
+                    reconstruction_loss = ce_loss
+                    final_loss = ce_loss.detach()
+                    final_energy = energy.squeeze().mean().detach()
+            else:
+                reconstruction_loss += ce_loss
+                if mcmc_step == (total_mcmc_steps - 1):
+                    final_loss = ce_loss.detach()
+                    final_energy = energy.squeeze().mean().detach()
             
-            # Track metrics
+            # Track initial step
             if mcmc_step == 0:
                 initial_loss = ce_loss.detach()
                 initial_energy = energy.squeeze().mean().detach()
-            if mcmc_step == total_mcmc_steps - 1:
-                final_loss = ce_loss.detach()
-                final_energy = energy.squeeze().mean().detach()
         
-        # Average loss over MCMC steps
-        reconstruction_loss = reconstruction_loss / total_mcmc_steps
+        # Average loss over MCMC steps (unless truncate_mcmc)
+        if not (hasattr(self.hparams, 'truncate_mcmc') and self.hparams.truncate_mcmc):
+            reconstruction_loss = reconstruction_loss / total_mcmc_steps
         
         # Compute energy improvement (lower is better)
         energy_improvement = initial_energy - final_energy if (

@@ -5,7 +5,7 @@
 ### SLURM CONFIGURATION ###
 #SBATCH --nodes=1
 #SBATCH --gpus=8
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=40
 #SBATCH --time=24:00:00
 #SBATCH --mem=160GB
@@ -24,6 +24,13 @@ export MODEL_SIZE="${RUN_NAME#*-}"; export MODEL_SIZE="${MODEL_SIZE%%-*}"
 mkdir -p logs/slurm/mus/
 
 module purge
+eval "$(conda shell.bash hook)"
+conda activate music_EBT
+
+export PYTHONPATH="/home/rebcecca/music-EBT:$PYTHONPATH"
+export PYTHONUNBUFFERED=1
+
+cd /home/rebcecca/music-EBT || exit 1
 
 lr=(0.001)
 alpha=(500)
@@ -64,7 +71,7 @@ python train_model.py \
 --validation_split_pct 0.01 \
 --val_check_interval 5000 \
 \
---wandb_project 'mus_symbolic_pretrain' \
+--wandb_project 'mus_symb_ebt_s1_pretrain' \
 \
 --log_model_archi \
 --log_gradients \

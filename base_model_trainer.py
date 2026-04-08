@@ -26,7 +26,7 @@ from data.nlp.squad_dataloader import SQuADDataset
 from data.nlp.ai2arc_dataloader import AI2ArcDataset
 from data.nlp.planbench_dataloader import PlanBenchDataset
 from data.nlp.synthetic_dataset import NLPSyntheticDataset
-from data.mus.symbolic.dataloaders.giga_midi_dataloader import GigaMidiDataset
+from data.mus.symbolic.dataloaders.giga_midi_dataloader import GigaMIDIDataset
 
 from model.vid.ebt import EBT_VID
 from model.nlp.ebt import EBT_NLP
@@ -556,7 +556,7 @@ class ModelTrainer(L.LightningModule):
                 self.train_ds = SQuADDataset(self.hparams, split = 'train')
                 self.val_ds = SQuADDataset(self.hparams, split = 'validation')
             elif self.hparams.dataset_name == "giga_midi":
-                self.full_ds = GigaMidiDataset(self.hparams)
+                self.full_ds = GigaMIDIDataset(self.hparams)
                 train_samples = int(len(self.full_ds) * (1 - self.hparams.validation_split_pct))
                 valid_samples = len(self.full_ds) - train_samples
                 self.train_ds, self.val_ds = random_split(self.full_ds, [train_samples, valid_samples])
@@ -601,7 +601,7 @@ class ModelTrainer(L.LightningModule):
             elif self.hparams.dataset_name == "ai2arc":
                 self.test_ds = AI2ArcDataset(self.hparams, split = "test")
             elif self.hparams.dataset_name == "giga_midi":
-                full_ds = GigaMidiDataset(self.hparams)
+                full_ds = GigaMIDIDataset(self.hparams)
                 train_samples = int(len(full_ds) * (1 - self.hparams.validation_split_pct))
                 test_samples = len(full_ds) - train_samples
                 _, self.test_ds = random_split(full_ds, [train_samples, test_samples])
