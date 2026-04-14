@@ -92,7 +92,7 @@ class Baseline_Transformer_MUS(L.LightningModule):
         embeddings = self.embeddings(x)  # (B, S, D)
         
         # Pass through transformer
-        predicted_embeddings = self.transformer(embeddings, learning=learning)  # (B, S, D)
+        predicted_embeddings = self.transformer(embeddings, start_pos=0, learning=learning)  # (B, S, D)
         
         # Project to vocabulary
         predicted_logits = self.output(predicted_embeddings)  # (B, S, V)

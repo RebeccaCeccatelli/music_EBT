@@ -27,10 +27,33 @@ module purge
 eval "$(conda shell.bash hook)"
 conda activate music_EBT
 
-export PYTHONPATH="/home/rebcecca/music-EBT:$PYTHONPATH"
+### Get the project root directory
+### Try multiple methods since $0 can be unreliable in SLURM
+### Method 1: Search up directory tree for train_model.py (most reliable in SLURM)
+find_project_root() {
+    local dir="$1"
+    for ((i=0; i<10; i++)); do
+        if [[ -f "${dir}/train_model.py" ]]; then
+            echo "${dir}"
+            return 0
+        fi
+        dir="$(dirname "${dir}")"
+    done
+    echo "" # Not found
+    return 1
+}
+
+PROJECT_ROOT="$(find_project_root "$(pwd)")"
+if [[ -z "${PROJECT_ROOT}" ]]; then
+    echo "❌ Error: Could not find project root. train_model.py not found in parent directories."
+    echo "   Make sure this script is in <project_root>/job_scripts/mus/pretrain/"
+    exit 1
+fi
+
+export PYTHONPATH="${PROJECT_ROOT}:$PYTHONPATH"
 export PYTHONUNBUFFERED=1
 
-cd /home/rebcecca/music-EBT || exit 1
+cd "${PROJECT_ROOT}" || exit 1
 
 lr=(0.0006)
 alpha=(500)
