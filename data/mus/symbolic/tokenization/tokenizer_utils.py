@@ -175,3 +175,127 @@ def get_supported_tokenizers() -> dict:
         'Anticipation-Interarrival': 'Anticipation (MIDI-like interarrival)',
         'Anticipation-Arrival-Time': 'Anticipation (absolute time, supports infilling)',
     }
+
+
+def verify_tokens(dataset_name: str = "giga-midi") -> dict:
+    """
+    Verify that tokenization is complete for a dataset.
+    Checks for presence and size of tokenized-events files.
+    
+    Args:
+        dataset_name: Dataset name (default: 'giga-midi')
+    
+    Returns:
+        dict: Status for each split ('train', 'validation', 'test')
+    """
+    import os
+    from pathlib import Path
+    from data.mus.symbolic.path_utils import get_dataset_path
+    
+    root_dir = get_dataset_path(dataset_name)
+    token_dir = os.path.join(root_dir, "tokens", "anticipation")
+    
+    print(f"🔍 Checking tokenization for: {dataset_name}")
+    print(f"   Token directory: {token_dir}")
+    print()
+    
+    splits = ['train', 'validation', 'test']
+    results = {}
+    all_ok = True
+    total_size_mb = 0
+    
+    for split in splits:
+        token_file = os.path.join(token_dir, f"tokenized-events-{split}.txt")
+        
+        if os.path.exists(token_file):
+            size_bytes = os.path.getsize(token_file)
+            size_mb = size_bytes / (1024 * 1024)
+            total_size_mb += size_mb
+            
+            # Count lines (rough estimate of number of tokenized sequences)
+            try:
+                with open(token_file, 'r') as f:
+                    num_lines = sum(1 for _ in f)
+            except:
+                num_lines = "?"
+            
+            if size_bytes > 0:
+                results[split] = "✅"
+                status = f"✅ READY   | {size_mb:>8.2f} MB | ~{num_lines} sequences"
+            else:
+                results[split] = "⚠️"
+                all_ok = False
+                status = f"⚠️  EMPTY   | {size_mb:>8.2f} MB | (0 bytes)"
+        else:
+            results[split] = "❌"
+            all_ok = False
+            status = f"❌ MISSING | File not found"
+        
+        print(f"  {split:12} {status}")
+    
+    print()
+    print(f"📊 Total tokenized data: {total_size_mb:.2f} MB")
+    
+    # Check for miditok REMI tokenizer
+    remi_tokenizer = os.path.join(token_dir, "..", "miditok", "tokenizer.json")
+    if os.path.exists(remi_tokenizer):
+        print(f"✅ REMI tokenizer found: {remi_tokenizer}")
+    else:
+        print(f"⚠️  REMI tokenizer not found (may not be needed)")
+    
+    print()
+    if all_ok:
+        print("✨ Tokenization is complete! Ready for training.")
+    else:
+        print("⚠️  Tokenization is incomplete. Run:")
+        print(f"   cd data/mus/symbolic/tokenization")
+        print(f"   python -m anticipation_tokenizer {dataset_name}")
+    
+    return results
+
+
+def verify_midi_source(dataset_name: str = "giga-midi") -> bool:
+    """
+    Check if raw MIDI files are present before tokenization.
+    
+    Args:
+        dataset_name: Dataset name (default: 'giga-midi')
+    
+    Returns:
+        bool: True if all splits have MIDI files, False otherwise
+    """
+    import os
+    from pathlib import Path
+    from data.mus.symbolic.path_utils import get_dataset_path
+    
+    root_dir = get_dataset_path(dataset_name)
+    midi_dir = os.path.join(root_dir, "midi")
+    
+    if not os.path.exists(midi_dir):
+        print(f"❌ MIDI directory not found: {midi_dir}")
+        print(f"   Download GigaMIDI first:")
+        print(f"   python -m data.mus.symbolic.dataloaders.giga_midi_dataloader")
+        return False
+    
+    splits = ['train', 'validation', 'test']
+    print(f"\n📁 Raw MIDI status in: {midi_dir}")
+    
+    all_midi_found = True
+    for split in splits:
+        split_path = os.path.join(midi_dir, split)
+        
+        if os.path.isdir(split_path):
+            # Count MIDI files recursively
+            midi_files = list(Path(split_path).rglob("*.mid")) + list(Path(split_path).rglob("*.midi"))
+            midi_files = [f for f in midi_files if not f.name.startswith("._")]  # Skip Mac junk
+            
+            if midi_files:
+                print(f"  {split:12} ✅ {len(midi_files)} MIDI files found")
+            else:
+                print(f"  {split:12} ⚠️  No MIDI files found")
+                all_midi_found = False
+        else:
+            print(f"  {split:12} ❌ Directory missing")
+            all_midi_found = False
+    
+    return all_midi_found
