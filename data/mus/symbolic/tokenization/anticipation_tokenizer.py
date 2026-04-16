@@ -59,7 +59,9 @@ class AnticipationTokenizer:
         self.midi_dir = get_subset_path(self.dataset_name, "midi")
         
         # 2. Define Token destination and Quarantine
-        self.token_dir = os.path.join(get_dataset_path(self.dataset_name), "tokens", "anticipation")
+        # Use separate folders for vanilla vs non-vanilla anticipation
+        folder_name = "anticipation-vanilla" if self.use_vanilla else "anticipation"
+        self.token_dir = os.path.join(get_dataset_path(self.dataset_name), "tokens", folder_name)
         self.quarantine_dir = os.path.join(get_dataset_path(self.dataset_name), "quarantined_midis")
         
         os.makedirs(self.token_dir, exist_ok=True)
