@@ -4,6 +4,7 @@
 # Auto-Submission Script for GigaMIDI Tokenization with Checkpoint Recovery
 #
 # This script:
+# 0. (Optional) Downloads/Extracts GigaMIDI and runs preprocessing
 # 1. Submits SLURM jobs for each split sequentially
 # 2. Monitors job status and detects timeouts
 # 3. On timeout, checks for checkpoint and auto-resubmits with --resume
@@ -11,12 +12,14 @@
 # 5. Processes splits one at a time to avoid race conditions
 #
 # Usage:
-#   bash auto_submit_gigamidi.sh [--vanilla] [--splits SPLIT1 SPLIT2 ...] [--max-attempts N]
+#   bash auto_submit_gigamidi.sh [OPTIONS]
 #
 # Examples:
-#   bash auto_submit_gigamidi.sh                    # Non-vanilla, all splits
-#   bash auto_submit_gigamidi.sh --vanilla          # Vanilla, all splits
-#   bash auto_submit_gigamidi.sh --vanilla --splits train test
+#   bash auto_submit_gigamidi.sh                              # Full pipeline (download + tokenize, non-vanilla)
+#   bash auto_submit_gigamidi.sh --vanilla                    # Full pipeline with vanilla tokenizer
+#   bash auto_submit_gigamidi.sh --vanilla --splits train     # Download + tokenize only train split
+#   bash auto_submit_gigamidi.sh --skip-download --vanilla    # Skip download, only tokenize
+#   bash auto_submit_gigamidi.sh --download-only              # Only download/extract, skip tokenization
 #   bash auto_submit_gigamidi.sh --max-attempts 10
 #
 ################################################################################
@@ -39,6 +42,8 @@ SPLITS=("train" "test" "validation")
 MAX_ATTEMPTS=5
 POLL_INTERVAL=30
 DETACH=0
+SKIP_DOWNLOAD=0
+DOWNLOAD_ONLY=0
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
@@ -113,6 +118,14 @@ parse_args() {
                 DETACH=1
                 shift
                 ;;
+            --skip-download)
+                SKIP_DOWNLOAD=1
+                shift
+                ;;
+            --download-only)
+                DOWNLOAD_ONLY=1
+                shift
+                ;;
             *)
                 print_error "Unknown argument: $1"
                 usage
@@ -136,14 +149,18 @@ Options:
   --max-attempts N        Max resume attempts per split (default: 5)
   --poll-interval N       Seconds between status checks (default: 30)
   --detach                Submit job and return immediately (no monitoring)
+  --skip-download         Skip download/preprocessing step, only tokenize
+  --download-only         Only download/preprocess, skip tokenization
   -h, --help              Show this help message
 
 Examples:
-  bash auto_submit_gigamidi.sh
-  bash auto_submit_gigamidi.sh --vanilla
-  bash auto_submit_gigamidi.sh --vanilla --splits train
-  bash auto_submit_gigamidi.sh --vanilla --detach
-  bash auto_submit_gigamidi.sh --max-attempts 10
+  bash auto_submit_gigamidi.sh                              # Full pipeline (download + tokenize)
+  bash auto_submit_gigamidi.sh --vanilla                    # Full pipeline, vanilla tokenizer
+  bash auto_submit_gigamidi.sh --vanilla --splits train     # Download + tokenize train split
+  bash auto_submit_gigamidi.sh --skip-download --vanilla    # Skip download, only tokenize
+  bash auto_submit_gigamidi.sh --download-only              # Only download/extract, skip tokenization
+  bash auto_submit_gigamidi.sh --vanilla --detach           # Full pipeline, return immediately
+  bash auto_submit_gigamidi.sh --max-attempts 10            # Full pipeline, max 10 attempts per split
 EOF
 }
 
@@ -172,6 +189,113 @@ check_dependencies() {
     fi
     
     return 0
+}
+
+# Run the preprocessing pipeline as a SLURM job (download + extract + preprocess MIDI → .compound.txt ONLY, no tokenization)
+run_download_and_preprocessing() {
+    print_header "🚀 STEP 0: Submitting Preprocessing Job (Download, Extract, Preprocess MIDI)"
+    
+    print_info "Submitting preprocessing as SLURM job (GigaMIDI download/extraction + MIDI→.compound.txt conversion)..."
+    
+    local job_name="preprocess-gigamidi"
+    [ $VANILLA -eq 1 ] && job_name="${job_name}-vanilla"
+    
+    local export_cmd="export PYTHONPATH='$PROJECT_ROOT/data/mus/symbolic:$PROJECT_ROOT/data/mus/symbolic/tokenization/anticipation:'\$PYTHONPATH && "
+    export_cmd="$export_cmd export PYTHONUNBUFFERED=1 && "
+    export_cmd="$export_cmd export TQDM_ISATTY=1 && "
+    export_cmd="$export_cmd export TQDM_MININTERVAL=0.1 && "
+    export_cmd="$export_cmd export WANDB_CONSOLE=wrap_raw && "
+    export_cmd="$export_cmd cd '$PROJECT_ROOT'"
+    
+    if [ -n "${REMOTE_DATA_STORAGE:-}" ]; then
+        export_cmd="$export_cmd && export REMOTE_DATA_STORAGE='$REMOTE_DATA_STORAGE'"
+    fi
+    
+    if [ -n "${CUSTOM_STORAGE_PATH:-}" ]; then
+        export_cmd="$export_cmd && export REMOTE_DATA_STORAGE='$CUSTOM_STORAGE_PATH'"
+    fi
+    
+    if [ -n "${WANDB_API_KEY:-}" ]; then
+        export_cmd="$export_cmd && export WANDB_API_KEY='${WANDB_API_KEY}'"
+    fi
+    
+    if [ -n "${HUGGING_FACE_HUB_TOKEN:-}" ]; then
+        export_cmd="$export_cmd && export HUGGING_FACE_HUB_TOKEN='${HUGGING_FACE_HUB_TOKEN}'"
+    fi
+    
+    # Build preprocessing commands (download + extract + convert MIDI to .compound.txt, NO tokenization)
+    # Step 1: Download and extract GigaMIDI
+    # Step 2: Run midi_preprocess.py to convert all MIDI files to .compound.txt format
+    local preprocess_cmd="python3 -m dataloaders.giga_midi_dataloader && "
+    preprocess_cmd="$preprocess_cmd python3 data/mus/symbolic/tokenization/anticipation/train/midi_preprocess.py /home/rebcecca/orcd/pool/music_datasets/giga-midi/midi"
+    
+    # Use shared log directory for accessible logs
+    local log_dir="$HOME/slurm-logs"
+    mkdir -p "$log_dir"
+    local job_log="$log_dir/${job_name}.log"
+    
+    print_info "Submitting: sbatch --job-name='$job_name' -c 16 --mem=32G --time=12:00:00 ..."
+    print_info "Log: $job_log"
+    
+    local output=$( \
+        sbatch --job-name="$job_name" \
+               --export=ALL \
+               -c 16 \
+               --mem=32G \
+               --time=12:00:00 \
+               --output="$job_log" \
+               --error="$job_log" \
+               --wrap="$export_cmd && $preprocess_cmd" \
+        2>&1 \
+    )
+    
+    local job_id=$(echo "$output" | grep -oP 'Submitted batch job \K[0-9]+' || echo "")
+    
+    if [ -z "$job_id" ]; then
+        print_error "Failed to submit preprocessing job"
+        echo "$output" >&2
+        return 1
+    fi
+    
+    print_success "Preprocessing job submitted with ID: $job_id"
+    print_info "Logs: $job_log"
+    
+    # Monitor preprocessing job
+    print_info "Monitoring preprocessing job..."
+    local check_count=0
+    local max_checks=$((12*60*60 / 30))  # Allow up to 12 hours with 30s polls
+    
+    while [ $check_count -lt $max_checks ]; do
+        check_count=$((check_count + 1))
+        
+        # Check job status
+        local job_status=$(sacct -j "$job_id" -o State --noheader 2>/dev/null | head -1 | xargs)
+        
+        if [ "$job_status" = "COMPLETED" ]; then
+            print_success "Preprocessing job COMPLETED"
+            return 0
+        elif [ "$job_status" = "FAILED" ]; then
+            print_error "Preprocessing job FAILED"
+            print_error "Check logs: $job_log"
+            return 1
+        elif [ "$job_status" = "TIMEOUT" ]; then
+            print_error "Preprocessing job TIMEOUT"
+            return 1
+        elif [ "$job_status" = "CANCELLED" ]; then
+            print_error "Preprocessing job CANCELLED"
+            return 1
+        fi
+        
+        # Still running - print progress
+        if [ $((check_count % 10)) -eq 0 ]; then
+            echo -ne "\r   ⏳ Check $check_count: status=$job_status"
+        fi
+        
+        sleep 30
+    done
+    
+    print_warning "Monitoring timeout (24 hours) reached"
+    return 1
 }
 
 # Get job status from SLURM (with retries for race conditions)
@@ -439,6 +563,8 @@ main() {
     echo "   Splits: ${SPLITS[*]}"
     echo "   Max attempts: $MAX_ATTEMPTS"
     echo "   Poll interval: ${POLL_INTERVAL}s"
+    echo "   Skip Download: $([ $SKIP_DOWNLOAD -eq 1 ] && echo "Yes" || echo "No")"
+    echo "   Download Only: $([ $DOWNLOAD_ONLY -eq 1 ] && echo "Yes" || echo "No")"
     echo ""
     
     # Check dependencies
@@ -448,6 +574,27 @@ main() {
     fi
     
     echo ""
+    
+    # STEP 0: Download and preprocessing (unless skipped)
+    if [ $SKIP_DOWNLOAD -eq 0 ]; then
+        if ! run_download_and_preprocessing; then
+            print_error "Download/preprocessing failed"
+            exit 1
+        fi
+        echo ""
+    fi
+    
+    # If download-only mode, exit after preprocessing
+    if [ $DOWNLOAD_ONLY -eq 1 ]; then
+        print_header "✅ Download/Preprocess-Only Mode Complete"
+        print_success "GigaMIDI data download and preprocessing completed. Tokenization jobs NOT submitted."
+        exit 0
+    fi
+    
+    # ========================================================================
+    # PHASE 1: PARALLEL TOKENIZATION (via separate SLURM jobs)
+    # ========================================================================
+    print_header "🎹 PHASE 1: Submitting Tokenization Jobs (Per-Split)"
     
     # Process splits
     local completed=()
