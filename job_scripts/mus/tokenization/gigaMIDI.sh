@@ -45,9 +45,9 @@ if [[ "$SLURM_JOB_NAME" == "gigaMIDI.sh" || -z "$SLURM_JOB_NAME" ]]; then
 fi
 
 # --- 3. LOAD ENVIRONMENT VARIABLES ---
-# Locates .env relative to the script's directory (matches lakh.sh logic)
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-ENV_PATH="../../../.env"
+PROJECT_ROOT="$SCRIPT_DIR/../../.."
+ENV_PATH="$SCRIPT_DIR/../../../.env"
 
 if [ -f "$ENV_PATH" ]; then
     export $(grep -v '^#' "$ENV_PATH" | xargs)
@@ -63,8 +63,7 @@ if [ -f "$ENV_PATH" ]; then
         echo "✅ WandB API Key exported."
     fi
 else
-    echo "❌ Error: .env file not found at $ENV_PATH."
-    exit 1
+    echo "⚠️ Warning: .env not found at $ENV_PATH. Using shell environment or defaults."
 fi
 
 # --- 4. DYNAMIC STORAGE LOGIC ---
