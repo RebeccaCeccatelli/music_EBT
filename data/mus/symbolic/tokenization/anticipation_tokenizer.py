@@ -42,18 +42,26 @@ class AnticipationTokenizer:
             project_formatted = f"{self.dataset_name.replace('-', ' ').title().replace(' ', '-')}-Tokenization"
             
             vocab_mode = "vanilla" if self.use_vanilla else "anticipation"
-            wandb.init(
-                project=project_formatted,
-                name=f"{vocab_mode}-{datetime.now().strftime('%m%d-%H%M')}",
-                settings=wandb.Settings(console="wrap_raw"), 
-                config={
-                    "dataset": dataset_name,
-                    "pipeline": vocab_mode,
-                    "augment": self.augment,
-                    "interarrival": self.interarrival,
-                    "use_vanilla": self.use_vanilla
-                }
-            )
+            try:
+                wandb.init(
+                    project=project_formatted,
+                    name=f"{vocab_mode}-{datetime.now().strftime('%m%d-%H%M')}",
+                    settings=wandb.Settings(console="wrap_raw"), 
+                    config={
+                        "dataset": dataset_name,
+                        "pipeline": vocab_mode,
+                        "augment": self.augment,
+                        "interarrival": self.interarrival,
+                        "use_vanilla": self.use_vanilla
+                    }
+                )
+            except Exception as e:
+                # Handle threading/connection issues - log the full error but continue
+                print(f"⚠️  Wandb init failed: {type(e).__name__}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                print("Continuing without wandb tracking...")
+                self.use_wandb = False
         
         # 1. Resolve MIDI source directory
         self.midi_dir = get_subset_path(self.dataset_name, "midi")
@@ -66,22 +74,21 @@ class AnticipationTokenizer:
         
         os.makedirs(self.token_dir, exist_ok=True)
         os.makedirs(self.quarantine_dir, exist_ok=True)
-        
-        # Initialize a basic tokenizer just for the "Mirror Validation" check
-        self.validator = REMI(TokenizerConfig())
 
 
     def _pre_cleanup_and_validate(self):
         """
         1. Physically deletes Mac metadata (._*) and __MACOSX.
-        2. Dry-runs every MIDI to catch corruptions BEFORE the main script crashes.
+        2. Lightweight validation: just checks if MIDI files can be opened (skips encoding).
+           Heavy validation happens during tokenization.
         """
-        print(f"🧹 [Pre-Flight] Cleaning and Validating: {self.midi_dir}")
+        print(f"🧹 [Pre-Flight] Cleaning and Quick Validation: {self.midi_dir}")
         deleted_junk = 0
         quarantined_files = 0
         
         # Get all potential files
         all_paths = list(Path(self.midi_dir).rglob("*.mid")) + list(Path(self.midi_dir).rglob("*.midi"))
+        print(f"   Found {len(all_paths)} MIDI files. Scanning for junk files and obvious corruption...")
         
         for midi_path in all_paths:
             # A. Remove Mac System Junk Immediately
@@ -92,10 +99,11 @@ class AnticipationTokenizer:
                 except: pass
                 continue
 
-            # B. Mirror Check: Try to encode. If it fails, it's 'corrupted' for our purposes.
+            # B. Lightweight Check: Try to open with mido. If it fails, it's 'corrupted'.
+            # (Full encoding validation happens during tokenization)
             try:
-                # We don't need the tokens, just the 'True' or 'False' on whether it opens
-                _ = self.validator.encode(str(midi_path))
+                import mido
+                _ = mido.MidiFile(str(midi_path))
             except Exception:
                 quarantined_files += 1
                 # Move to quarantine while preserving structure
@@ -104,10 +112,18 @@ class AnticipationTokenizer:
                     dest_path = Path(self.quarantine_dir) / rel_path
                     dest_path.parent.mkdir(parents=True, exist_ok=True)
                     shutil.move(str(midi_path), str(dest_path))
-                    print(f"🚨 Quarantined corrupted file: {midi_path.name}")
                 except: pass
 
-        print(f"✅ Cleanup results: {deleted_junk} junk files deleted, {quarantined_files} actual corruptions quarantined.")
+        print(f"✅ Cleanup results: {deleted_junk} junk files deleted, {quarantined_files} corruptions quarantined.")
+        
+        # Log to wandb if enabled
+        if self.use_wandb and wandb.run:
+            wandb.log({
+                "preprocessing_junk_files_deleted": deleted_junk,
+                "preprocessing_corrupted_quarantined": quarantined_files,
+                "preprocessing_total_files_scanned": len(all_paths)
+            })
+        
         return quarantined_files
 
     def preprocess(self, add_drum: bool = False):
@@ -237,7 +253,8 @@ if __name__ == "__main__":
         dataset_type=mode,
         augment=augment, 
         interarrival=interarrival,
-        use_vanilla=use_vanilla
+        use_vanilla=use_vanilla,
+        use_wandb=True  # Enable wandb to log preprocessing metrics
     )
     
     master.run_full_pipeline(add_drum=add_drum)
