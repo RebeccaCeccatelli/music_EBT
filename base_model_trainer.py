@@ -28,6 +28,7 @@ from data.nlp.planbench_dataloader import PlanBenchDataset
 from data.nlp.synthetic_dataset import NLPSyntheticDataset
 from data.mus.symbolic.dataloaders.giga_midi_dataloader import GigaMIDIDataset
 from data.mus.symbolic.dataloaders.test_dataloader import MusicSyntheticDataset
+from data.mus.symbolic.dataloaders.custom_music_dataloader import CustomMusicDataset
 
 from model.vid.ebt import EBT_VID
 from model.nlp.ebt import EBT_NLP
@@ -562,7 +563,13 @@ class ModelTrainer(L.LightningModule):
                 valid_samples = len(self.full_ds) - train_samples
                 self.train_ds, self.val_ds = random_split(self.full_ds, [train_samples, valid_samples])
             else:
-                raise NotImplementedError("Haven't implemented this dataset yet")
+                # Try to load as custom dataset
+                try:
+                    tokenizer_type = getattr(self.hparams, 'dataset_music_tokenizer_type', 'anticipation')
+                    self.train_ds = CustomMusicDataset(self.hparams, self.hparams.dataset_name, split='train', tokenizer_type=tokenizer_type)
+                    self.val_ds = CustomMusicDataset(self.hparams, self.hparams.dataset_name, split='validation', tokenizer_type=tokenizer_type)
+                except Exception as e:
+                    raise NotImplementedError(f"Haven't implemented dataset {self.hparams.dataset_name} and cannot load as custom dataset: {e}")
             print(f"{self.hparams.dataset_name} length of train_dataset: {len(self.train_ds)} and val_dataset: {len(self.val_ds)}")
             
         # Assign test dataset for use in dataloader(s)
@@ -607,7 +614,12 @@ class ModelTrainer(L.LightningModule):
                 test_samples = len(full_ds) - train_samples
                 _, self.test_ds = random_split(full_ds, [train_samples, test_samples])
             else:
-                raise NotImplementedError("haven't implemented this dataset yet")
+                # Try to load as custom dataset
+                try:
+                    tokenizer_type = getattr(self.hparams, 'dataset_music_tokenizer_type', 'anticipation')
+                    self.test_ds = CustomMusicDataset(self.hparams, self.hparams.dataset_name, split='test', tokenizer_type=tokenizer_type)
+                except Exception as e:
+                    raise NotImplementedError(f"haven't implemented test split for dataset {self.hparams.dataset_name} and cannot load as custom dataset: {e}")
             print(f"{self.hparams.dataset_name} length of test_ds: {len(self.test_ds)}")
         else:
             raise ValueError(f"Unknown stage: {stage}, please investigate")
