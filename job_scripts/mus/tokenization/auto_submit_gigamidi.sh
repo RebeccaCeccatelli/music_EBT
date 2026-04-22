@@ -229,13 +229,10 @@ run_download_and_preprocessing() {
     local preprocess_cmd="python3 -m dataloaders.giga_midi_dataloader && "
     preprocess_cmd="$preprocess_cmd python3 data/mus/symbolic/tokenization/anticipation/train/midi_preprocess.py /home/rebcecca/orcd/pool/music_datasets/giga-midi/midi"
     
-    # Use shared log directory for accessible logs
-    local log_dir="$HOME/slurm-logs"
-    mkdir -p "$log_dir"
-    local job_log="$log_dir/${job_name}.log"
+    # Logs are tracked in wandb instead of local files
     
     print_info "Submitting: sbatch --job-name='$job_name' -c 16 --mem=32G --time=12:00:00 ..."
-    print_info "Log: $job_log"
+    print_info "SLURM logs will be discarded. Metrics logged to wandb."
     
     local output=$( \
         sbatch --job-name="$job_name" \
@@ -243,8 +240,9 @@ run_download_and_preprocessing() {
                -c 16 \
                --mem=32G \
                --time=12:00:00 \
-               --output="$job_log" \
-               --error="$job_log" \
+               --output=/dev/null \
+               --error=/dev/null \
+
                --wrap="$export_cmd && $preprocess_cmd" \
         2>&1 \
     )
@@ -354,13 +352,10 @@ submit_job() {
         export_cmd="$export_cmd && export WANDB_API_KEY='${WANDB_API_KEY}'"
     fi
     
-    # Use shared log directory for accessible logs
-    local log_dir="$HOME/slurm-logs"
-    mkdir -p "$log_dir"
-    local job_log="$log_dir/${job_name}.log"
+    # Logs are tracked in wandb instead of local files
     
     print_info "Submitting: sbatch --job-name='$job_name' -c 8 --mem=16G --time=12:00:00 ..."
-    print_info "Log: $job_log"
+    print_info "SLURM logs will be discarded. Metrics logged to wandb."
     
     local output=$( \
         sbatch --job-name="$job_name" \
@@ -368,8 +363,9 @@ submit_job() {
                -c 8 \
                --mem=16G \
                --time=12:00:00 \
-               --output="$job_log" \
-               --error="$job_log" \
+               --output=/dev/null \
+               --error=/dev/null \
+
                --wrap="$export_cmd && $python_cmd" \
         2>&1 \
     )
