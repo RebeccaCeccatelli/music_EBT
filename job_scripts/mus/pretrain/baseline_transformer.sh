@@ -8,20 +8,19 @@
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
-#SBATCH --time=3:00:00
+#SBATCH --time=04:00:00  # Extended for 50k steps
 #SBATCH --mem=80GB
 #SBATCH --partition=mit_normal_gpu
+#SBATCH --output=/dev/null
 
 ### ADDITIONAL RUN INFO ###
 #SBATCH --array=0
 
 ### LOG INFO ###
-#SBATCH --job-name=baseline-symb-xxs-test-2h
-#SBATCH --output=logs/slurm/mus/baseline-symb-xxs-test-2h_%A-%a.log
-export RUN_NAME="baseline-symb-xxs-test-2h"
-# NOTE ctrl d ALL THREE of above to modify job-name, output, and RUN_NAME (which should all be the same)
+#SBATCH --job-name=baseline-symb-xxs-prod
+# SLURM logs sent to wandb (see --wandb_project below)
+export RUN_NAME="baseline-symb-xxs-prod"
 export MODEL_SIZE="xxs"
-mkdir -p logs/slurm/mus/
 
 ### Get the project root directory
 ### Try multiple methods since $0 can be unreliable in SLURM
@@ -51,51 +50,73 @@ export PYTHONUNBUFFERED=1
 
 cd "${PROJECT_ROOT}" || exit 1
 
-lr=(0.0006)
+# Parse command-line arguments
+DATASET_NAME="giga_midi"
+TOKENIZER_TYPE="REMI"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --dataset_name)
+            DATASET_NAME="$2"
+            shift 2
+            ;;
+        --tokenizer_type)
+            TOKENIZER_TYPE="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            exit 1
+            ;;
+    esac
+done
+
+lr=(0.0008)  # Slightly higher LR for better signal
 
 python train_model.py \
 --run_name ${RUN_NAME}${lr[${SLURM_ARRAY_TASK_ID}]} \
 --modality "MUS_SYMB" \
 --model_name "baseline_transformer" \
 --model_size ${MODEL_SIZE} \
-\
---tokenizer_type "REMI" \
+--tokenizer_type "${TOKENIZER_TYPE}" \
 --normalize_initial_condition \
 --context_length 512 \
-\
 --gpus "1" \
-\
 --peak_learning_rate ${lr[${SLURM_ARRAY_TASK_ID}]} \
 --batch_size_per_device 32 \
 --accumulate_grad_batches 2 \
 --gradient_clip_val 1.0 \
-\
---weight_decay 0.01 \
+--weight_decay 0.05 \
 --min_lr_scale 10 \
---max_steps 500 \
---max_scheduling_steps 500 \
---warm_up_steps 50 \
-\
---dataset_name "giga_midi" \
+--max_steps 50000 \
+--max_scheduling_steps 50000 \
+--warm_up_steps 5000 \
+--dataset_name "${DATASET_NAME}" \
 --num_workers 12 \
---validation_split_pct 0.01 \
---limit_train_batches 1 \
---limit_val_batches 1 \
---limit_test_batches 1 \
-\
+--validation_split_pct 0.1 \
+--limit_train_batches 1.0 \
+--limit_val_batches 1.0 \
+--limit_test_batches 1.0 \
 --wandb_project 'mus_symb_baseline_pretrain' \
-\
 --log_model_archi \
 --log_gradients \
---log_every_n_steps 10 \
-\
+--log_every_n_steps 200 \
 --set_matmul_precision "medium" \
 --wandb_watch \
 ${SLURM_ARRAY_TASK_ID:+--is_slurm_run}
 
 # NOTES:
-# - Quick 2-hour test run with 500 steps
+# - Production run with 50k steps (24 hour timeout)
 # - Standard transformer baseline (no MCMC/energy-based training)
-# - Validation every 200 steps with 10 batches to ensure training stability
-# - Monitor loss/perplexity to ensure training is working
-# - After validation, extend max_steps for longer training runs
+# - 10% validation split for better overfitting detection
+# - Higher regularization (weight_decay 0.05) to reduce overfitting
+# - 5k step warm-up (~10% of total steps)
+# - Logging every 200 steps for cleaner graphs
+#
+# USAGE:
+# Default (giga_midi + REMI):
+#   sbatch baseline_transformer.sh
+# 
+# With custom dataset and tokenizer:
+#   sbatch baseline_transformer.sh --dataset_name giga-midi --tokenizer_type anticipation
+#   sbatch baseline_transformer.sh --dataset_name jordan-progrock-dataset --tokenizer_type anticipation
