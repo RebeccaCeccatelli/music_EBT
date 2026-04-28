@@ -1,30 +1,28 @@
 #!/bin/bash
-### Baseline Transformer Music - Pretraining Script
+### Baseline Transformer Music - Pretraining Script (SMALL Upgrade)
 ### Standard transformer baseline for comparison with EBT models
-### This is a quick 2-hour test run to validate training pipeline
 
 ### SLURM CONFIGURATION ###
 #SBATCH --nodes=1
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
-#SBATCH --time=04:00:00  # Extended for 50k steps
+#SBATCH --time=6:00:00  # Increased for Small model & 100k steps
 #SBATCH --mem=80GB
 #SBATCH --partition=mit_normal_gpu
-#SBATCH --output=/dev/null
+#SBATCH --output=./logs/slurm_%j.out # Saves logs to your project logs dir
 
 ### ADDITIONAL RUN INFO ###
 #SBATCH --array=0
 
 ### LOG INFO ###
-#SBATCH --job-name=baseline-symb-xxs-prod
-# SLURM logs sent to wandb (see --wandb_project below)
-export RUN_NAME="baseline-symb-xxs-prod"
-export MODEL_SIZE="xxs"
+export RUN_NAME="baseline-symb-small-prod"
+export MODEL_SIZE="small"
 
-### Get the project root directory
-### Try multiple methods since $0 can be unreliable in SLURM
-### Method 1: Search up directory tree for train_model.py (most reliable in SLURM)
+# Recommended LR for 'small' per your model_utils.py is 0.0006
+lr=(0.0006)
+
+### Project Root Discovery ###
 find_project_root() {
     local dir="$1"
     for ((i=0; i<10; i++)); do
@@ -34,62 +32,50 @@ find_project_root() {
         fi
         dir="$(dirname "${dir}")"
     done
-    echo "" # Not found
+    echo ""
     return 1
 }
 
 PROJECT_ROOT="$(find_project_root "$(pwd)")"
 if [[ -z "${PROJECT_ROOT}" ]]; then
-    echo "❌ Error: Could not find project root. train_model.py not found in parent directories."
-    echo "   Make sure this script is in <project_root>/job_scripts/mus/pretrain/"
+    echo "❌ Error: Could not find project root."
     exit 1
 fi
 
 export PYTHONPATH="${PROJECT_ROOT}:$PYTHONPATH"
 export PYTHONUNBUFFERED=1
-
 cd "${PROJECT_ROOT}" || exit 1
 
-# Parse command-line arguments
+# Parse command-line arguments (overridable via sbatch)
 DATASET_NAME="giga_midi"
 TOKENIZER_TYPE="REMI"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --dataset_name)
-            DATASET_NAME="$2"
-            shift 2
-            ;;
-        --tokenizer_type)
-            TOKENIZER_TYPE="$2"
-            shift 2
-            ;;
-        *)
-            echo "Unknown argument: $1"
-            exit 1
-            ;;
+        --dataset_name) DATASET_NAME="$2"; shift 2 ;;
+        --tokenizer_type) TOKENIZER_TYPE="$2"; shift 2 ;;
+        *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
 
-lr=(0.0008)  # Slightly higher LR for better signal
-
 python train_model.py \
---run_name ${RUN_NAME}${lr[${SLURM_ARRAY_TASK_ID}]} \
+--run_name "${RUN_NAME}-${lr[${SLURM_ARRAY_TASK_ID}]}" \
 --modality "MUS_SYMB" \
 --model_name "baseline_transformer" \
---model_size ${MODEL_SIZE} \
+--model_size "${MODEL_SIZE}" \
 --tokenizer_type "${TOKENIZER_TYPE}" \
 --normalize_initial_condition \
---context_length 512 \
+--context_length 1024 \
+--resume_training_ckpt "logs/checkpoints/baseline-symb-small-prod-0.0006_2026-04-23_11-59-19_/last.ckpt" \
 --gpus "1" \
---peak_learning_rate ${lr[${SLURM_ARRAY_TASK_ID}]} \
+--peak_learning_rate "${lr[${SLURM_ARRAY_TASK_ID}]}" \
 --batch_size_per_device 32 \
---accumulate_grad_batches 2 \
+--accumulate_grad_batches 8 \
 --gradient_clip_val 1.0 \
 --weight_decay 0.05 \
 --min_lr_scale 10 \
---max_steps 50000 \
---max_scheduling_steps 50000 \
+--max_steps 60000 \
+--max_scheduling_steps 60000 \
 --warm_up_steps 5000 \
 --dataset_name "${DATASET_NAME}" \
 --num_workers 12 \
@@ -104,19 +90,3 @@ python train_model.py \
 --set_matmul_precision "medium" \
 --wandb_watch \
 ${SLURM_ARRAY_TASK_ID:+--is_slurm_run}
-
-# NOTES:
-# - Production run with 50k steps (24 hour timeout)
-# - Standard transformer baseline (no MCMC/energy-based training)
-# - 10% validation split for better overfitting detection
-# - Higher regularization (weight_decay 0.05) to reduce overfitting
-# - 5k step warm-up (~10% of total steps)
-# - Logging every 200 steps for cleaner graphs
-#
-# USAGE:
-# Default (giga_midi + REMI):
-#   sbatch baseline_transformer.sh
-# 
-# With custom dataset and tokenizer:
-#   sbatch baseline_transformer.sh --dataset_name giga-midi --tokenizer_type anticipation
-#   sbatch baseline_transformer.sh --dataset_name jordan-progrock-dataset --tokenizer_type anticipation

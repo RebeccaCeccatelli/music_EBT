@@ -46,6 +46,7 @@ from model.img.dit_denoise import Diffusion_Transformer_IMG_Denoise
 
 from model.model_utils import save_frames, denormalize, load_image_encoder, center_crop_arr
 from inference.nlp.generate_text import generate_text, get_ppl
+from inference.mus.generate_music import generate_music
 from inference.vid.generate_video import generate_video
 from inference.img.generate_image import generate_image
 from inference.mus.generate_music import generate_music
@@ -66,6 +67,10 @@ class ModelTrainer(L.LightningModule):
             if "execution_mode" in self.hparams and "save_generation_logs_dir" in self.hparams and self.hparams.execution_mode == "inference": # two of these are sanity check for loading pretrained ckpt that may not have newer params
                 print("setting up infer logger")
                 self.infer_logger = text_logger.setup_jsonl_logger(log_filename = "results.jsonl", base_log_dir=self.hparams.save_generation_logs_dir)
+        if self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+            if "execution_mode" in self.hparams and "save_generation_logs_dir" in self.hparams and self.hparams.execution_mode == "inference":
+                print("setting up music inference logger")
+                self.infer_logger = text_logger.setup_jsonl_logger(log_filename = "generations.jsonl", base_log_dir=self.hparams.save_generation_logs_dir)
         if self.hparams.modality == "VID": #is computer vision
             self.image_dims = self.hparams.image_dims # list size two
             self.num_generated_videos = 0
@@ -322,6 +327,16 @@ class ModelTrainer(L.LightningModule):
                 self.log_metrics(outputs, "test")
             elif self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
                 outputs = generate_music(self.model, batch, self.hparams)
+                # Log generated music tokens
+                for i, tokens in enumerate(outputs['generation_tokens']):
+                    log_entry = {
+                        'sample_idx': self.num_generated_videos if hasattr(self, 'num_generated_videos') else i,
+                        'generated_tokens': tokens,
+                    }
+                    if 'generation_logprobs' in outputs:
+                        log_entry['logprobs'] = outputs['generation_logprobs'][i]
+                    if hasattr(self, 'infer_logger'):
+                        self.infer_logger.log_data(log_entry)
                 self.log_metrics(outputs, "test")
             else:
                 raise NotImplementedError(f"Inference mode not supported for modality {self.hparams.modality} yet")

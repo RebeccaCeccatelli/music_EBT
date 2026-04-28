@@ -1,5 +1,231 @@
+import torch
+import torch.nn.functional as F
+from typing import List, Tuple, Optional
+
+
+def sample_top_p(probs, p):
+    """
+    Perform top-p (nucleus) sampling on a probability distribution.
+
+    Args:
+        probs (torch.Tensor): Probability distribution tensor.
+        p (float): Probability threshold for top-p sampling.
+
+    Returns:
+        torch.Tensor: Sampled token indices.
+
+    Note:
+        Top-p sampling selects the smallest set of tokens whose cumulative probability mass
+        exceeds the threshold p. The distribution is renormalized based on the selected tokens.
+    """
+    probs_sort, probs_idx = torch.sort(probs, dim=-1, descending=True)
+    probs_sum = torch.cumsum(probs_sort, dim=-1)
+    mask = probs_sum - probs_sort > p
+    probs_sort[mask] = 0.0
+    probs_sort.div_(probs_sort.sum(dim=-1, keepdim=True))
+    next_token = torch.multinomial(probs_sort, num_samples=1)
+    next_token = torch.gather(probs_idx, -1, next_token)
+    return next_token
+
+
+def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz):
+    """
+    Forward pass for music token generation.
+    
+    Args:
+        hparams: Hyperparameters containing model_name and inference settings
+        model: The music generation model
+        input_tokens: Input token sequences, shape (bsz, seq_len)
+        start_pos: Starting position for KV caching (currently unused, set to 0)
+        bsz: Batch size
+    
+    Returns:
+        logits: Raw logits for next token prediction, shape (bsz, seq_len, vocab_size)
+    """
+    if hparams.model_name == "ebt":
+        if hparams.infer_ebt_advanced:
+            ebt_outputs = model.ebt_advanced_inference(input_tokens, start_pos=0, learning=False)
+            logits = ebt_outputs[0]  # Final predicted logits
+        else:
+            ebt_outputs = model.forward(input_tokens, start_pos=0, learning=False, return_raw_logits=True)
+            logits = ebt_outputs[0][-1]  # Use final MCMC step logits
+    else:
+        # Baseline transformer or other models
+        logits = model.forward(input_tokens, start_pos=0, learning=False, return_raw_logits=True)
+    
+    return logits
+
 
 def generate_music(model, batch, hparams):
-    # TODO: add logic for music generation here, this will likely be similar to generate_text() but with music specific changes
-    # NOTE: one day may have to extend to audio generation too
-    pass
+    """
+    Generate symbolic music (MIDI tokens) using autoregressive decoding.
+    
+    Supports:
+    - Temperature-controlled sampling
+    - Top-p (nucleus) sampling
+    - Energy-based transformers (with MCMC refinement)
+    - Baseline transformers
+    - Log probability tracking
+    
+    Args:
+        model: The music generation model (EBT or Baseline Transformer)
+        batch: Input batch containing 'input_ids' (conditioning tokens)
+        hparams: Hyperparameters including:
+            - infer_max_gen_len: Maximum tokens to generate
+            - infer_temp: Temperature for sampling (0 = greedy)
+            - infer_topp: Top-p threshold for nucleus sampling
+            - infer_logprobs: Whether to track log probabilities
+            - infer_echo: Whether to return prompt tokens in output
+            - context_length: Maximum sequence length
+    
+    Returns:
+        dict: Generated sequences with keys:
+            - 'generation_tokens': List of generated token sequences (without prompt)
+            - 'generation_logprobs': List of log probabilities (if tracking)
+            - 'full_sequences': Full sequences including prompt (if echo=True)
+    """
+    # Extract configuration
+    ids = batch['input_ids']
+    max_gen_len = hparams.infer_max_gen_len
+    temperature = hparams.infer_temp
+    top_p = hparams.infer_topp
+    logprobs = hparams.infer_logprobs
+    echo = hparams.infer_echo
+    
+    # Get padding token ID from the model
+    pad_token_id = model.pad_token_id if hasattr(model, 'pad_token_id') else 0
+    
+    # Extract prompt tokens (non-padded portion)
+    prompt_tokens = []
+    for row_ids in ids:
+        row_ids = row_ids.squeeze() if row_ids.dim() > 1 else row_ids
+        # Find actual length (assuming padding at the end or attention mask available)
+        # For now, include all tokens (dataloader should provide clean sequences)
+        seq_len = len(row_ids)
+        prompt_tokens.append(row_ids[:seq_len].tolist())
+    
+    # Get model parameters
+    params = model.transformer.params if hasattr(model, 'transformer') else None
+    bsz = len(prompt_tokens)
+    
+    if params is not None:
+        assert bsz <= params.max_batch_size, f"Batch size {bsz} exceeds model max {params.max_batch_size}"
+    
+    # Determine sequence lengths
+    min_prompt_len = min(len(t) for t in prompt_tokens) if prompt_tokens else 0
+    max_prompt_len = max(len(t) for t in prompt_tokens) if prompt_tokens else 0
+    
+    # Ensure prompts fit in context
+    assert max_prompt_len <= hparams.context_length, \
+        f"Prompt length {max_prompt_len} exceeds context length {hparams.context_length}"
+    
+    total_len = min(hparams.context_length, max_gen_len + max_prompt_len)
+    
+    # Initialize token tensor
+    tokens = torch.full(
+        (bsz, total_len),
+        pad_token_id,
+        dtype=torch.long,
+        device="cuda"
+    )
+    
+    # Populate prompt tokens
+    for k, t in enumerate(prompt_tokens):
+        tokens[k, :len(t)] = torch.tensor(t, dtype=torch.long, device="cuda").clone().detach()
+    
+    # Initialize log probability tracking if requested
+    if logprobs:
+        token_logprobs = torch.zeros_like(tokens, dtype=torch.float)
+    
+    # Create input mask to track which tokens are part of prompt vs generated
+    input_text_mask = tokens != pad_token_id
+    eos_reached = torch.tensor([False] * bsz, device="cuda")
+    
+    # Autoregressive generation
+    with torch.no_grad():
+        # If min prompt length equals total length, compute logits once and we're done
+        if min_prompt_len == total_len:
+            logits = call_model_forward_decode(hparams, model, tokens, 0, bsz)
+            if logprobs:
+                token_logprobs = -F.cross_entropy(
+                    input=logits.transpose(1, 2),
+                    target=tokens,
+                    reduction="none",
+                    ignore_index=pad_token_id,
+                )
+        
+        # Generate tokens one at a time
+        for cur_pos in range(min_prompt_len, total_len):
+            # Get model prediction
+            input_tokens = tokens[:, :cur_pos]
+            logits = call_model_forward_decode(hparams, model, input_tokens, 0, bsz)
+            
+            # Sample next token
+            if temperature > 0:
+                # Temperature-scaled sampling
+                probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
+                next_token = sample_top_p(probs, top_p)
+            else:
+                # Greedy decoding
+                next_token = torch.argmax(logits[:, -1], dim=-1)
+            
+            next_token = next_token.reshape(-1)
+            
+            # Only use generated token if we haven't reached the end of prompt
+            next_token = torch.where(
+                input_text_mask[:, cur_pos],
+                tokens[:, cur_pos],
+                next_token
+            )
+            
+            tokens[:, cur_pos] = next_token
+            
+            # Track log probabilities
+            if logprobs:
+                token_logprobs[:, cur_pos] = -F.cross_entropy(
+                    input=logits.transpose(1, 2),
+                    target=tokens[:, cur_pos:cur_pos + 1],
+                    reduction="none",
+                    ignore_index=pad_token_id,
+                ).squeeze()
+            
+            # Check for EOS (optional: could use special EOS token)
+            # For now, just let it generate up to max length
+            # eos_reached |= (next_token == eos_token_id)
+            # if all(eos_reached):
+            #     break
+    
+    # Convert log probabilities to list format
+    if logprobs:
+        token_logprobs = token_logprobs.tolist()
+    
+    # Extract generation results
+    out_tokens = []
+    out_logprobs = []
+    
+    for i, toks in enumerate(tokens.tolist()):
+        # Find where prompt ends (first pad token or use original prompt length)
+        prompt_len = len(prompt_tokens[i])
+        
+        # Generated tokens (exclude prompt)
+        generated = toks[prompt_len:]
+        # Remove trailing padding
+        generated = [t for t in generated if t != pad_token_id]
+        
+        out_tokens.append(generated)
+        
+        if logprobs:
+            # Log probs for generated portion
+            gen_logprobs = token_logprobs[i][prompt_len:prompt_len + len(generated)]
+            out_logprobs.append(gen_logprobs)
+    
+    # Prepare output
+    result = {
+        'generation_tokens': out_tokens,
+        'full_sequences': [toks for toks in tokens.tolist()] if echo else out_tokens,
+    }
+    
+    if logprobs:
+        result['generation_logprobs'] = out_logprobs
+    
+    return result
