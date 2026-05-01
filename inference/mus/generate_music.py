@@ -1,6 +1,17 @@
+"""
+Music generation for all model types (EBT, Baseline Llama, Baseline HF GPT2)
+
+Unified generation interface supporting:
+- Energy-Based Transformers (EBT) with MCMC refinement
+- Baseline Llama-based transformers
+- Baseline HF GPT2 transformers
+
+Code adapted from Llama2 generation.py and HuggingFace transformers.
+"""
+
 import torch
 import torch.nn.functional as F
-from typing import List, Tuple, Optional
+from typing import List, Optional
 
 
 def sample_top_p(probs, p):
@@ -32,6 +43,8 @@ def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz):
     """
     Forward pass for music token generation.
     
+    Handles both custom transformers (EBT, Llama) and HuggingFace models.
+    
     Args:
         hparams: Hyperparameters containing model_name and inference settings
         model: The music generation model
@@ -40,17 +53,28 @@ def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz):
         bsz: Batch size
     
     Returns:
-        logits: Raw logits for next token prediction, shape (bsz, seq_len, vocab_size)
+        logits: Raw logits for next token prediction, shape (bsz, seq_len, vocab_size) or (bsz, vocab_size)
     """
     if hparams.model_name == "ebt":
+        # Energy-Based Transformer with MCMC refinement
         if hparams.infer_ebt_advanced:
             ebt_outputs = model.ebt_advanced_inference(input_tokens, start_pos=0, learning=False)
             logits = ebt_outputs[0]  # Final predicted logits
         else:
             ebt_outputs = model.forward(input_tokens, start_pos=0, learning=False, return_raw_logits=True)
             logits = ebt_outputs[0][-1]  # Use final MCMC step logits
+    elif hparams.model_name == "baseline_hf_gpt2_transformer":
+        # HuggingFace GPT2 model
+        attention_mask = (input_tokens != model.pad_token_id).long()
+        outputs = model.model(
+            input_ids=input_tokens,
+            attention_mask=attention_mask,
+            return_dict=True,
+            use_cache=False,
+        )
+        logits = outputs.logits  # (B, S, V)
     else:
-        # Baseline transformer or other models
+        # Baseline Llama transformer or other models
         logits = model.forward(input_tokens, start_pos=0, learning=False, return_raw_logits=True)
     
     return logits
@@ -60,15 +84,18 @@ def generate_music(model, batch, hparams):
     """
     Generate symbolic music (MIDI tokens) using autoregressive decoding.
     
-    Supports:
+    Supports all model types:
+    - Energy-Based Transformers (EBT)
+    - Baseline Llama transformers
+    - Baseline HF GPT2 transformers
+    
+    Features:
     - Temperature-controlled sampling
     - Top-p (nucleus) sampling
-    - Energy-based transformers (with MCMC refinement)
-    - Baseline transformers
     - Log probability tracking
     
     Args:
-        model: The music generation model (EBT or Baseline Transformer)
+        model: The music generation model (EBT, Baseline Llama, or Baseline HF GPT2)
         batch: Input batch containing 'input_ids' (conditioning tokens)
         hparams: Hyperparameters including:
             - infer_max_gen_len: Maximum tokens to generate
@@ -99,13 +126,11 @@ def generate_music(model, batch, hparams):
     prompt_tokens = []
     for row_ids in ids:
         row_ids = row_ids.squeeze() if row_ids.dim() > 1 else row_ids
-        # Find actual length (assuming padding at the end or attention mask available)
-        # For now, include all tokens (dataloader should provide clean sequences)
         seq_len = len(row_ids)
         prompt_tokens.append(row_ids[:seq_len].tolist())
     
-    # Get model parameters
-    params = model.transformer.params if hasattr(model, 'transformer') else None
+    # Get model parameters (for custom transformers)
+    params = model.transformer.params if hasattr(model, 'transformer') and hasattr(model.transformer, 'params') else None
     bsz = len(prompt_tokens)
     
     if params is not None:
@@ -139,7 +164,6 @@ def generate_music(model, batch, hparams):
     
     # Create input mask to track which tokens are part of prompt vs generated
     input_text_mask = tokens != pad_token_id
-    eos_reached = torch.tensor([False] * bsz, device="cuda")
     
     # Autoregressive generation
     with torch.no_grad():
@@ -147,12 +171,14 @@ def generate_music(model, batch, hparams):
         if min_prompt_len == total_len:
             logits = call_model_forward_decode(hparams, model, tokens, 0, bsz)
             if logprobs:
-                token_logprobs = -F.cross_entropy(
-                    input=logits.transpose(1, 2),
-                    target=tokens,
-                    reduction="none",
-                    ignore_index=pad_token_id,
-                )
+                # Handle both (B, S, V) and (B, V) shaped logits
+                if logits.dim() == 3:
+                    token_logprobs = -F.cross_entropy(
+                        input=logits.transpose(1, 2),
+                        target=tokens,
+                        reduction="none",
+                        ignore_index=pad_token_id,
+                    )
         
         # Generate tokens one at a time
         for cur_pos in range(min_prompt_len, total_len):
@@ -160,14 +186,20 @@ def generate_music(model, batch, hparams):
             input_tokens = tokens[:, :cur_pos]
             logits = call_model_forward_decode(hparams, model, input_tokens, 0, bsz)
             
+            # Extract last token logits
+            if logits.dim() == 3:
+                last_logits = logits[:, -1, :]  # (B, V)
+            else:
+                last_logits = logits  # Already (B, V)
+            
             # Sample next token
             if temperature > 0:
                 # Temperature-scaled sampling
-                probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
+                probs = torch.softmax(last_logits / temperature, dim=-1)
                 next_token = sample_top_p(probs, top_p)
             else:
                 # Greedy decoding
-                next_token = torch.argmax(logits[:, -1], dim=-1)
+                next_token = torch.argmax(last_logits, dim=-1)
             
             next_token = next_token.reshape(-1)
             
@@ -183,17 +215,11 @@ def generate_music(model, batch, hparams):
             # Track log probabilities
             if logprobs:
                 token_logprobs[:, cur_pos] = -F.cross_entropy(
-                    input=logits.transpose(1, 2),
+                    input=last_logits.unsqueeze(1).transpose(1, 2),
                     target=tokens[:, cur_pos:cur_pos + 1],
                     reduction="none",
                     ignore_index=pad_token_id,
                 ).squeeze()
-            
-            # Check for EOS (optional: could use special EOS token)
-            # For now, just let it generate up to max length
-            # eos_reached |= (next_token == eos_token_id)
-            # if all(eos_reached):
-            #     break
     
     # Convert log probabilities to list format
     if logprobs:

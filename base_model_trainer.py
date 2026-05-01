@@ -39,7 +39,8 @@ from model.img.ebt_denoise import EBT_IMG_Denoise
 
 from model.vid.baseline_transformer import Baseline_Transformer_VID
 from model.nlp.baseline_transformer import Baseline_Transformer_NLP
-from model.mus.baseline_transformer import Baseline_Transformer_MUS
+from model.mus.baseline_llama_transformer import Baseline_Llama_Transformer_MUS
+from model.mus.baseline_hf_gpt2_transformer import Baseline_HF_GPT2_Transformer_MUS
 
 from model.img.dit_t2i import Diffusion_Transformer_IMG_T2I
 from model.img.dit_denoise import Diffusion_Transformer_IMG_Denoise
@@ -155,9 +156,19 @@ class ModelTrainer(L.LightningModule):
                 elif self.hparams.modality == "NLP":
                     self.model = Baseline_Transformer_NLP(self.hparams)
                 elif self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
-                    self.model = Baseline_Transformer_MUS(self.hparams)
+                    raise ValueError(f"For music, use --model_name baseline_llama_transformer or baseline_hf_gpt2_transformer instead of baseline_transformer")
                 else:
                     raise ValueError(f"Modality: {self.hparams.modality} not supported as a base model trainer model as of now")
+            elif self.hparams.model_name == "baseline_llama_transformer":
+                if self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+                    self.model = Baseline_Llama_Transformer_MUS(self.hparams)
+                else:
+                    raise ValueError(f"Baseline Llama transformer only supported for music modalities, got {self.hparams.modality}")
+            elif self.hparams.model_name == "baseline_hf_gpt2_transformer":
+                if self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+                    self.model = Baseline_HF_GPT2_Transformer_MUS(self.hparams)
+                else:
+                    raise ValueError(f"Baseline HF GPT2 transformer only supported for music modalities, got {self.hparams.modality}")
             elif self.hparams.model_name == "dit":
                 if self.hparams.modality == "IMG":
                     if self.hparams.image_task == "t2i":
@@ -326,7 +337,9 @@ class ModelTrainer(L.LightningModule):
                 outputs = generate_image(self.model, batch, self.hparams)
                 self.log_metrics(outputs, "test")
             elif self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+                # Unified music generation (handles EBT, Baseline Llama, and Baseline HF GPT2)
                 outputs = generate_music(self.model, batch, self.hparams)
+                
                 # Log generated music tokens
                 for i, tokens in enumerate(outputs['generation_tokens']):
                     log_entry = {
@@ -503,7 +516,7 @@ class ModelTrainer(L.LightningModule):
             ]
             return self.get_optimizer_scheduler_dict(optimizer_parameters)
             
-        elif self.hparams.model_name == "baseline_transformer":
+        elif self.hparams.model_name in ["baseline_llama_transformer", "baseline_hf_gpt2_transformer"]:
             all_params = [param for _, param in self.model.named_parameters()]
             optimizer_parameters = [
                 {'params': all_params, 'weight_decay': self.hparams.weight_decay, 'lr': self.hparams.peak_learning_rate}  # Weight decay for other parameters
