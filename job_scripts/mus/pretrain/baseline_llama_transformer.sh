@@ -1,22 +1,22 @@
 #!/bin/bash
-### Baseline Transformer Music - Pretraining Script (SMALL Upgrade)
-### Standard transformer baseline for comparison with EBT models
+### Baseline Llama Transformer Music - Pretraining Script
+### Custom Llama2-inspired baseline transformer for comparison with EBT models
 
 ### SLURM CONFIGURATION ###
 #SBATCH --nodes=1
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
-#SBATCH --time=6:00:00  # Increased for Small model & 100k steps
+#SBATCH --time=6:00:00
 #SBATCH --mem=80GB
 #SBATCH --partition=mit_normal_gpu
-#SBATCH --output=./logs/slurm_%j.out # Saves logs to your project logs dir
+#SBATCH --output=./logs/slurm_%j.out
 
 ### ADDITIONAL RUN INFO ###
 #SBATCH --array=0
 
 ### LOG INFO ###
-export RUN_NAME="baseline-symb-small-prod"
+export RUN_NAME="baseline-llama-symb-small-prod"
 export MODEL_SIZE="small"
 
 # Recommended LR for 'small' per your model_utils.py is 0.0006
@@ -61,12 +61,12 @@ done
 python train_model.py \
 --run_name "${RUN_NAME}-${lr[${SLURM_ARRAY_TASK_ID}]}" \
 --modality "MUS_SYMB" \
---model_name "baseline_transformer" \
+--model_name "baseline_llama_transformer" \
 --model_size "${MODEL_SIZE}" \
 --tokenizer_type "${TOKENIZER_TYPE}" \
 --normalize_initial_condition \
 --context_length 1024 \
---resume_training_ckpt "logs/checkpoints/baseline-symb-small-prod-0.0006_2026-04-23_11-59-19_/last.ckpt" \
+--resume_training_ckpt "logs/checkpoints/baseline-llama-symb-small-prod-0.0006_2026-04-23_11-59-19_/last.ckpt" \
 --gpus "1" \
 --peak_learning_rate "${lr[${SLURM_ARRAY_TASK_ID}]}" \
 --batch_size_per_device 32 \

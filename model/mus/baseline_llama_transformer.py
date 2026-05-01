@@ -1,8 +1,8 @@
 """
-Baseline Transformer for Music (Symbolic MIDI Tokens)
+Baseline Llama-Based Transformer for Music (Symbolic MIDI Tokens)
 
 Standard autoregressive transformer for next-token prediction.
-Serves as a comparison baseline against the Energy-Based Transformer (EBT).
+Uses custom Llama2-inspired architecture as a comparison baseline against the Energy-Based Transformer (EBT).
 
 Simple architecture: Embed → Transformer → Output Projection → CE Loss
 """
@@ -21,11 +21,12 @@ from model.model_utils import *
 from data.mus.symbolic.tokenization.tokenizer_utils import load_tokenizer
 
 
-class Baseline_Transformer_MUS(L.LightningModule):
+class Baseline_Llama_Transformer_MUS(L.LightningModule):
     """
-    Baseline Transformer for Music Generation (Symbolic)
+    Baseline Llama-Based Transformer for Music Generation (Symbolic)
     
     Standard next-token prediction model without energy-based training.
+    Uses custom Llama2-inspired architecture (RMSNorm, Rotary embeddings, etc).
     Use this to benchmark against EBT and validate the benefit of iterative refinement.
     """
     
