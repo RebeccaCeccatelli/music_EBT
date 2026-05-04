@@ -107,6 +107,13 @@ def main(args):
     elif args.modality == "IMG":
         args.backbone_type = "vae" # always uses vae
         assert args.embedding_dim != 0, "must define embedding dim for IMG models"
+    elif args.modality in ["MUS_SYMB", "MUS_NEUR"]:
+        # Music-specific validation handled in model initialization
+        if args.modality == "MUS_SYMB":
+            assert args.embedding_dim != 0, "must define embedding dim for symbolic music models"
+        elif args.modality == "MUS_NEUR":
+            assert args.embedding_dim != 0, "must define embedding dim for neural music models"
+
     else:
         raise ValueError(f"please add support for modality {args.modality}")
     
@@ -242,6 +249,10 @@ def main(args):
                 trainer.logger.experiment.log({"test_fvd": fvd, "test_fid": fid})
         elif args.modality == "IMG":
             pass # no post test code for denoising, for t2i could call FID code here if desired
+        elif args.modality in ["MUS_SYMB", "MUS_NEUR"]:
+            # Music-specific post-test evaluation can be added here
+            pass
+
         else:
             raise NotImplementedError(f"no post test evaluation setup for this modality: {args.modality} yet")
 
@@ -300,7 +311,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--run_name", help="run name, should include model name in it for important runs (see slurm scripts)", default="test")
 
-    parser.add_argument("--modality", help="is the model being trained for NLP, VID, IMG. default is VID, and most of the code has been designed around VID.", type=str, default="VID")
+    parser.add_argument("--modality", help="is the model being trained for NLP, VID, IMG, MUS_SYMB (symbolic MIDI), or MUS_NEUR (neural audio). default is VID, and most of the code has been designed around VID.", type=str, default="VID")
 
     parser.add_argument("--model_name", help="model_type/name", default='ebt')
 
@@ -355,6 +366,11 @@ if __name__ == '__main__':
     parser.add_argument("--patch_size", help="patch size from DiT paper, larger means less compute", choices=[2, 4, 8, 16], type=int, default=8)
 
     parser.add_argument("--log_image_every_n_steps", help="logs a generated image every n training steps", type=int, default=500)
+
+    # MUS SPECIFIC PARAMS ########################################################################################################################
+    parser.add_argument("--tokenizer_type", help="[Music] tokenizer type for symbolic music (e.g., REMI, MIDI-VAE)", type=str, default="REMI")
+    parser.add_argument("--tokenizer_config_path", help="[Music] path to tokenizer config file for symbolic music", type=str, default=None)
+    parser.add_argument("--audio_sample_rate", help="[Music] sample rate for neural music audio (Hz)", type=int, default=16000)
 
     #EBT MCMC ##################################################################
     #NOTE in the code we broadly refer to MCMC/optimization interchangeably, although in the paper we refrain from the term mcmc
@@ -630,6 +646,9 @@ if __name__ == '__main__':
 
     parser.add_argument("--infer_generate_video", help="[Inference] whether to get FVD and FID metrics", action="store_true", default=False)
 
+    # MUS INFERENCE ########################################################################
+    parser.add_argument("--infer_generate_music", help="[Inference] whether to generate music samples during inference", action="store_true", default=True)
+    
     # EBT SPECIFIC INFERENCE/TESTING PARAMS FOR ADVANCED INFERENCE ##################################################
 
     parser.add_argument("--infer_ebt_advanced", help="[Inference] Does advanced inference for EBT, including hparams for more mcmc steps, override alpha, generating many samples and choosing the best, langevin dynamics, etc", action="store_true", default=False)

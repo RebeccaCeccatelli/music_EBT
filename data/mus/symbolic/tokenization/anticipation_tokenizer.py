@@ -9,17 +9,31 @@ from miditok import REMI, TokenizerConfig
 from path_utils import get_dataset_path, get_subset_path
 from dataloaders.constants import DatasetType
 
+# NOTE: vocab import moved to __init__ to allow dynamic selection via use_vanilla flag
+
 # Import the main logic from your sub-modules
 from tokenization.anticipation.train.midi_preprocess import main as preprocess_main
 from tokenization.anticipation.finetune.tokenize_custom import main as custom_main
 from tokenization.anticipation.train.tokenize_gigaMIDI import main as giga_main
 
 class AnticipationTokenizer:
-    def __init__(self, dataset_name: str, dataset_type: DatasetType, augment: int = 1, interarrival: bool = False, use_wandb = True):
+    def __init__(self, dataset_name: str, dataset_type: DatasetType, augment: int = 1, interarrival: bool = False, use_vanilla: bool = False, use_wandb = True):
+        # Set environment variable BEFORE importing vocab to enable dynamic selection
+        if use_vanilla:
+            os.environ['ANTICIPATION_VANILLA'] = 'true'
+        else:
+            os.environ['ANTICIPATION_VANILLA'] = 'false'
+        
+        # Import vocab after setting the flag
+        from tokenization.anticipation.anticipation.vocab_selector import (
+            VOCAB_SIZE, MIDI_VOCAB_SIZE, REST, MIDI_SEPARATOR
+        )
+        
         self.dataset_name = dataset_name
         self.dataset_type = dataset_type
         self.augment = augment
         self.interarrival = interarrival
+        self.use_vanilla = use_vanilla
         self.use_wandb = use_wandb
         
         if self.use_wandb:
@@ -27,42 +41,54 @@ class AnticipationTokenizer:
             # We capitalize it for a cleaner look on the dashboard
             project_formatted = f"{self.dataset_name.replace('-', ' ').title().replace(' ', '-')}-Tokenization"
             
-            wandb.init(
-                project=project_formatted,
-                name=f"anticipation-{datetime.now().strftime('%m%d-%H%M')}",
-                settings=wandb.Settings(console="wrap_raw"), 
-                config={
-                    "dataset": dataset_name,
-                    "pipeline": "Anticipation",
-                    "augment": self.augment,
-                    "interarrival": self.interarrival
-                }
-            )
+            vocab_mode = "vanilla" if self.use_vanilla else "anticipation"
+            try:
+                wandb.init(
+                    project=project_formatted,
+                    name=f"{vocab_mode}-{datetime.now().strftime('%m%d-%H%M')}",
+                    settings=wandb.Settings(console="wrap_raw"), 
+                    config={
+                        "dataset": dataset_name,
+                        "pipeline": vocab_mode,
+                        "augment": self.augment,
+                        "interarrival": self.interarrival,
+                        "use_vanilla": self.use_vanilla
+                    }
+                )
+            except Exception as e:
+                # Handle threading/connection issues - log the full error but continue
+                print(f"⚠️  Wandb init failed: {type(e).__name__}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                print("Continuing without wandb tracking...")
+                self.use_wandb = False
         
         # 1. Resolve MIDI source directory
         self.midi_dir = get_subset_path(self.dataset_name, "midi")
         
         # 2. Define Token destination and Quarantine
-        self.token_dir = os.path.join(get_dataset_path(self.dataset_name), "tokens", "anticipation")
+        # Use separate folders for vanilla vs non-vanilla anticipation
+        folder_name = "anticipation-vanilla" if self.use_vanilla else "anticipation"
+        self.token_dir = os.path.join(get_dataset_path(self.dataset_name), "tokens", folder_name)
         self.quarantine_dir = os.path.join(get_dataset_path(self.dataset_name), "quarantined_midis")
         
         os.makedirs(self.token_dir, exist_ok=True)
         os.makedirs(self.quarantine_dir, exist_ok=True)
-        
-        # Initialize a basic tokenizer just for the "Mirror Validation" check
-        self.validator = REMI(TokenizerConfig())
+
 
     def _pre_cleanup_and_validate(self):
         """
         1. Physically deletes Mac metadata (._*) and __MACOSX.
-        2. Dry-runs every MIDI to catch corruptions BEFORE the main script crashes.
+        2. Lightweight validation: just checks if MIDI files can be opened (skips encoding).
+           Heavy validation happens during tokenization.
         """
-        print(f"🧹 [Pre-Flight] Cleaning and Validating: {self.midi_dir}")
+        print(f"🧹 [Pre-Flight] Cleaning and Quick Validation: {self.midi_dir}")
         deleted_junk = 0
         quarantined_files = 0
         
         # Get all potential files
         all_paths = list(Path(self.midi_dir).rglob("*.mid")) + list(Path(self.midi_dir).rglob("*.midi"))
+        print(f"   Found {len(all_paths)} MIDI files. Scanning for junk files and obvious corruption...")
         
         for midi_path in all_paths:
             # A. Remove Mac System Junk Immediately
@@ -73,10 +99,11 @@ class AnticipationTokenizer:
                 except: pass
                 continue
 
-            # B. Mirror Check: Try to encode. If it fails, it's 'corrupted' for our purposes.
+            # B. Lightweight Check: Try to open with mido. If it fails, it's 'corrupted'.
+            # (Full encoding validation happens during tokenization)
             try:
-                # We don't need the tokens, just the 'True' or 'False' on whether it opens
-                _ = self.validator.encode(str(midi_path))
+                import mido
+                _ = mido.MidiFile(str(midi_path))
             except Exception:
                 quarantined_files += 1
                 # Move to quarantine while preserving structure
@@ -85,10 +112,18 @@ class AnticipationTokenizer:
                     dest_path = Path(self.quarantine_dir) / rel_path
                     dest_path.parent.mkdir(parents=True, exist_ok=True)
                     shutil.move(str(midi_path), str(dest_path))
-                    print(f"🚨 Quarantined corrupted file: {midi_path.name}")
                 except: pass
 
-        print(f"✅ Cleanup results: {deleted_junk} junk files deleted, {quarantined_files} actual corruptions quarantined.")
+        print(f"✅ Cleanup results: {deleted_junk} junk files deleted, {quarantined_files} corruptions quarantined.")
+        
+        # Log to wandb if enabled
+        if self.use_wandb and wandb.run:
+            wandb.log({
+                "preprocessing_junk_files_deleted": deleted_junk,
+                "preprocessing_corrupted_quarantined": quarantined_files,
+                "preprocessing_total_files_scanned": len(all_paths)
+            })
+        
         return quarantined_files
 
     def preprocess(self, add_drum: bool = False):
@@ -148,10 +183,45 @@ class AnticipationTokenizer:
         self.preprocess(add_drum=add_drum)
         self.tokenize()
         print(f"=== Finished. Data is in: {self.token_dir} ===")
+    
+    def get_vocab_size(self) -> int:
+        """
+        Returns the vocabulary size for the anticipation tokenizer.
+        Different based on encoding type (interarrival vs arrival-time), and anticipation capability.
+        
+        Returns:
+            int: Vocabulary size
+        """
+        # Import here to respect the use_vanilla flag set in __init__
+        from tokenization.anticipation.anticipation.vocab_selector import VOCAB_SIZE, MIDI_VOCAB_SIZE
+        
+        if self.interarrival:
+            return MIDI_VOCAB_SIZE
+        else:
+            return VOCAB_SIZE
+    
+    def get_pad_token_id(self) -> int:
+        """
+        Returns the padding token ID for the anticipation tokenizer.
+        Different based on encoding type (interarrival vs arrival-time), and anticipation capability.
+        
+        Interarrival uses MIDI_SEPARATOR (for HuggingFace generation compatibility).
+        Arrival-time uses REST (for event padding).
+        
+        Returns:
+            int: Padding token ID
+        """
+        # Import here to respect the use_vanilla flag set in __init__
+        from tokenization.anticipation.anticipation.vocab_selector import REST, MIDI_SEPARATOR
+        
+        if self.interarrival:
+            return MIDI_SEPARATOR
+        else:
+            return REST
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(f"Usage: python3 -m tokenization.anticipation_tokenizer [{', '.join(DatasetType.list())}]")
+        print(f"Usage: python3 -m tokenization.anticipation_tokenizer [{', '.join(DatasetType.list())}] [--vanilla]")
         sys.exit(1)
 
     try:
@@ -160,6 +230,9 @@ if __name__ == "__main__":
         print(f"❌ Error: '{sys.argv[1]}' is not a valid dataset type.")
         sys.exit(1)
     
+    # Check for --vanilla flag
+    use_vanilla = '--vanilla' in sys.argv
+    
     # Defaults for GigaMIDI
     if mode == DatasetType.GIGA_MIDI:
         dataset_name = "giga-midi"
@@ -167,7 +240,7 @@ if __name__ == "__main__":
         interarrival = True
         add_drum = False
     elif mode == DatasetType.CUSTOM:
-        dataset_name = sys.argv[2] if len(sys.argv) > 2 else "custom"
+        dataset_name = sys.argv[2] if len(sys.argv) > 2 and not sys.argv[2].startswith('--') else "custom"
         augment = 1       
         interarrival = True
         add_drum = True
@@ -179,7 +252,9 @@ if __name__ == "__main__":
         dataset_name=dataset_name, 
         dataset_type=mode,
         augment=augment, 
-        interarrival=interarrival
+        interarrival=interarrival,
+        use_vanilla=use_vanilla,
+        use_wandb=True  # Enable wandb to log preprocessing metrics
     )
     
     master.run_full_pipeline(add_drum=add_drum)

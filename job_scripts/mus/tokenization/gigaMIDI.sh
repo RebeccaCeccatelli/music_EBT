@@ -11,27 +11,43 @@
 
 # --- 1. Capture Arguments ---
 TOKENIZER_TYPE=$1
+VANILLA_FLAG=$2  # Optional: pass --vanilla to use vanilla vocabulary (only for anticipation_tokenizer)
 
 if [ -z "$TOKENIZER_TYPE" ]; then
     echo "❌ Error: No tokenizer type provided."
-    echo "Usage: sbatch $0 [tokenizer-type]"
+    echo "Usage: sbatch $0 [tokenizer-type] [--vanilla]"
     echo "Example: sbatch $0 anticipation_tokenizer"
+    echo "Example: sbatch $0 anticipation_tokenizer --vanilla"
+    exit 1
+fi
+
+# Validate that --vanilla is only used with anticipation_tokenizer
+if [ "$VANILLA_FLAG" = "--vanilla" ] && [ "$TOKENIZER_TYPE" != "anticipation" ]; then
+    echo "❌ Error: --vanilla flag is only supported for anticipation tokenizer"
+    echo "Usage: sbatch $0 [tokenizer-type] [--vanilla]"
+    echo "Example: sbatch $0 anticipation --vanilla"
     exit 1
 fi
 
 # --- 2. DYNAMIC NAMING ---
+# Build job name, appending "vanilla" if that flag is set
+JOB_NAME="gigaMIDI_${TOKENIZER_TYPE}"
+if [ "$VANILLA_FLAG" = "--vanilla" ]; then
+    JOB_NAME="${JOB_NAME}_vanilla"
+fi
+
 if [[ "$SLURM_JOB_NAME" == "gigaMIDI.sh" || -z "$SLURM_JOB_NAME" ]]; then
     # We EXPLICITLY set the --output here for the real job. 
     # The current 'manager' job will follow the header and send its output to /dev/null.
-    sbatch --job-name="gigaMIDI_${TOKENIZER_TYPE}" \
-           "$0" "$TOKENIZER_TYPE"
+    sbatch --job-name="$JOB_NAME" \
+           "$0" "$TOKENIZER_TYPE" "$VANILLA_FLAG"
     exit 0
 fi
 
 # --- 3. LOAD ENVIRONMENT VARIABLES ---
-# Locates .env relative to the script's directory (matches lakh.sh logic)
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-ENV_PATH="../../../.env"
+PROJECT_ROOT="$SCRIPT_DIR/../../.."
+ENV_PATH="$SCRIPT_DIR/../../../.env"
 
 if [ -f "$ENV_PATH" ]; then
     export $(grep -v '^#' "$ENV_PATH" | xargs)
@@ -47,8 +63,7 @@ if [ -f "$ENV_PATH" ]; then
         echo "✅ WandB API Key exported."
     fi
 else
-    echo "❌ Error: .env file not found at $ENV_PATH."
-    exit 1
+    echo "⚠️ Warning: .env not found at $ENV_PATH. Using shell environment or defaults."
 fi
 
 # --- 4. DYNAMIC STORAGE LOGIC ---
@@ -80,6 +95,11 @@ echo "--- GigaMIDI Full Pipeline Metadata ---"
 echo "Project Root:   $PROJECT_ROOT"
 echo "Data Storage:   ${REMOTE_DATA_STORAGE:-Local Project Directory}"
 echo "Module:         $TOKEN_MODULE"
+if [ "$VANILLA_FLAG" = "--vanilla" ]; then
+    echo "Vocabulary:     Vanilla (no anticipation control block)"
+else
+    echo "Vocabulary:     Full Anticipation (with control block)"
+fi
 echo "---------------------------------------"
 
 # --- 6. Execution ---
@@ -90,7 +110,7 @@ echo "🚀 [Step 1/2] Checking/Downloading GigaMIDI..."
 
 # STEP 2: Tokenize
 echo "🎹 [Step 2/2] Starting Tokenization ($TOKEN_MODULE)..."
-if "$PYTHON_EXEC" -m "$TOKEN_MODULE" gigamidi; then
+if "$PYTHON_EXEC" -m "$TOKEN_MODULE" gigamidi $VANILLA_FLAG; then
     echo "✅ GigaMIDI Pipeline Complete."
 else
     echo "❌ Error: Tokenization failed."
