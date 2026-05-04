@@ -27,8 +27,8 @@ from data.nlp.ai2arc_dataloader import AI2ArcDataset
 from data.nlp.planbench_dataloader import PlanBenchDataset
 from data.nlp.synthetic_dataset import NLPSyntheticDataset
 from data.mus.symbolic.dataloaders.giga_midi_dataloader import GigaMIDIDataset
-from data.mus.symbolic.dataloaders.test_dataloader import MusicSyntheticDataset
 from data.mus.symbolic.dataloaders.custom_music_dataloader import CustomMusicDataset
+from data.mus.symbolic.dataloaders.giga_midi_miditok_dataset import GigaMIDIMiditokDataset
 
 from model.vid.ebt import EBT_VID
 from model.nlp.ebt import EBT_NLP
@@ -586,10 +586,8 @@ class ModelTrainer(L.LightningModule):
                 self.train_ds = SQuADDataset(self.hparams, split = 'train')
                 self.val_ds = SQuADDataset(self.hparams, split = 'validation')
             elif self.hparams.dataset_name == "giga_midi":
-                self.full_ds = MusicSyntheticDataset(self.hparams)
-                train_samples = int(len(self.full_ds) * (1 - self.hparams.validation_split_pct))
-                valid_samples = len(self.full_ds) - train_samples
-                self.train_ds, self.val_ds = random_split(self.full_ds, [train_samples, valid_samples])
+                self.train_ds = GigaMIDIMiditokDataset(self.hparams, split="train")
+                self.val_ds = GigaMIDIMiditokDataset(self.hparams, split="validation")
             else:
                 # Try to load as custom dataset
                 try:
