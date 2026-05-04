@@ -10,7 +10,7 @@ from argparse import ArgumentParser
 
 def get_vocab_sizes():
     """Get vocab sizes for different tokenizers"""
-    from tokenization.anticipation.anticipation.vocab_selector import VOCAB_SIZE, MIDI_VOCAB_SIZE
+    from data.mus.symbolic.tokenization.anticipation.anticipation.vocab_selector import VOCAB_SIZE, MIDI_VOCAB_SIZE
     return {
         "anticipation_arrival": VOCAB_SIZE,
         "anticipation_interarrival": MIDI_VOCAB_SIZE,
