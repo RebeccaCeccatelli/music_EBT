@@ -64,20 +64,21 @@ python train_model.py \
 --model_size "${MODEL_SIZE}" \
 --tokenizer_type "${TOKENIZER_TYPE}" \
 --normalize_initial_condition \
---context_length 1024 \
+--context_length 512 \
 --gpus "1" \
---peak_learning_rate "${lr[${SLURM_ARRAY_TASK_ID}]}" \
---batch_size_per_device 32 \
---accumulate_grad_batches 8 \
+--peak_learning_rate 0.0008 \
+--batch_size_per_device 64 \
+--accumulate_grad_batches 4 \
 --gradient_clip_val 1.0 \
 --weight_decay 0.05 \
 --min_lr_scale 10 \
---max_steps 60000 \
---max_scheduling_steps 60000 \
---warm_up_steps 5000 \
+--max_steps 25000 \
+--max_scheduling_steps 25000 \
+--warm_up_steps 2500 \
 --dataset_name "${DATASET_NAME}" \
+--tokenizer_config_path "/home/rebcecca/orcd/pool/music_datasets/giga-midi/tokens/miditok/tokenizer.json" \
 --num_workers 12 \
---validation_split_pct 0.1 \
+--validation_split_pct 0.05 \
 --limit_train_batches 1.0 \
 --limit_val_batches 1.0 \
 --limit_test_batches 1.0 \
@@ -92,6 +93,7 @@ ${SLURM_ARRAY_TASK_ID:+--is_slurm_run}
 # NOTES:
 # - Baseline HF GPT2 transformer for comparison with EBT
 # - Same training configuration as baseline_llama_transformer.sh for fair comparison
-# - 60k steps, 1024 context length
+# - 25k steps (optimized for 6-hour limit), 512 context length
+# - Larger batch size (64) and shorter sequences for faster convergence
 # - Standard AdamW optimizer with cosine annealing
-# - bf16 mixed precision for efficiency
+# - Higher LR (0.0008) to compensate for fewer steps
