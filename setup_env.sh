@@ -10,7 +10,7 @@ echo "--------------------------------------------------------"
 
 # 1. STORAGE CONFIG: Redirects heavy datasets to high-capacity storage (Pool).
 # 💡 USER TIP: Set to "" to use the local 'datasets' folder within the repo.
-export REMOTE_DATA_STORAGE="/orcd/home/002/rebcecca/orcd/pool/music_datasets"
+export REMOTE_DATA_STORAGE="/home/rebcecca/orcd/pool/music_datasets"
 
 if [ -n "$REMOTE_DATA_STORAGE" ]; then
     echo "📂 Storage: [REMOTE] Creating directory at $REMOTE_DATA_STORAGE..."

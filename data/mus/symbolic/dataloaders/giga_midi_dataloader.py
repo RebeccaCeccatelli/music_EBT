@@ -2,8 +2,8 @@ import os
 import zipfile
 import shutil
 from huggingface_hub import hf_hub_download
-from path_utils import get_dataset_path
-from dataloaders.constants import DatasetType
+from data.mus.symbolic.path_utils import get_dataset_path
+from data.mus.symbolic.dataloaders.constants import DatasetType
 
 class GigaMIDIDataset:
     def __init__(self):
