@@ -154,6 +154,7 @@ bash_scripts/debug/debug_dataloader.sh
 work.sh
 **/.nfs000*
 inference_results/**
+inference_outputs/
 logs
 data/mus/symbolic/datasets/**
 .env

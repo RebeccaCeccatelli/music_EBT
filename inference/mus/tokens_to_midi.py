@@ -19,31 +19,50 @@ from data.mus.symbolic.tokenization.tokenizer_utils import load_tokenizer
 def tokens_to_midi(token_list: List[int], tokenizer) -> bytes:
     """
     Convert a list of token IDs to a MIDI file (bytes).
-    
+
     Args:
         token_list: List of integer token IDs
         tokenizer: REMI tokenizer instance with decode() method
-    
+
     Returns:
         MIDI file as bytes
     """
-    # miditok tokenizer.decode() expects a list of token objects or token IDs
-    # Convert token IDs to miditok tokens if needed
+    import tempfile
+
+    # miditok tokenizer.decode() returns a symusic.Score object
     midi_obj = tokenizer.decode(token_list)
-    
+
     # Convert MIDI object to bytes
-    if hasattr(midi_obj, 'save'):
-        # If it's a pretty_midi or music21 object
-        import tempfile
+    if hasattr(midi_obj, 'dump_midi'):
+        # symusic.Score object - use dump_midi() method
         with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as f:
-            midi_obj.write(f.name)
-            with open(f.name, 'rb') as mf:
+            temp_path = f.name
+        try:
+            midi_obj.dump_midi(temp_path)
+            with open(temp_path, 'rb') as mf:
                 midi_bytes = mf.read()
-            os.remove(f.name)
             return midi_bytes
-    else:
-        # If it already returns bytes
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+    elif hasattr(midi_obj, 'write'):
+        # pretty_midi or music21 object
+        with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as f:
+            temp_path = f.name
+        try:
+            midi_obj.write(temp_path)
+            with open(temp_path, 'rb') as mf:
+                midi_bytes = mf.read()
+            return midi_bytes
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+    elif isinstance(midi_obj, bytes):
+        # Already bytes
         return midi_obj
+    else:
+        # Try to convert to bytes
+        raise ValueError(f"Cannot convert {type(midi_obj)} to MIDI bytes")
 
 
 def main():
