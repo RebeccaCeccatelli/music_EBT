@@ -47,16 +47,16 @@ def sample_top_p(probs, p):
 def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz):
     """
     Forward pass for music token generation.
-    
+
     Handles both custom transformers (EBT, Llama) and HuggingFace models.
-    
+
     Args:
         hparams: Hyperparameters containing model_name and inference settings
         model: The music generation model
         input_tokens: Input token sequences, shape (bsz, seq_len)
         start_pos: Starting position for KV caching (currently unused, set to 0)
         bsz: Batch size
-    
+
     Returns:
         logits: Raw logits for next token prediction, shape (bsz, seq_len, vocab_size) or (bsz, vocab_size)
     """
@@ -78,10 +78,13 @@ def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz):
             use_cache=False,
         )
         logits = outputs.logits  # (B, S, V)
+    elif hparams.model_name == "baseline_llama_transformer":
+        # Baseline Llama transformer - does NOT use start_pos parameter
+        logits = model.forward(input_tokens, learning=False, return_raw_logits=True)
     else:
-        # Baseline Llama transformer or other models
+        # Default: assume standard transformer interface
         logits = model.forward(input_tokens, start_pos=0, learning=False, return_raw_logits=True)
-    
+
     return logits
 
 
@@ -176,18 +179,21 @@ def generate_remi(model, batch, hparams):
         f"Prompt length {max_prompt_len} exceeds context length {hparams.context_length}"
     
     total_len = min(hparams.context_length, max_gen_len + max_prompt_len)
-    
+
+    # Determine device from hparams
+    device = getattr(hparams, 'device', 'cuda')
+
     # Initialize token tensor
     tokens = torch.full(
         (bsz, total_len),
         pad_token_id,
         dtype=torch.long,
-        device="cuda"
+        device=device
     )
-    
+
     # Populate prompt tokens
     for k, t in enumerate(prompt_tokens):
-        tokens[k, :len(t)] = torch.tensor(t, dtype=torch.long, device="cuda").clone().detach()
+        tokens[k, :len(t)] = torch.tensor(t, dtype=torch.long, device=device).clone().detach()
     
     # Initialize log probability tracking if requested
     if logprobs:
