@@ -141,6 +141,7 @@ def generate_remi(model, batch, hparams):
     
     Returns:
         dict: Generated sequences with keys:
+            - 'prompt_tokens': List of prompt token sequences
             - 'generation_tokens': List of generated token sequences (without prompt)
             - 'generation_logprobs': List of log probabilities (if tracking)
             - 'full_sequences': Full sequences including prompt (if echo=True)
@@ -160,8 +161,10 @@ def generate_remi(model, batch, hparams):
     prompt_tokens = []
     for row_ids in ids:
         row_ids = row_ids.squeeze() if row_ids.dim() > 1 else row_ids
-        seq_len = len(row_ids)
-        prompt_tokens.append(row_ids[:seq_len].tolist())
+        prompt = row_ids.tolist()
+        while prompt and prompt[-1] == pad_token_id:
+            prompt.pop()
+        prompt_tokens.append(prompt)
     
     # Get model parameters (for custom transformers)
     params = model.transformer.params if hasattr(model, 'transformer') and hasattr(model.transformer, 'params') else None
@@ -284,6 +287,7 @@ def generate_remi(model, batch, hparams):
     
     # Prepare output
     result = {
+        'prompt_tokens': prompt_tokens,
         'generation_tokens': out_tokens,
         'full_sequences': [toks for toks in tokens.tolist()] if echo else out_tokens,
     }
@@ -322,6 +326,7 @@ def generate_anticipation(model, batch, hparams) -> Dict:
     
     Returns:
         dict: Generated sequences with keys:
+            - 'prompt_tokens': List of prompt token sequences
             - 'generation_tokens': List of generated token sequences
             - 'generation_logprobs': List of log probabilities (if tracking)
     
@@ -492,6 +497,7 @@ def generate_anticipation(model, batch, hparams) -> Dict:
     
     # Format output
     result = {
+        'prompt_tokens': prompt_tokens,
         'generation_tokens': generated_all,
     }
     

@@ -19,90 +19,99 @@ def tokens_to_piano_roll(token_ids: List[int], tokenizer) -> np.ndarray:
     """
     Convert token IDs to piano roll representation.
 
-    Returns: 2D array (time_steps, 128 pitches)
+    Uses tokenizer.decode() to convert tokens to MIDI, then extracts notes directly.
+    This works with all miditok tokenizers (REMI, Octuple, CPWord, MuMIDI).
+
+    Returns: 2D array (time_steps, 128 pitches) with velocity values
     """
-    # Get ID to token mapping
-    id_to_token = {v: k for k, v in tokenizer.vocab.items()}
-    tokens = [id_to_token.get(t, f"UNK_{t}") for t in token_ids]
-
-    # Parse tokens to extract note events
-    notes = []  # (pitch, start_time, duration)
-    current_time = 0
-    current_pitch = None
-
-    for token in tokens:
-        if token.startswith("Pitch_"):
-            # Extract pitch value
-            pitch_str = token.split("_")[1]
-            try:
-                current_pitch = int(pitch_str)
-            except:
-                continue
-
-        elif token.startswith("Duration_"):
-            # Extract duration and add note
-            duration_str = token.split("_")[1]
-            try:
-                duration = float(duration_str)
-                if current_pitch is not None:
-                    notes.append((current_pitch, current_time, duration))
-                    current_time += duration
-            except:
-                continue
-
-        elif token.startswith("Time_Shift_"):
-            # Time shift
-            shift_str = token.split("_")[-1]
-            try:
-                current_time += float(shift_str)
-            except:
-                continue
-
-        elif token == "Bar_None":
-            # Optional: could track bar boundaries
-            pass
-
-    if not notes:
-        # Return empty piano roll if no notes
+    try:
+        # Decode tokens to MIDI object (symusic.Score)
+        midi_obj = tokenizer.decode(token_ids)
+    except Exception as e:
+        print(f"Error decoding tokens: {e}")
         return np.zeros((100, 128))
 
-    # Create piano roll
-    max_time = max(start + dur for pitch, start, dur in notes)
-    time_steps = int(max_time * 4) + 1  # 4 time steps per beat
-    piano_roll = np.zeros((time_steps, 128), dtype=np.float32)
+    # Extract notes from the MIDI object
+    notes = []  # (pitch, start_time, end_time, velocity)
 
-    # Fill in notes
-    for pitch, start, duration in notes:
+    try:
+        # symusic.Score object has tracks attribute
+        if hasattr(midi_obj, 'tracks'):
+            for track in midi_obj.tracks:
+                # symusic tracks have notes attribute
+                if hasattr(track, 'notes'):
+                    for note in track.notes:
+                        # symusic notes have pitch, start, end, velocity attributes
+                        pitch = note.pitch
+                        start = note.start  # in ticks
+                        end = note.end      # in ticks
+                        velocity = note.velocity
+                        notes.append((pitch, start, end, velocity))
+    except Exception as e:
+        print(f"Error extracting notes from MIDI object: {e}")
+        return np.zeros((100, 128))
+
+    if not notes:
+        return np.zeros((100, 128))
+
+    # Get ticks per beat from the MIDI object
+    tpb = getattr(midi_obj, 'ticks_per_quarter', 480)
+
+    # Convert ticks to quarter notes (standardized time)
+    notes_quarters = [(pitch, start / tpb, end / tpb, velocity)
+                      for pitch, start, end, velocity in notes]
+
+    # Create piano roll with 4 time steps per quarter note
+    max_time = max(end for _, _, end, _ in notes_quarters)
+    time_steps = int(max_time * 4) + 1
+    piano_roll = np.zeros((time_steps, 128), dtype=np.uint8)
+
+    # Fill in notes with velocity
+    for pitch, start, end, velocity in notes_quarters:
         if 0 <= pitch < 128:
             start_step = int(start * 4)
-            end_step = int((start + duration) * 4)
+            end_step = int(end * 4)
             end_step = min(end_step, time_steps)
             if start_step < time_steps:
-                piano_roll[start_step:end_step, pitch] = 1.0
+                piano_roll[start_step:end_step, pitch] = np.maximum(
+                    piano_roll[start_step:end_step, pitch],
+                    velocity
+                )
 
     return piano_roll
 
 
 def plot_piano_roll(piano_roll: np.ndarray, title: str = "") -> np.ndarray:
     """Create matplotlib figure of piano roll and return as image array."""
-    fig, ax = plt.subplots(figsize=(12, 4), dpi=100)
+    fig, ax = plt.subplots(figsize=(14, 6), dpi=100)
 
-    # Plot piano roll
-    ax.imshow(piano_roll.T, aspect='auto', origin='lower', cmap='Blues', interpolation='nearest')
+    # Plot piano roll (velocity-weighted)
+    im = ax.imshow(
+        piano_roll.T,
+        aspect='auto',
+        origin='lower',
+        cmap='YlOrRd',
+        interpolation='nearest',
+        vmin=0,
+        vmax=127
+    )
 
-    ax.set_xlabel("Time")
-    ax.set_ylabel("Pitch (MIDI note)")
-    ax.set_title(title)
+    ax.set_xlabel("Time (×250ms)", fontsize=11)
+    ax.set_ylabel("MIDI Pitch", fontsize=11)
+    ax.set_title(title, fontsize=14, fontweight='bold')
 
-    # Add semitone lines for C notes
+    # Add octave lines
     for octave in range(11):
         c_pitch = 12 * octave
         if c_pitch < 128:
-            ax.axhline(y=c_pitch, color='gray', alpha=0.3, linewidth=0.5)
+            ax.axhline(y=c_pitch, color='gray', alpha=0.2, linewidth=0.8, linestyle='--')
 
+    ax.set_yticks([12 * i for i in range(11)])
+    ax.set_yticklabels([f"C{i-1}" for i in range(11)])
+
+    plt.colorbar(im, ax=ax, label="Velocity")
     plt.tight_layout()
 
-    # Convert figure to image array
     fig.canvas.draw()
     image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
     image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
@@ -113,31 +122,42 @@ def plot_piano_roll(piano_roll: np.ndarray, title: str = "") -> np.ndarray:
 
 def save_piano_roll_image(piano_roll: np.ndarray, output_path: Path, title: str = ""):
     """Save piano roll as PNG image."""
-    fig, ax = plt.subplots(figsize=(12, 4), dpi=100)
+    fig, ax = plt.subplots(figsize=(14, 6), dpi=100)
 
-    # Plot piano roll
-    im = ax.imshow(piano_roll.T, aspect='auto', origin='lower', cmap='Blues', interpolation='nearest')
+    # Plot piano roll (velocity-weighted)
+    im = ax.imshow(
+        piano_roll.T,
+        aspect='auto',
+        origin='lower',
+        cmap='YlOrRd',
+        interpolation='nearest',
+        vmin=0,
+        vmax=127
+    )
 
-    ax.set_xlabel("Time Steps")
-    ax.set_ylabel("MIDI Pitch")
-    ax.set_title(title)
+    ax.set_xlabel("Time (×250ms)", fontsize=11)
+    ax.set_ylabel("MIDI Pitch", fontsize=11)
+    ax.set_title(title, fontsize=14, fontweight='bold')
 
-    # Add semitone lines for C notes
+    # Add octave lines
     for octave in range(11):
         c_pitch = 12 * octave
         if c_pitch < 128:
-            ax.axhline(y=c_pitch, color='gray', alpha=0.2, linewidth=0.5)
+            ax.axhline(y=c_pitch, color='gray', alpha=0.2, linewidth=0.8, linestyle='--')
 
-    plt.colorbar(im, ax=ax, label="Note On")
+    ax.set_yticks([12 * i for i in range(11)])
+    ax.set_yticklabels([f"C{i-1}" for i in range(11)])
+
+    plt.colorbar(im, ax=ax, label="Velocity")
     plt.tight_layout()
     plt.savefig(output_path, dpi=100, bbox_inches='tight')
     plt.close(fig)
 
 
-def generate_piano_rolls_for_run(run_dir: Path):
+def generate_piano_rolls_for_run(run_dir: Path, tokenizer_type: str = "REMI"):
     """Generate piano rolls for all token files in a run."""
-    print(f"Loading tokenizer...")
-    tokenizer, _, _ = load_tokenizer(tokenizer_type="REMI", dataset_name="giga_midi")
+    print(f"Loading {tokenizer_type} tokenizer...")
+    tokenizer, _, _ = load_tokenizer(tokenizer_type=tokenizer_type, dataset_name="giga_midi")
 
     for model_dir in ["gpt2", "llama"]:
         tokens_dir = run_dir / model_dir / "tokens"
@@ -170,8 +190,9 @@ def generate_piano_rolls_for_run(run_dir: Path):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python tokens_to_piano_roll.py <run_dir>")
+        print("Usage: python tokens_to_piano_roll.py <run_dir> [--tokenizer_type REMI]")
         print("Example: python tokens_to_piano_roll.py inference_outputs/run_20260505_145305")
+        print("         python tokens_to_piano_roll.py inference_outputs/run_20260505_145305 --tokenizer_type Octuple")
         sys.exit(1)
 
     run_dir = Path(sys.argv[1])
@@ -179,5 +200,11 @@ if __name__ == "__main__":
         print(f"❌ Run directory not found: {run_dir}")
         sys.exit(1)
 
-    generate_piano_rolls_for_run(run_dir)
+    tokenizer_type = "REMI"
+    if "--tokenizer_type" in sys.argv:
+        idx = sys.argv.index("--tokenizer_type")
+        if idx + 1 < len(sys.argv):
+            tokenizer_type = sys.argv[idx + 1]
+
+    generate_piano_rolls_for_run(run_dir, tokenizer_type)
     print("\n✅ Piano rolls generated!")
