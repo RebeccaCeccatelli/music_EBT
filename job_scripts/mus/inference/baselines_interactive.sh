@@ -52,10 +52,12 @@ PROMPT_LENGTH="${PROMPT_LENGTH:-128}"
 GENERATION_LENGTH="${GENERATION_LENGTH:-384}"
 NUM_SAMPLES="${NUM_SAMPLES:-5}"
 USE_TEST_SPLIT="${USE_TEST_SPLIT:-}" # Set to "--use_test_split" to use test split
+WANDB_PROJECT="${WANDB_PROJECT:-music_inference_baselines}"
+WANDB_ENTITY="${WANDB_ENTITY:-}"    # Leave empty to use default wandb entity
 
 # Generate timestamp for unique run directory
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RUN_DIR="./inference_outputs/run_${TIMESTAMP}"
+RUN_DIR="/home/rebcecca/orcd/pool/music_outputs/inference/baselines/run_${TIMESTAMP}"
 
 # Create run directory with organized structure
 mkdir -p "${RUN_DIR}/gpt2/midi" "${RUN_DIR}/gpt2/wav" "${RUN_DIR}/gpt2/tokens"
@@ -72,11 +74,7 @@ echo "Generation length: ${GENERATION_LENGTH} tokens"
 echo "Number of samples: ${NUM_SAMPLES}"
 echo "=========================================="
 
-# Create inference log directory
-mkdir -p inference_logs
-
-# Generate log file
-INFERENCE_LOG="inference_logs/slurm_inference_${SLURM_JOB_ID}_${TIMESTAMP}.log"
+SLURM_LOG="logs/slurm/mus/baselines_interactive_${SLURM_JOB_ID}.log"
 
 {
     echo "=========================================="
@@ -137,8 +135,8 @@ for model_dir in ["gpt2", "llama"]:
 PYTHON_EOF
 
     echo ""
-    echo "Generating piano rolls from prompt and generated token files..."
-    /home/rebcecca/.conda/envs/music_EBT/bin/python "${PROJECT_ROOT}/inference/mus/tokens_to_piano_roll.py" "${RUN_DIR}" --tokenizer_type REMI
+    echo "Generating piano rolls from MIDI files..."
+    /home/rebcecca/.conda/envs/music_EBT/bin/python "${PROJECT_ROOT}/inference/mus/tokens_to_piano_roll.py" "${RUN_DIR}"
 
     echo ""
     echo "=========================================="
@@ -149,11 +147,18 @@ PYTHON_EOF
     echo "  GPT2:  ${RUN_DIR}/gpt2/"
     echo "  Llama: ${RUN_DIR}/llama/"
     echo "SLURM Job ID: $SLURM_JOB_ID"
-    echo "Log file: $INFERENCE_LOG"
 
-} 2>&1 | tee "$INFERENCE_LOG"
+}
 
 EXIT_CODE=$?
+
+echo ""
+echo "Uploading results to wandb..."
+/home/rebcecca/.conda/envs/music_EBT/bin/python "${PROJECT_ROOT}/inference/mus/upload_to_wandb.py" \
+    "${RUN_DIR}" \
+    --wandb_project "${WANDB_PROJECT}" \
+    --wandb_entity "${WANDB_ENTITY}" \
+    --log_file "${SLURM_LOG}"
 
 if [ $EXIT_CODE -eq 0 ]; then
     echo "✅ Inference completed successfully"

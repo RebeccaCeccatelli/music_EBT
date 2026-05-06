@@ -363,6 +363,12 @@ def main():
         help="Use test split instead of validation"
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for sample selection. If not set, a random seed is used each run."
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="auto",
@@ -401,14 +407,23 @@ def main():
     split = "test" if args.use_test_split else "validation"
     dataset = prepare_dataset(hparams, split=split)
 
+    # Randomly select sample indices
+    import random
+    seed = args.seed if args.seed is not None else random.randint(0, 2**31 - 1)
+    rng = random.Random(seed)
+    num_samples = min(args.num_samples, len(dataset))
+    sample_indices = rng.sample(range(len(dataset)), num_samples)
+    print(f"Random seed: {seed}")
+    print(f"Sample indices: {sample_indices}")
+
     # Run inference on samples
     successful = 0
     failed = 0
 
-    for i in range(min(args.num_samples, len(dataset))):
+    for i, dataset_idx in enumerate(sample_indices):
         if run_single_sample_inference(
             model, hparams, tokenizer, dataset,
-            i, args.prompt_length, args.generation_length,
+            dataset_idx, args.prompt_length, args.generation_length,
             str(output_dir), device
         ):
             successful += 1
@@ -436,6 +451,8 @@ def main():
         "num_samples_requested": args.num_samples,
         "num_samples_successful": successful,
         "dataset_split": split,
+        "seed": seed,
+        "sample_indices": sample_indices,
         "device": device,
     }
 
