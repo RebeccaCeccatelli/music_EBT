@@ -34,10 +34,98 @@ def load_tokenizer(
         ValueError: If tokenizer_type is unknown or invalid
     """
     
+    # Normalize to proper case for anticipation
+    tokenizer_type = _normalize_tokenizer_type(tokenizer_type)
+    
     if tokenizer_type.startswith('Anticipation'):
         return _load_anticipation_tokenizer(tokenizer_type, dataset_name, use_vanilla)
     else:
         return _load_miditok_tokenizer(tokenizer_type, tokenizer_config_path)
+
+
+def get_vocab_size(
+    tokenizer_type: str,
+    dataset_name: str = 'giga-midi',
+    use_vanilla: bool = False
+) -> Tuple[int, int]:
+    """
+    Get vocab size and pad token ID without loading the full tokenizer object.
+    
+    Useful for training with pre-tokenized data where you only need metadata.
+    
+    Args:
+        tokenizer_type: One of:
+            Miditok: "REMI", "Octuple", "CPWord", "MuMIDI" (case-insensitive)
+            Anticipation: "anticipation", "anticipation-vanilla", "anticipation-interarrival", etc. (case-insensitive)
+        dataset_name: Dataset name for Anticipation tokenizer (default: 'giga-midi')
+        use_vanilla: If True and tokenizer_type is "anticipation", use vanilla variant
+    
+    Returns:
+        Tuple of (vocab_size, pad_token_id)
+    
+    Raises:
+        ValueError: If tokenizer_type is unknown
+    """
+    tokenizer_type = _normalize_tokenizer_type(tokenizer_type)
+    
+    if tokenizer_type.startswith('Anticipation'):
+        return _get_anticipation_vocab_size(tokenizer_type, use_vanilla)
+    else:
+        return _get_miditok_vocab_size(tokenizer_type)
+
+
+def _normalize_tokenizer_type(tokenizer_type: str) -> str:
+    """Normalize tokenizer type string (case-insensitive handling)."""
+    if tokenizer_type.lower().startswith('anticipation'):
+        # Capitalize properly: "anticipation" -> "Anticipation", "anticipation-vanilla" -> "Anticipation-Vanilla"
+        parts = tokenizer_type.split('-')
+        return '-'.join(part.capitalize() for part in parts)
+    return tokenizer_type  # Keep miditok types as-is
+
+
+def _get_anticipation_vocab_size(tokenizer_type: str, use_vanilla: bool = False) -> Tuple[int, int]:
+    """Get vocab size for anticipation tokenizer without full instantiation."""
+    # Determine variant
+    if tokenizer_type == 'Anticipation':
+        variant = 'Vanilla' if use_vanilla else 'Arrival-Time'
+    else:
+        variant = tokenizer_type.split('-', 1)[1]
+    
+    # Import vocab constants
+    if variant == 'Vanilla':
+        from data.mus.symbolic.tokenization.anticipation.anticipation.vocab_vanilla import VOCAB_SIZE, CONTROL_OFFSET
+        pad_token_id = CONTROL_OFFSET - 1  # Last token before control block
+        return VOCAB_SIZE, pad_token_id
+    elif variant == 'Interarrival':
+        from data.mus.symbolic.tokenization.anticipation.anticipation.vocab_vanilla import MIDI_VOCAB_SIZE
+        pad_token_id = MIDI_VOCAB_SIZE - 1
+        return MIDI_VOCAB_SIZE, pad_token_id
+    elif variant == 'Arrival-Time':
+        from data.mus.symbolic.tokenization.anticipation.anticipation.vocab_ant import VOCAB_SIZE, CONTROL_OFFSET
+        pad_token_id = CONTROL_OFFSET - 1
+        return VOCAB_SIZE, pad_token_id
+    else:
+        raise ValueError(f"Unknown Anticipation variant: {variant}")
+
+
+def _get_miditok_vocab_size(tokenizer_type: str) -> Tuple[int, int]:
+    """Get vocab size for miditok tokenizer without full instantiation."""
+    # Known vocab sizes for miditok tokenizers (standard configs)
+    miditok_vocab_sizes = {
+        'REMI': (284, 283),          # (vocab_size, pad_token_id)
+        'Octuple': (385, 384),
+        'CPWord': (430, 429),
+        'MuMIDI': (350, 349),
+    }
+    
+    if tokenizer_type not in miditok_vocab_sizes:
+        available = ', '.join(miditok_vocab_sizes.keys())
+        raise ValueError(
+            f"Unknown miditok tokenizer: {tokenizer_type}. "
+            f"Available: {available}"
+        )
+    
+    return miditok_vocab_sizes[tokenizer_type]
 
 
 def _load_anticipation_tokenizer(

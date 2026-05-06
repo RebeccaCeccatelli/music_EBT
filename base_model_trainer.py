@@ -72,6 +72,7 @@ class ModelTrainer(L.LightningModule):
             if "execution_mode" in self.hparams and "save_generation_logs_dir" in self.hparams and self.hparams.execution_mode == "inference":
                 print("setting up music inference logger")
                 self.infer_logger = text_logger.setup_jsonl_logger(log_filename = "generations.jsonl", base_log_dir=self.hparams.save_generation_logs_dir)
+                self.num_generated_music_samples = 0
         if self.hparams.modality == "VID": #is computer vision
             self.image_dims = self.hparams.image_dims # list size two
             self.num_generated_videos = 0
@@ -340,17 +341,26 @@ class ModelTrainer(L.LightningModule):
                 # Unified music generation (handles EBT, Baseline Llama, and Baseline HF GPT2)
                 outputs = generate_music(self.model, batch, self.hparams)
                 
-                # Log generated music tokens
+                # Log prompts and generated music tokens together for comparison.
                 for i, tokens in enumerate(outputs['generation_tokens']):
+                    sample_idx = self.num_generated_music_samples + i if hasattr(self, 'num_generated_music_samples') else i
                     log_entry = {
-                        'sample_idx': self.num_generated_videos if hasattr(self, 'num_generated_videos') else i,
+                        'sample_idx': sample_idx,
+                        'prompt_tokens': outputs.get('prompt_tokens', [[]])[i],
                         'generated_tokens': tokens,
                     }
                     if 'generation_logprobs' in outputs:
                         log_entry['logprobs'] = outputs['generation_logprobs'][i]
                     if hasattr(self, 'infer_logger'):
                         self.infer_logger.log_data(log_entry)
-                self.log_metrics(outputs, "test")
+                if hasattr(self, 'num_generated_music_samples'):
+                    self.num_generated_music_samples += len(outputs['generation_tokens'])
+                metric_outputs = {
+                    key: value for key, value in outputs.items()
+                    if isinstance(value, (int, float, torch.Tensor))
+                }
+                if metric_outputs:
+                    self.log_metrics(metric_outputs, "test")
             else:
                 raise NotImplementedError(f"Inference mode not supported for modality {self.hparams.modality} yet")
         else: # all other modes just get metrics

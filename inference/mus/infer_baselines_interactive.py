@@ -257,59 +257,55 @@ def run_single_sample_inference(
             model, hparams, prompt_tokens, generation_length
         )
 
-        # Prepare full sequence with continuation
-        full_with_continuation = list(full_tokens.cpu().numpy())[:prompt_length] + generated_tokens
+        # Normalize token containers to plain Python ints so JSON serialization is reliable.
+        full_tokens_list = [int(token) for token in full_tokens.cpu().numpy()]
+        prompt_tokens_list = [int(token) for token in prompt_tokens[0].cpu().numpy()]
+        generated_tokens = [int(token) for token in generated_tokens]
+        ground_truth_tokens = full_tokens_list[:prompt_length + generation_length]
 
         # Save outputs
         base_name = f"sample_{sample_idx}"
+        output_path = Path(output_dir)
+        wav_output_path = output_path.parent / "wav" if output_path.name == "midi" else output_path
+        wav_output_path.mkdir(parents=True, exist_ok=True)
+        tokens_dir = Path(output_dir).parent / "tokens"
+        tokens_dir.mkdir(parents=True, exist_ok=True)
 
-        # Ground truth (full original)
-        print("\nSaving ground truth...")
+        # Prompt
+        print("\nSaving prompt...")
         tokens_to_files(
-            list(full_tokens.cpu().numpy()),
-            tokenizer,
-            f"{output_dir}/{base_name}_ground_truth.mid",
-            f"{output_dir}/{base_name}_ground_truth.wav",
-            "ground truth"
-        )
-
-        # Prompt only
-        print("Saving prompt...")
-        tokens_to_files(
-            list(prompt_tokens[0].cpu().numpy()),
+            prompt_tokens_list,
             tokenizer,
             f"{output_dir}/{base_name}_prompt.mid",
-            f"{output_dir}/{base_name}_prompt.wav",
+            str(wav_output_path / f"{base_name}_prompt.wav"),
             "prompt"
         )
+        with open(tokens_dir / f"{base_name}_prompt.json", 'w') as f:
+            json.dump(prompt_tokens_list, f)
 
-        # Generated continuation only
+        # Generated continuation
         print("Saving generated continuation...")
         tokens_to_files(
             generated_tokens,
             tokenizer,
             f"{output_dir}/{base_name}_generated.mid",
-            f"{output_dir}/{base_name}_generated.wav",
+            str(wav_output_path / f"{base_name}_generated.wav"),
             "generated"
         )
-
-        # Save generated tokens to JSON
-        tokens_dir = Path(output_dir).parent / "tokens"
-        tokens_dir.mkdir(parents=True, exist_ok=True)
-        tokens_file = tokens_dir / f"{base_name}_generated.json"
-        with open(tokens_file, 'w') as f:
-            import json
+        with open(tokens_dir / f"{base_name}_generated.json", 'w') as f:
             json.dump(generated_tokens, f)
 
-        # Full sequence with continuation
-        print("Saving full sequence with continuation...")
+        # Ground truth (original prompt + original continuation, same window as generated)
+        print("Saving ground truth...")
         tokens_to_files(
-            full_with_continuation,
+            ground_truth_tokens,
             tokenizer,
-            f"{output_dir}/{base_name}_full_with_continuation.mid",
-            f"{output_dir}/{base_name}_full_with_continuation.wav",
-            "full with continuation"
+            f"{output_dir}/{base_name}_ground_truth.mid",
+            str(wav_output_path / f"{base_name}_ground_truth.wav"),
+            "ground truth"
         )
+        with open(tokens_dir / f"{base_name}_ground_truth.json", 'w') as f:
+            json.dump(ground_truth_tokens, f)
 
         return True
 

@@ -133,14 +133,23 @@ def main():
                 data = json.loads(line.strip())
                 sample_idx = data.get('sample_idx', i)
                 tokens = data.get('generated_tokens', [])
+                prompt_tokens = data.get('prompt_tokens', [])
                 
                 if not tokens:
                     print(f"Sample {sample_idx}: No tokens found, skipping")
                     error_count += 1
                     continue
+
+                if prompt_tokens:
+                    print(f"Converting sample {sample_idx} prompt ({len(prompt_tokens)} tokens)...", end=" ")
+                    prompt_midi_bytes = tokens_to_midi(prompt_tokens, tokenizer)
+                    prompt_output_file = output_path / f"sample_{sample_idx:04d}_prompt.mid"
+                    with open(prompt_output_file, 'wb') as mf:
+                        mf.write(prompt_midi_bytes)
+                    print(f"✓ Saved to {prompt_output_file.name}")
                 
                 # Convert tokens to MIDI
-                print(f"Converting sample {sample_idx} ({len(tokens)} tokens)...", end=" ")
+                print(f"Converting sample {sample_idx} generated ({len(tokens)} tokens)...", end=" ")
                 midi_bytes = tokens_to_midi(tokens, tokenizer)
                 
                 # Save MIDI file

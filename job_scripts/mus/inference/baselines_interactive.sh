@@ -80,7 +80,7 @@ INFERENCE_LOG="inference_logs/slurm_inference_${SLURM_JOB_ID}_${TIMESTAMP}.log"
 
 {
     echo "=========================================="
-    echo "GPT2 Baseline Inference (5 samples)"
+    echo "GPT2 Baseline Inference (${NUM_SAMPLES} samples)"
     echo "=========================================="
     /home/rebcecca/.conda/envs/music_EBT/bin/python "${PROJECT_ROOT}/inference/mus/infer_baselines_interactive.py" \
         --checkpoint "${CHECKPOINT_GPT2}" \
@@ -94,7 +94,7 @@ INFERENCE_LOG="inference_logs/slurm_inference_${SLURM_JOB_ID}_${TIMESTAMP}.log"
 
     echo ""
     echo "=========================================="
-    echo "Llama Baseline Inference (5 samples)"
+    echo "Llama Baseline Inference (${NUM_SAMPLES} samples)"
     echo "=========================================="
     /home/rebcecca/.conda/envs/music_EBT/bin/python "${PROJECT_ROOT}/inference/mus/infer_baselines_interactive.py" \
         --checkpoint "${CHECKPOINT_LLAMA}" \
@@ -110,28 +110,35 @@ INFERENCE_LOG="inference_logs/slurm_inference_${SLURM_JOB_ID}_${TIMESTAMP}.log"
     echo "=========================================="
     echo "✅ Inference Complete!"
     echo "=========================================="
-    echo "Converting MIDI to WAV..."
-    /home/rebcecca/.conda/envs/music_EBT/bin/python << 'PYTHON_EOF'
+    echo "Ensuring all MIDI files are available as WAV..."
+    /home/rebcecca/.conda/envs/music_EBT/bin/python << PYTHON_EOF
 import sys
 sys.path.insert(0, "${PROJECT_ROOT}")
 from convert_midi_simple import simple_synth
 from pathlib import Path
-import glob
 
 run_dir = Path("${RUN_DIR}")
 for model_dir in ["gpt2", "llama"]:
     midi_dir = run_dir / model_dir / "midi"
     wav_dir = run_dir / model_dir / "wav"
+    wav_dir.mkdir(parents=True, exist_ok=True)
 
     midi_files = sorted(midi_dir.glob("*.mid"))
     for midi_file in midi_files:
         wav_file = wav_dir / midi_file.name.replace(".mid", ".wav")
+        if wav_file.exists():
+            print(f"↪ {wav_file.name} already exists")
+            continue
         try:
             simple_synth(str(midi_file), str(wav_file))
             print(f"✅ {wav_file.name}")
         except Exception as e:
             print(f"❌ {wav_file.name}: {e}")
 PYTHON_EOF
+
+    echo ""
+    echo "Generating piano rolls from prompt and generated token files..."
+    /home/rebcecca/.conda/envs/music_EBT/bin/python "${PROJECT_ROOT}/inference/mus/tokens_to_piano_roll.py" "${RUN_DIR}" --tokenizer_type REMI
 
     echo ""
     echo "=========================================="
