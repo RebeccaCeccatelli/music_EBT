@@ -66,6 +66,7 @@ python train_model.py \
 --model_size ${MODEL_SIZE} \
 \
 --tokenizer_type "REMI" \
+--tokenizer_config_path "/home/rebcecca/orcd/pool/music_datasets/giga-midi/tokens/miditok/tokenizer.json" \
 --normalize_initial_condition \
 --ebt_type "time_embed" \
 --denoising_initial_condition "random_noise" \

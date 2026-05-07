@@ -46,32 +46,33 @@ def load_tokenizer(
 def get_vocab_size(
     tokenizer_type: str,
     dataset_name: str = 'giga-midi',
-    use_vanilla: bool = False
+    use_vanilla: bool = False,
+    tokenizer_config_path: str = None,
 ) -> Tuple[int, int]:
     """
-    Get vocab size and pad token ID without loading the full tokenizer object.
-    
-    Useful for training with pre-tokenized data where you only need metadata.
-    
+    Get vocab size and pad token ID.
+
     Args:
         tokenizer_type: One of:
             Miditok: "REMI", "Octuple", "CPWord", "MuMIDI" (case-insensitive)
             Anticipation: "anticipation", "anticipation-vanilla", "anticipation-interarrival", etc. (case-insensitive)
         dataset_name: Dataset name for Anticipation tokenizer (default: 'giga-midi')
         use_vanilla: If True and tokenizer_type is "anticipation", use vanilla variant
-    
+        tokenizer_config_path: Path to saved tokenizer.json (miditok only). Ensures vocab matches
+                               the config used during tokenization.
+
     Returns:
         Tuple of (vocab_size, pad_token_id)
-    
+
     Raises:
         ValueError: If tokenizer_type is unknown
     """
     tokenizer_type = _normalize_tokenizer_type(tokenizer_type)
-    
+
     if tokenizer_type.startswith('Anticipation'):
         return _get_anticipation_vocab_size(tokenizer_type, use_vanilla)
     else:
-        return _get_miditok_vocab_size(tokenizer_type)
+        return _get_miditok_vocab_size(tokenizer_type, tokenizer_config_path)
 
 
 def _normalize_tokenizer_type(tokenizer_type: str) -> str:
@@ -108,24 +109,14 @@ def _get_anticipation_vocab_size(tokenizer_type: str, use_vanilla: bool = False)
         raise ValueError(f"Unknown Anticipation variant: {variant}")
 
 
-def _get_miditok_vocab_size(tokenizer_type: str) -> Tuple[int, int]:
-    """Get vocab size for miditok tokenizer without full instantiation."""
-    # Known vocab sizes for miditok tokenizers (standard configs)
-    miditok_vocab_sizes = {
-        'REMI': (284, 283),          # (vocab_size, pad_token_id)
-        'Octuple': (385, 384),
-        'CPWord': (430, 429),
-        'MuMIDI': (350, 349),
-    }
-    
-    if tokenizer_type not in miditok_vocab_sizes:
-        available = ', '.join(miditok_vocab_sizes.keys())
-        raise ValueError(
-            f"Unknown miditok tokenizer: {tokenizer_type}. "
-            f"Available: {available}"
-        )
-    
-    return miditok_vocab_sizes[tokenizer_type]
+def _get_miditok_vocab_size(tokenizer_type: str, tokenizer_config_path: str = None) -> Tuple[int, int]:
+    """Get vocab size for miditok tokenizer.
+
+    Vocab size is config-dependent, so we instantiate the tokenizer to get accurate values.
+    Pass tokenizer_config_path to match exactly the config used during tokenization.
+    """
+    _, vocab_size, pad_token_id = _load_miditok_tokenizer(tokenizer_type, tokenizer_config_path)
+    return vocab_size, pad_token_id
 
 
 def _load_anticipation_tokenizer(
