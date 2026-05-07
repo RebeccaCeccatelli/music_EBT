@@ -61,6 +61,7 @@ python "${PROJECT_ROOT}/train_model.py" \
 --model_size ${MODEL_SIZE} \
 \
 --tokenizer_type "REMI" \
+--tokenizer_config_path "/home/rebcecca/orcd/pool/music_datasets/giga-midi/tokens/miditok/tokenizer.json" \
 --dataset_name "giga-midi" \
 \
 --context_length 1024 \

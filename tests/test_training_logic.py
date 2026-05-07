@@ -51,7 +51,8 @@ print(f"Input shape: {input_ids.shape}")
 print(f"Target shape: {targets.shape}")
 
 # Simulate forward pass
-vocab_size = 284
+# REMI with TokenizerConfig(num_velocities=32, use_chords=True, use_programs=True) → 427 tokens, PAD=0
+vocab_size = 427
 batch_size = input_ids.shape[0]
 seq_len = input_ids.shape[1]
 
@@ -65,7 +66,7 @@ targets_flat = targets.reshape(-1)
 print(f"Logits flat: {logits_flat.shape}")
 print(f"Targets flat: {targets_flat.shape}")
 
-# Compute loss
+# Compute loss — PAD_None is token 0 in miditok REMI vocabulary
 pad_token_id = 0
 ce_loss = F.cross_entropy(logits_flat, targets_flat, ignore_index=pad_token_id)
 print(f"\nCross-entropy loss: {ce_loss.item():.4f}")
