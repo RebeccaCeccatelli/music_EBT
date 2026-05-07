@@ -45,7 +45,7 @@ def upload_run(run_dir: Path, wandb_project: str, wandb_entity: str, log_file: P
         ), key=int)
 
         for idx in sample_indices:
-            for kind in ["prompt", "generated", "ground_truth"]:
+            for kind in ["prompt", "generated", "ground_truth", "prompt_with_generated_continuation"]:
                 png = piano_rolls_dir / f"sample_{idx}_{kind}.png"
                 if png.exists():
                     key = f"{model_name}/sample_{idx}/{kind}_piano_roll"

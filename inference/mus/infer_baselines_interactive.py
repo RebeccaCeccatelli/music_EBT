@@ -307,6 +307,19 @@ def run_single_sample_inference(
         with open(tokens_dir / f"{base_name}_ground_truth.json", 'w') as f:
             json.dump(ground_truth_tokens, f)
 
+        # Prompt + generated continuation (same length as ground truth, for direct comparison)
+        print("Saving prompt with generated continuation...")
+        patched_tokens = prompt_tokens_list + generated_tokens
+        tokens_to_files(
+            patched_tokens,
+            tokenizer,
+            f"{output_dir}/{base_name}_prompt_with_generated_continuation.mid",
+            str(wav_output_path / f"{base_name}_prompt_with_generated_continuation.wav"),
+            "prompt with generated continuation"
+        )
+        with open(tokens_dir / f"{base_name}_prompt_with_generated_continuation.json", 'w') as f:
+            json.dump(patched_tokens, f)
+
         return True
 
     except Exception as e:
