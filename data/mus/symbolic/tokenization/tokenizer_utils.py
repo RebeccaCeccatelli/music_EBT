@@ -86,23 +86,30 @@ def _normalize_tokenizer_type(tokenizer_type: str) -> str:
 
 def _get_anticipation_vocab_size(tokenizer_type: str, use_vanilla: bool = False) -> Tuple[int, int]:
     """Get vocab size for anticipation tokenizer without full instantiation."""
+    import sys, os
+    # The vocab modules do `from anticipation.config import *` internally, so the
+    # submodule root (which contains the `anticipation/` package) must be on sys.path.
+    _submodule_root = os.path.join(os.path.dirname(__file__), 'anticipation')
+    if _submodule_root not in sys.path:
+        sys.path.insert(0, _submodule_root)
+
     # Determine variant
     if tokenizer_type == 'Anticipation':
         variant = 'Vanilla' if use_vanilla else 'Arrival-Time'
     else:
         variant = tokenizer_type.split('-', 1)[1]
-    
+
     # Import vocab constants
     if variant == 'Vanilla':
-        from data.mus.symbolic.tokenization.anticipation.anticipation.vocab_vanilla import VOCAB_SIZE, CONTROL_OFFSET
+        from anticipation.vocab_vanilla import VOCAB_SIZE, CONTROL_OFFSET
         pad_token_id = CONTROL_OFFSET - 1  # Last token before control block
         return VOCAB_SIZE, pad_token_id
     elif variant == 'Interarrival':
-        from data.mus.symbolic.tokenization.anticipation.anticipation.vocab_vanilla import MIDI_VOCAB_SIZE
+        from anticipation.vocab_vanilla import MIDI_VOCAB_SIZE
         pad_token_id = MIDI_VOCAB_SIZE - 1
         return MIDI_VOCAB_SIZE, pad_token_id
     elif variant == 'Arrival-Time':
-        from data.mus.symbolic.tokenization.anticipation.anticipation.vocab_ant import VOCAB_SIZE, CONTROL_OFFSET
+        from anticipation.vocab_ant import VOCAB_SIZE, CONTROL_OFFSET
         pad_token_id = CONTROL_OFFSET - 1
         return VOCAB_SIZE, pad_token_id
     else:
@@ -162,28 +169,11 @@ def _load_anticipation_tokenizer(
             f"Use: Vanilla, Interarrival, or Arrival-Time"
         )
     
-    try:
-        from data.mus.symbolic.tokenization.anticipation_tokenizer import AnticipationTokenizer
-        from dataloaders.constants import DatasetType
-    except ImportError as e:
-        raise ImportError(
-            f"Failed to import Anticipation tokenizer. "
-            f"Ensure you're in the music-EBT workspace. Error: {e}"
-        )
-    
-    # Instantiate tokenizer
-    tokenizer = AnticipationTokenizer(
-        dataset_name=dataset_name,
-        dataset_type=DatasetType.GIGA_MIDI,
-        interarrival=interarrival,
-        use_vanilla=use_vanilla,
-        use_wandb=False  # Don't log during training initialization
-    )
-    
-    vocab_size = tokenizer.get_vocab_size()
-    pad_token_id = tokenizer.get_pad_token_id()
-    
-    return tokenizer, vocab_size, pad_token_id
+    # Derive vocab_size and pad_token_id directly from the vocab modules — avoids
+    # importing AnticipationTokenizer, which has heavy path/workflow dependencies
+    # not needed at training time (data is already pre-tokenized on disk).
+    vocab_size, pad_token_id = _get_anticipation_vocab_size(tokenizer_type, use_vanilla)
+    return None, vocab_size, pad_token_id
 
 
 def _load_miditok_tokenizer(

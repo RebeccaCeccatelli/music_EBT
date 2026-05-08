@@ -15,7 +15,6 @@
 #SBATCH --array=0
 
 ### LOG INFO ###
-export RUN_NAME="baseline-hf-gpt2-symb-small"
 export MODEL_SIZE="small"
 
 # Learning rate
@@ -46,16 +45,32 @@ export PYTHONUNBUFFERED=1
 cd "${PROJECT_ROOT}" || exit 1
 
 # Parse command-line arguments
+# Supported tokenizer types:
+#   REMI                      - miditok REMI (default, giga-midi/tokens/miditok/)
+#   Anticipation-Arrival-Time - AMT paper format, full vocab 55028 (giga-midi/tokens/anticipation/)
+#   Anticipation-Vanilla      - arrival-time, no control block, smaller vocab (giga-midi/tokens/anticipation-vanilla/)
 DATASET_NAME="giga_midi"
 TOKENIZER_TYPE="REMI"
+RESUME_CKPT=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --dataset_name) DATASET_NAME="$2"; shift 2 ;;
         --tokenizer_type) TOKENIZER_TYPE="$2"; shift 2 ;;
+        --resume_training_ckpt) RESUME_CKPT="$2"; shift 2 ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
+
+# Build tokenizer slug for run naming
+case "${TOKENIZER_TYPE}" in
+    REMI)                       TOK_SLUG="remi" ;;
+    Anticipation-Arrival-Time)  TOK_SLUG="ant-at-full" ;;
+    Anticipation-Vanilla)       TOK_SLUG="ant-at-ar" ;;
+    Anticipation-Interarrival)  TOK_SLUG="ant-ia-full" ;;
+    *)                          TOK_SLUG=$(echo "${TOKENIZER_TYPE}" | tr '[:upper:]' '[:lower:]') ;;
+esac
+export RUN_NAME="baseline-hf-gpt2-symb-small-${TOK_SLUG}"
 
 python train_model.py \
 --run_name "${RUN_NAME}-${lr[${SLURM_ARRAY_TASK_ID}]}" \
@@ -88,6 +103,7 @@ python train_model.py \
 --log_every_n_steps 200 \
 --set_matmul_precision "medium" \
 --wandb_watch \
+${RESUME_CKPT:+--resume_training_ckpt "${RESUME_CKPT}"} \
 ${SLURM_ARRAY_TASK_ID:+--is_slurm_run}
 
 # NOTES:
