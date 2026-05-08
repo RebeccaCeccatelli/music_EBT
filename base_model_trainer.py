@@ -56,6 +56,19 @@ from utils import text_logger
 from utils.metrics_calculator import get_torchmetrics
 
 
+def _anticipation_dir_name(tokenizer_type: str) -> str:
+    """Map tokenizer_type to the anticipation data subdirectory name.
+
+    'anticipation/' holds AMT-style data: arrival-time, full vocab (55028 tokens),
+    augment=10 (event + control tokens interleaved). This is what the AMT paper trains on.
+    'anticipation-vanilla/' holds arrival-time data without the control block (smaller vocab, plain AR).
+    """
+    t = tokenizer_type.lower()
+    if t in ('anticipation', 'anticipation-arrival-time'):
+        return 'anticipation'
+    return t  # 'anticipation-interarrival' etc.
+
+
 class ModelTrainer(L.LightningModule):
     def __init__(self, hparams, trained_model = None):
         super().__init__()
@@ -596,8 +609,15 @@ class ModelTrainer(L.LightningModule):
                 self.train_ds = SQuADDataset(self.hparams, split = 'train')
                 self.val_ds = SQuADDataset(self.hparams, split = 'validation')
             elif self.hparams.dataset_name == "giga_midi":
-                self.train_ds = GigaMIDIMiditokDataset(self.hparams, split="train")
-                self.val_ds = GigaMIDIMiditokDataset(self.hparams, split="validation")
+                tokenizer_type = getattr(self.hparams, 'tokenizer_type', 'REMI')
+                if tokenizer_type.lower().startswith('anticipation'):
+                    dir_name = _anticipation_dir_name(tokenizer_type)
+                    pad_id = getattr(self.model, 'pad_token_id', 0)
+                    self.train_ds = CustomMusicDataset(self.hparams, 'giga-midi', split='train', tokenizer_type=dir_name, pad_token_id=pad_id)
+                    self.val_ds = CustomMusicDataset(self.hparams, 'giga-midi', split='validation', tokenizer_type=dir_name, pad_token_id=pad_id)
+                else:
+                    self.train_ds = GigaMIDIMiditokDataset(self.hparams, split="train")
+                    self.val_ds = GigaMIDIMiditokDataset(self.hparams, split="validation")
             else:
                 # Try to load as custom dataset
                 try:
@@ -645,10 +665,16 @@ class ModelTrainer(L.LightningModule):
             elif self.hparams.dataset_name == "ai2arc":
                 self.test_ds = AI2ArcDataset(self.hparams, split = "test")
             elif self.hparams.dataset_name == "giga_midi":
-                full_ds = GigaMIDIDataset(self.hparams)
-                train_samples = int(len(full_ds) * (1 - self.hparams.validation_split_pct))
-                test_samples = len(full_ds) - train_samples
-                _, self.test_ds = random_split(full_ds, [train_samples, test_samples])
+                tokenizer_type = getattr(self.hparams, 'tokenizer_type', 'REMI')
+                if tokenizer_type.lower().startswith('anticipation'):
+                    dir_name = _anticipation_dir_name(tokenizer_type)
+                    pad_id = getattr(self.model, 'pad_token_id', 0)
+                    self.test_ds = CustomMusicDataset(self.hparams, 'giga-midi', split='test', tokenizer_type=dir_name, pad_token_id=pad_id)
+                else:
+                    full_ds = GigaMIDIDataset(self.hparams)
+                    train_samples = int(len(full_ds) * (1 - self.hparams.validation_split_pct))
+                    test_samples = len(full_ds) - train_samples
+                    _, self.test_ds = random_split(full_ds, [train_samples, test_samples])
             else:
                 # Try to load as custom dataset
                 try:
