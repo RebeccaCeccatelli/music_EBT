@@ -65,7 +65,7 @@ def main(args):
 
     if args.is_slurm_run:
         if not args.override_slurm_checks:
-            assert args.debug_mode == False and args.detect_anomaly == False and args.limit_train_batches == 1 and args.limit_val_batches == 1 and args.limit_test_batches == 1 and args.find_unused_parameters == False and args.debug_unused_parameters == False, "for slurm run cannot have certain params set to values since am assuming are not debugging, please check values here"
+            assert args.debug_mode == False and args.detect_anomaly == False and args.limit_train_batches == 1 and args.limit_test_batches == 1 and args.find_unused_parameters == False and args.debug_unused_parameters == False, "for slurm run cannot have certain params set to values since am assuming are not debugging, please check values here"
 
         print("Current Slurm job ID:", os.environ.get('SLURM_JOBID'))
         print("Current Slurm node list:", os.environ.get('SLURM_NODELIST'))

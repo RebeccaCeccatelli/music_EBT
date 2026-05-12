@@ -62,7 +62,7 @@ class Baseline_HF_GPT2_Transformer_MUS(L.LightningModule):
             use_cache=True,  # Enable KV caching for inference
         )
         
-        self.model = GPT2LMHeadModel(config)
+        self.model = GPT2LMHeadModel._from_config(config, attn_implementation="sdpa")
         
         # Resize token embeddings to match your vocabulary
         self.model.resize_token_embeddings(self.vocab_size)

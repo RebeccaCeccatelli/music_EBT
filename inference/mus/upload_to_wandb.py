@@ -1,12 +1,49 @@
 #!/usr/bin/env python3
 """Upload inference run outputs (piano rolls, audio, log) to wandb."""
 
+import re
 import sys
 import json
 import argparse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+
+_TOKENIZER_LABELS = {
+    "REMI": "remi",
+    "Anticipation-Arrival-Time": "ant-full",
+    "Anticipation-Vanilla": "ant-vanilla",
+    "Anticipation-Interarrival": "ant-interarrival",
+}
+
+
+def _tokenizer_label(config: dict) -> str:
+    for model_name in ("gpt2", "llama"):
+        tt = config.get(model_name, {}).get("tokenizer_type")
+        if tt:
+            return _TOKENIZER_LABELS.get(tt, tt.lower().replace(" ", "-"))
+    return "unknown-tok"
+
+
+def _present_models(config: dict) -> list:
+    return [m for m in ("gpt2", "llama") if config.get(m)]
+
+
+def _checkpoint_label(ckpt_path: str) -> str:
+    """Extract a short label from a checkpoint path.
+
+    e.g. '...epoch=epoch=0-step=step=1700-valid_loss=valid_loss=2.1304.ckpt'
+    -> 's1700-vl2.1304'
+    """
+    if not ckpt_path:
+        return "unk"
+    stem = Path(ckpt_path).stem
+    step_match = re.search(r'step=(\d+)', stem)
+    loss_match = re.search(r'valid_loss=([\d.]+)', stem)
+    step_part = f"s{step_match.group(1)}" if step_match else "sunk"
+    loss_part = f"-vl{loss_match.group(1)}" if loss_match else ""
+    return step_part + loss_part
 
 
 def upload_run(run_dir: Path, wandb_project: str, wandb_entity: str, log_file: Path = None):
@@ -20,13 +57,37 @@ def upload_run(run_dir: Path, wandb_project: str, wandb_entity: str, log_file: P
             with open(meta_path) as f:
                 config[model_name] = json.load(f)
 
+    tok_label = _tokenizer_label(config)
+    models = _present_models(config)
+    if len(models) == 1:
+        model_label = models[0]
+        ckpt_label = _checkpoint_label(config[models[0]].get("checkpoint", ""))
+    else:
+        # Fallback for old combined runs
+        model_label = "-".join(models) if models else "unknown"
+        ckpt_label = "_".join(
+            _checkpoint_label(config.get(m, {}).get("checkpoint", "")) for m in models
+        )
+    timestamp_match = re.search(r'(\d{8}_\d{6})', run_dir.name)
+    timestamp = timestamp_match.group(1) if timestamp_match else run_dir.name
+    run_name = f"{tok_label}_{model_label}_{ckpt_label}_{timestamp}"
+
     run = wandb.init(
         project=wandb_project,
         entity=wandb_entity or None,
-        name=f"baselines_inference_{run_dir.name}",
+        name=run_name,
         config=config,
         tags=["inference", "symbolic", "baseline"],
     )
+
+    # (file_kind, display_name, audio_rank, roll_rank) — rank prefixes drive alphabetical
+    # sort in wandb: prompt audio → prompt roll → ground truth audio → ground truth roll
+    # → generated audio → generated roll
+    UPLOAD_KINDS = [
+        ("prompt",                             "prompt",       "01", "02"),
+        ("ground_truth",                       "ground_truth", "03", "04"),
+        ("prompt_with_generated_continuation", "generated",    "05", "06"),
+    ]
 
     log_dict = {}
 
@@ -45,16 +106,16 @@ def upload_run(run_dir: Path, wandb_project: str, wandb_entity: str, log_file: P
         ), key=int)
 
         for idx in sample_indices:
-            for kind in ["prompt", "generated", "ground_truth", "prompt_with_generated_continuation"]:
-                png = piano_rolls_dir / f"sample_{idx}_{kind}.png"
-                if png.exists():
-                    key = f"{model_name}/sample_{idx}/{kind}_piano_roll"
-                    log_dict[key] = wandb.Image(str(png), caption=f"{model_name} sample {idx} — {kind}")
-
-                wav = wav_dir / f"sample_{idx}_{kind}.wav"
+            for file_kind, display_name, audio_rank, roll_rank in UPLOAD_KINDS:
+                wav = wav_dir / f"sample_{idx}_{file_kind}.wav"
                 if wav.exists():
-                    key = f"{model_name}/sample_{idx}/{kind}_audio"
-                    log_dict[key] = wandb.Audio(str(wav), caption=f"{model_name} sample {idx} — {kind}")
+                    key = f"sample_{idx}/{audio_rank}_{display_name}_audio"
+                    log_dict[key] = wandb.Audio(str(wav), caption=f"sample {idx} — {display_name}")
+
+                png = piano_rolls_dir / f"sample_{idx}_{file_kind}.png"
+                if png.exists():
+                    key = f"sample_{idx}/{roll_rank}_{display_name}_piano_roll"
+                    log_dict[key] = wandb.Image(str(png), caption=f"sample {idx} — {display_name}")
 
     if log_file and log_file.exists():
         wandb.save(str(log_file), base_path=str(log_file.parent))

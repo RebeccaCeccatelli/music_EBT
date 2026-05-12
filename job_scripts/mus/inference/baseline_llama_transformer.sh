@@ -42,7 +42,9 @@ if [[ -z "${PROJECT_ROOT}" ]]; then
 fi
 
 export PYTHONPATH="${PROJECT_ROOT}:$PYTHONPATH"
+export PATH="${HOME}/.conda/envs/music_EBT/bin:${PATH}"
 export PYTHONUNBUFFERED=1
+export CUDA_LAUNCH_BLOCKING=1
 
 # Load environment variables from .env file
 if [[ -f "${PROJECT_ROOT}/.env" ]]; then
@@ -54,35 +56,11 @@ fi
 # Get wandb entity from environment or use default
 WANDB_ENTITY="${WANDB_ENTITY:-rceccatelli}"
 
-python "${PROJECT_ROOT}/train_model.py" \
---run_name ${RUN_NAME} \
---modality "MUS_SYMB" \
---model_name "baseline_llama_transformer" \
---model_size ${MODEL_SIZE} \
-\
---tokenizer_type "REMI" \
---tokenizer_config_path "/home/rebcecca/orcd/pool/music_datasets/giga-midi/tokens/miditok/tokenizer.json" \
---dataset_name "giga-midi" \
-\
---context_length 1024 \
-\
---gpus "-1" \
-\
---batch_size_per_device 4 \
---num_workers 8 \
-\
---wandb_project "music_inference" \
-\
---log_model_archi \
-\
---execution_mode "inference" \
---only_test \
---only_test_model_ckpt "logs/checkpoints/baseline-llama-symb-small-prod0.0006_2026-04-22_18-17-39_/last.ckpt" \
---infer_max_gen_len 256 \
---infer_topp 0.9 \
---infer_temp 1.0 \
---infer_logprobs True \
---infer_echo True \
-\
---override_slurm_checks \
-${SLURM_ARRAY_TASK_ID:+--is_slurm_run}
+"${HOME}/.conda/envs/music_EBT/bin/python" "${PROJECT_ROOT}/inference/mus/infer_baselines_interactive.py" \
+--checkpoint "/home/rebcecca/music-EBT/logs/checkpoints/baseline-llama-small-remi-job13735284_2026-05-11_11-29-25_/epoch=epoch=15-step=step=8540-valid_loss=valid_loss=0.6461.ckpt" \
+--model_name baseline_llama_transformer \
+--prompt_length 128 \
+--generation_length 256 \
+--num_samples 10 \
+--output_dir "${PROJECT_ROOT}/logs/inference_outputs/llama_remi_0.646" \
+--device cuda
