@@ -216,7 +216,7 @@ class ModelTrainer(L.LightningModule):
 
         
     def on_train_start(self):
-        if self.hparams.debug_unused_parameters: 
+        if self.hparams.debug_unused_parameters:
             for name, param in self.model.named_parameters():
                 if param.requires_grad and "image_encoder" not in name: # NOTE need to modify this code to exclude specific frozen portions
                     print(f"registering param - {name}")
@@ -224,6 +224,21 @@ class ModelTrainer(L.LightningModule):
                     # TODO: consider adding exclusion logic for audio_encoder freezing in the future (if audio mus modality is added)
                 else:
                     self.model.parameters_not_to_check.add(name)
+
+        if self.global_step > 0 and hasattr(self, 'lr_scheduler') and self.lr_scheduler is not None:
+            if hasattr(self.lr_scheduler, 'last_epoch'):
+                self.lr_scheduler.last_epoch = self.global_step
+                print(f"Resuming training: Set LR scheduler to step {self.global_step}")
+
+    def on_save_checkpoint(self, checkpoint):
+        if hasattr(self, 'lr_scheduler') and self.lr_scheduler is not None:
+            checkpoint['lr_scheduler_state'] = self.lr_scheduler.state_dict()
+            checkpoint['global_step_at_checkpoint'] = self.global_step
+
+    def on_load_checkpoint(self, checkpoint):
+        if hasattr(self, 'lr_scheduler') and self.lr_scheduler is not None:
+            if 'lr_scheduler_state' in checkpoint:
+                self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state'])
 
     def create_hook(self, name): #this is only used for debugging with `debug_unused_parameters`
         def hook(grad):
@@ -432,6 +447,7 @@ class ModelTrainer(L.LightningModule):
     def get_optimizer_scheduler_dict(self, optimizer_parameters):
         optimizer = self.get_optimizer(optimizer_parameters)
         lr_scheduler = self.get_lr_scheduler(optimizer)
+        self.lr_scheduler = lr_scheduler
         return {
             'optimizer': optimizer,
             'lr_scheduler': {

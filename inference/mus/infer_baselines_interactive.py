@@ -29,11 +29,19 @@ from argparse import Namespace
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from inference.mus.generate_music import generate_remi
+from inference.mus.generate_music import generate_remi, generate_anticipation
 from inference.mus.tokens_to_midi import tokens_to_midi
 from data.mus.symbolic.dataloaders.giga_midi_miditok_dataset import GigaMIDIMiditokDataset
+from data.mus.symbolic.dataloaders.custom_music_dataloader import CustomMusicDataset
 from data.mus.symbolic.tokenization.tokenizer_utils import load_tokenizer
 from base_model_trainer import ModelTrainer
+
+# Maps hparams.tokenizer_type to the subdirectory used by CustomMusicDataset
+_ANTICIPATION_DIR = {
+    'Anticipation-Arrival-Time': 'anticipation',
+    'Anticipation-Vanilla': 'anticipation-vanilla',
+    'Anticipation-Interarrival': 'anticipation-interarrival',
+}
 
 
 def load_checkpoint(ckpt_path: str, model_name: str, device: str) -> Tuple[object, Dict]:
@@ -84,19 +92,26 @@ def load_checkpoint(ckpt_path: str, model_name: str, device: str) -> Tuple[objec
     return model_trainer.model, hparams
 
 
-def prepare_dataset(hparams: Namespace, split: str = "validation") -> GigaMIDIMiditokDataset:
+def prepare_dataset(hparams: Namespace, split: str = "validation", pad_token_id: int = 0):
     """
-    Load music dataset.
+    Load music dataset, routing to the correct class based on tokenizer type.
 
-    Args:
-        hparams: Hyperparameters with context_length
-        split: "train", "validation", or "test"
-
-    Returns:
-        Dataset object
+    For anticipation tokenizers, uses CustomMusicDataset (flat token text files).
+    For REMI / miditok tokenizers, uses GigaMIDIMiditokDataset (JSON files).
     """
     print(f"Loading {split} dataset...")
-    dataset = GigaMIDIMiditokDataset(hparams, split=split)
+    tokenizer_type = getattr(hparams, 'tokenizer_type', 'REMI')
+    if tokenizer_type in _ANTICIPATION_DIR:
+        token_dir = _ANTICIPATION_DIR[tokenizer_type]
+        dataset = CustomMusicDataset(
+            hparams,
+            dataset_name='giga-midi',
+            split=split,
+            tokenizer_type=token_dir,
+            pad_token_id=pad_token_id,
+        )
+    else:
+        dataset = GigaMIDIMiditokDataset(hparams, split=split)
     print(f"✅ Dataset loaded: {len(dataset)} songs")
     return dataset
 
@@ -159,7 +174,12 @@ def generate_continuation(
     # Generate
     print(f"Generating {generation_length} tokens...")
     with torch.no_grad():
-        outputs = generate_remi(model, batch, hparams)
+        if hparams.tokenizer_type == "REMI":
+            outputs = generate_remi(model, batch, hparams)
+        elif "Anticipation" in hparams.tokenizer_type:
+            outputs = generate_anticipation(model, batch, hparams)
+        else:
+            raise ValueError(f"Unsupported tokenizer type: {hparams.tokenizer_type}")
 
     generated_tokens = outputs['generation_tokens'][0]  # First (and only) sample
     print(f"✅ Generated {len(generated_tokens)} tokens")
@@ -309,7 +329,17 @@ def run_single_sample_inference(
 
         # Prompt + generated continuation (same length as ground truth, for direct comparison)
         print("Saving prompt with generated continuation...")
-        patched_tokens = prompt_tokens_list + generated_tokens
+        # For anticipation tokenizers: prompt_tokens_list starts with a mode token and may end
+        # with an incomplete triplet. Strip the mode token and trim to a triplet boundary before
+        # concatenating with generated_tokens so that stride-3 indexing stays aligned.
+        tokenizer_type = getattr(hparams, 'tokenizer_type', 'REMI')
+        if tokenizer_type != "REMI":
+            _prompt_core = prompt_tokens_list[1:] if len(prompt_tokens_list) > 0 else []
+            _rem = len(_prompt_core) % 3
+            _prompt_aligned = _prompt_core if _rem == 0 else _prompt_core[:-_rem]
+            patched_tokens = _prompt_aligned + generated_tokens
+        else:
+            patched_tokens = prompt_tokens_list + generated_tokens
         tokens_to_files(
             patched_tokens,
             tokenizer,
@@ -418,7 +448,7 @@ def main():
 
     # Load dataset
     split = "test" if args.use_test_split else "validation"
-    dataset = prepare_dataset(hparams, split=split)
+    dataset = prepare_dataset(hparams, split=split, pad_token_id=pad_token_id)
 
     # Randomly select sample indices
     import random
@@ -457,6 +487,7 @@ def main():
     metadata = {
         "checkpoint": args.checkpoint,
         "model_name": args.model_name,
+        "tokenizer_type": hparams.tokenizer_type,
         "prompt_length": args.prompt_length,
         "generation_length": args.generation_length,
         "temperature": 0.7,

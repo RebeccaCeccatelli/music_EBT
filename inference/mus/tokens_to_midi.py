@@ -45,6 +45,18 @@ def tokens_to_midi(token_list: List[int], tokenizer) -> bytes:
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
+    elif hasattr(midi_obj, 'save'):
+        # mido.MidiFile object
+        with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as f:
+            temp_path = f.name
+        try:
+            midi_obj.save(temp_path)
+            with open(temp_path, 'rb') as mf:
+                midi_bytes = mf.read()
+            return midi_bytes
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
     elif hasattr(midi_obj, 'write'):
         # pretty_midi or music21 object
         with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as f:

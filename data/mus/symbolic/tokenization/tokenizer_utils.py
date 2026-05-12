@@ -101,8 +101,10 @@ def _get_anticipation_vocab_size(tokenizer_type: str, use_vanilla: bool = False)
 
     # Import vocab constants
     if variant == 'Vanilla':
-        from anticipation.vocab_vanilla import VOCAB_SIZE, CONTROL_OFFSET
-        pad_token_id = CONTROL_OFFSET - 1  # Last token before control block
+        # The anticipation-vanilla/ data was generated with the full vocab (augment=1,
+        # no control tokens interleaved) — use vocab_ant to match the token ID range.
+        from anticipation.vocab_ant import VOCAB_SIZE, CONTROL_OFFSET
+        pad_token_id = CONTROL_OFFSET - 1
         return VOCAB_SIZE, pad_token_id
     elif variant == 'Interarrival':
         from anticipation.vocab_vanilla import MIDI_VOCAB_SIZE
@@ -133,18 +135,18 @@ def _load_anticipation_tokenizer(
 ) -> Tuple[Any, int, int]:
     """
     Load anticipation tokenizer with specified variant.
-    
+
     Variants:
     - Vanilla: No control block (simplified, smaller vocab)
     - Interarrival: MIDI-like interarrival time encoding
     - Arrival-Time: Absolute time encoding (supports infilling)
-    
+
     Args:
         tokenizer_type: "Anticipation-Vanilla", "Anticipation-Interarrival", "Anticipation-Arrival-Time", or "Anticipation"
         dataset_name: Dataset name for the tokenizer
         use_vanilla: If True and type is just "Anticipation", use vanilla variant
     """
-    
+
     # Determine variant from tokenizer_type
     if tokenizer_type == 'Anticipation':
         # Use the use_vanilla flag to determine variant
@@ -152,7 +154,7 @@ def _load_anticipation_tokenizer(
     else:
         # Extract variant from full type like "Anticipation-Vanilla"
         variant = tokenizer_type.split('-', 1)[1]
-    
+
     # Parse variant
     if variant == 'Vanilla':
         interarrival = False
@@ -168,12 +170,17 @@ def _load_anticipation_tokenizer(
             f"Unknown Anticipation variant: {variant}. "
             f"Use: Vanilla, Interarrival, or Arrival-Time"
         )
-    
+
     # Derive vocab_size and pad_token_id directly from the vocab modules — avoids
     # importing AnticipationTokenizer, which has heavy path/workflow dependencies
     # not needed at training time (data is already pre-tokenized on disk).
     vocab_size, pad_token_id = _get_anticipation_vocab_size(tokenizer_type, use_vanilla)
-    return None, vocab_size, pad_token_id
+
+    # Create tokenizer wrapper with decode() method for compatibility with inference pipeline
+    from data.mus.symbolic.tokenization.anticipation_decode_wrapper import AnticipationTokenizerWrapper
+    tokenizer = AnticipationTokenizerWrapper(variant=variant, use_vanilla=use_vanilla)
+
+    return tokenizer, vocab_size, pad_token_id
 
 
 def _load_miditok_tokenizer(
