@@ -94,7 +94,7 @@ python train_model.py \
 --validation_split_pct 0.01 \
 --val_check_interval 5000 \
 \
---checkpoint_path "${STAGE1_CKPT_PATH}" \
+--resume_training_ckpt "${STAGE1_CKPT_PATH}" \
 \
 --wandb_project 'mus_symb_ebt_s2_pretrain' \
 \
