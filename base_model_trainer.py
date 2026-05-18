@@ -56,6 +56,19 @@ from utils import text_logger
 from utils.metrics_calculator import get_torchmetrics
 
 
+def _anticipation_dir_name(tokenizer_type: str) -> str:
+    """Map tokenizer_type to the anticipation data subdirectory name.
+
+    'anticipation/' holds AMT-style data: arrival-time, full vocab (55028 tokens),
+    augment=10 (event + control tokens interleaved). This is what the AMT paper trains on.
+    'anticipation-vanilla/' holds arrival-time data without the control block (smaller vocab, plain AR).
+    """
+    t = tokenizer_type.lower()
+    if t in ('anticipation', 'anticipation-arrival-time'):
+        return 'anticipation'
+    return t  # 'anticipation-interarrival' etc.
+
+
 class ModelTrainer(L.LightningModule):
     def __init__(self, hparams, trained_model = None):
         super().__init__()
@@ -72,6 +85,7 @@ class ModelTrainer(L.LightningModule):
             if "execution_mode" in self.hparams and "save_generation_logs_dir" in self.hparams and self.hparams.execution_mode == "inference":
                 print("setting up music inference logger")
                 self.infer_logger = text_logger.setup_jsonl_logger(log_filename = "generations.jsonl", base_log_dir=self.hparams.save_generation_logs_dir)
+                self.num_generated_music_samples = 0
         if self.hparams.modality == "VID": #is computer vision
             self.image_dims = self.hparams.image_dims # list size two
             self.num_generated_videos = 0
@@ -202,7 +216,7 @@ class ModelTrainer(L.LightningModule):
 
         
     def on_train_start(self):
-        if self.hparams.debug_unused_parameters: 
+        if self.hparams.debug_unused_parameters:
             for name, param in self.model.named_parameters():
                 if param.requires_grad and "image_encoder" not in name: # NOTE need to modify this code to exclude specific frozen portions
                     print(f"registering param - {name}")
@@ -210,6 +224,21 @@ class ModelTrainer(L.LightningModule):
                     # TODO: consider adding exclusion logic for audio_encoder freezing in the future (if audio mus modality is added)
                 else:
                     self.model.parameters_not_to_check.add(name)
+
+        if self.global_step > 0 and hasattr(self, 'lr_scheduler') and self.lr_scheduler is not None:
+            if hasattr(self.lr_scheduler, 'last_epoch'):
+                self.lr_scheduler.last_epoch = self.global_step
+                print(f"Resuming training: Set LR scheduler to step {self.global_step}")
+
+    def on_save_checkpoint(self, checkpoint):
+        if hasattr(self, 'lr_scheduler') and self.lr_scheduler is not None:
+            checkpoint['lr_scheduler_state'] = self.lr_scheduler.state_dict()
+            checkpoint['global_step_at_checkpoint'] = self.global_step
+
+    def on_load_checkpoint(self, checkpoint):
+        if hasattr(self, 'lr_scheduler') and self.lr_scheduler is not None:
+            if 'lr_scheduler_state' in checkpoint:
+                self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state'])
 
     def create_hook(self, name): #this is only used for debugging with `debug_unused_parameters`
         def hook(grad):
@@ -340,17 +369,26 @@ class ModelTrainer(L.LightningModule):
                 # Unified music generation (handles EBT, Baseline Llama, and Baseline HF GPT2)
                 outputs = generate_music(self.model, batch, self.hparams)
                 
-                # Log generated music tokens
+                # Log prompts and generated music tokens together for comparison.
                 for i, tokens in enumerate(outputs['generation_tokens']):
+                    sample_idx = self.num_generated_music_samples + i if hasattr(self, 'num_generated_music_samples') else i
                     log_entry = {
-                        'sample_idx': self.num_generated_videos if hasattr(self, 'num_generated_videos') else i,
+                        'sample_idx': sample_idx,
+                        'prompt_tokens': outputs.get('prompt_tokens', [[]])[i],
                         'generated_tokens': tokens,
                     }
                     if 'generation_logprobs' in outputs:
                         log_entry['logprobs'] = outputs['generation_logprobs'][i]
                     if hasattr(self, 'infer_logger'):
                         self.infer_logger.log_data(log_entry)
-                self.log_metrics(outputs, "test")
+                if hasattr(self, 'num_generated_music_samples'):
+                    self.num_generated_music_samples += len(outputs['generation_tokens'])
+                metric_outputs = {
+                    key: value for key, value in outputs.items()
+                    if isinstance(value, (int, float, torch.Tensor))
+                }
+                if metric_outputs:
+                    self.log_metrics(metric_outputs, "test")
             else:
                 raise NotImplementedError(f"Inference mode not supported for modality {self.hparams.modality} yet")
         else: # all other modes just get metrics
@@ -409,6 +447,7 @@ class ModelTrainer(L.LightningModule):
     def get_optimizer_scheduler_dict(self, optimizer_parameters):
         optimizer = self.get_optimizer(optimizer_parameters)
         lr_scheduler = self.get_lr_scheduler(optimizer)
+        self.lr_scheduler = lr_scheduler
         return {
             'optimizer': optimizer,
             'lr_scheduler': {
@@ -586,8 +625,15 @@ class ModelTrainer(L.LightningModule):
                 self.train_ds = SQuADDataset(self.hparams, split = 'train')
                 self.val_ds = SQuADDataset(self.hparams, split = 'validation')
             elif self.hparams.dataset_name == "giga_midi":
-                self.train_ds = GigaMIDIMiditokDataset(self.hparams, split="train")
-                self.val_ds = GigaMIDIMiditokDataset(self.hparams, split="validation")
+                tokenizer_type = getattr(self.hparams, 'tokenizer_type', 'REMI')
+                if tokenizer_type.lower().startswith('anticipation'):
+                    dir_name = _anticipation_dir_name(tokenizer_type)
+                    pad_id = getattr(self.model, 'pad_token_id', 0)
+                    self.train_ds = CustomMusicDataset(self.hparams, 'giga-midi', split='train', tokenizer_type=dir_name, pad_token_id=pad_id)
+                    self.val_ds = CustomMusicDataset(self.hparams, 'giga-midi', split='validation', tokenizer_type=dir_name, pad_token_id=pad_id)
+                else:
+                    self.train_ds = GigaMIDIMiditokDataset(self.hparams, split="train")
+                    self.val_ds = GigaMIDIMiditokDataset(self.hparams, split="validation")
             else:
                 # Try to load as custom dataset
                 try:
@@ -635,10 +681,16 @@ class ModelTrainer(L.LightningModule):
             elif self.hparams.dataset_name == "ai2arc":
                 self.test_ds = AI2ArcDataset(self.hparams, split = "test")
             elif self.hparams.dataset_name == "giga_midi":
-                full_ds = GigaMIDIDataset(self.hparams)
-                train_samples = int(len(full_ds) * (1 - self.hparams.validation_split_pct))
-                test_samples = len(full_ds) - train_samples
-                _, self.test_ds = random_split(full_ds, [train_samples, test_samples])
+                tokenizer_type = getattr(self.hparams, 'tokenizer_type', 'REMI')
+                if tokenizer_type.lower().startswith('anticipation'):
+                    dir_name = _anticipation_dir_name(tokenizer_type)
+                    pad_id = getattr(self.model, 'pad_token_id', 0)
+                    self.test_ds = CustomMusicDataset(self.hparams, 'giga-midi', split='test', tokenizer_type=dir_name, pad_token_id=pad_id)
+                else:
+                    full_ds = GigaMIDIDataset(self.hparams)
+                    train_samples = int(len(full_ds) * (1 - self.hparams.validation_split_pct))
+                    test_samples = len(full_ds) - train_samples
+                    _, self.test_ds = random_split(full_ds, [train_samples, test_samples])
             else:
                 # Try to load as custom dataset
                 try:

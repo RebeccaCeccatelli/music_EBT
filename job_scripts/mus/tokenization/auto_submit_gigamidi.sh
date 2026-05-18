@@ -38,6 +38,7 @@ NC='\033[0m' # No Color
 # ============================================================================
 
 VANILLA=0
+AUGMENT=10
 SPLITS=("train" "test" "validation")
 MAX_ATTEMPTS=5
 POLL_INTERVAL=30
@@ -99,6 +100,10 @@ parse_args() {
                 VANILLA=1
                 shift
                 ;;
+            --augment)
+                AUGMENT="$2"
+                shift 2
+                ;;
             --splits)
                 shift
                 while [[ $# -gt 0 ]] && [[ ! $1 =~ ^-- ]]; do
@@ -145,6 +150,7 @@ Usage: bash auto_submit_gigamidi.sh [OPTIONS]
 
 Options:
   --vanilla               Use vanilla tokenizer (default: arrival-time)
+  --augment N             Augmentation factor: 1=plain AR, 10=AMT with controls (default: 10)
   --splits SPLIT1 SPLIT2  Process specific splits (default: train test validation)
   --max-attempts N        Max resume attempts per split (default: 5)
   --poll-interval N       Seconds between status checks (default: 30)
@@ -236,13 +242,13 @@ run_download_and_preprocessing() {
     
     local output=$( \
         sbatch --job-name="$job_name" \
+               --partition=mit_normal \
                --export=ALL \
                -c 16 \
                --mem=32G \
                --time=12:00:00 \
                --output=/dev/null \
                --error=/dev/null \
-
                --wrap="$export_cmd && $preprocess_cmd" \
         2>&1 \
     )
@@ -336,8 +342,11 @@ submit_job() {
     
     # Build sbatch command that will run tokenize_gigaMIDI.py directly
     # We avoid custom.sh because it runs full pipeline; we want checkpoint-aware tokenization
+    local root_dir="${CUSTOM_STORAGE_PATH:-/home/rebcecca/orcd/pool/music_datasets}/giga-midi"
     local python_cmd="cd '$PROJECT_ROOT' && python3 data/mus/symbolic/tokenization/anticipation/train/tokenize_gigaMIDI.py"
+    python_cmd="$python_cmd --root_dir '$root_dir'"
     python_cmd="$python_cmd --split '$split'"
+    python_cmd="$python_cmd --augment '$AUGMENT'"
     [ "$VANILLA" -eq 1 ] && python_cmd="$python_cmd --vanilla"
     [ "$resume" -eq 1 ] && python_cmd="$python_cmd --resume"
     
@@ -354,27 +363,25 @@ submit_job() {
     
     # Logs are tracked in wandb instead of local files
     
-    print_info "Submitting: sbatch --job-name='$job_name' -c 8 --mem=16G --time=12:00:00 ..."
-    print_info "SLURM logs will be discarded. Metrics logged to wandb."
-    
+    print_info "Submitting: sbatch --job-name='$job_name' --partition=mit_normal -c 16 --mem=32G --time=12:00:00 ..."
+
     local output=$( \
         sbatch --job-name="$job_name" \
+               --partition=mit_normal \
                --export=ALL \
-               -c 8 \
-               --mem=16G \
+               -c 16 \
+               --mem=32G \
                --time=12:00:00 \
                --output=/dev/null \
                --error=/dev/null \
-
                --wrap="$export_cmd && $python_cmd" \
         2>&1 \
     )
-    
+
     local job_id=$(echo "$output" | grep -oP 'Submitted batch job \K[0-9]+' || echo "")
-    
+
     if [ -n "$job_id" ]; then
-        print_success "Job submitted with ID: $job_id"
-        print_info "Logs: $job_log"
+        print_success "Job submitted with ID: $job_id (split: $split, attempt: $attempt/$MAX_ATTEMPTS)"
         echo "$job_id"
     else
         print_error "Failed to submit job"
@@ -391,7 +398,7 @@ get_token_dir() {
     else
         folder_name="anticipation"
     fi
-    echo "/home/rebcecca/orcd/pool/music_datasets/GigaMIDI/tokens/$folder_name"
+    echo "${CUSTOM_STORAGE_PATH:-/home/rebcecca/orcd/pool/music_datasets}/giga-midi/tokens/$folder_name"
 }
 
 # Load checkpoint and get progress info
@@ -556,6 +563,7 @@ main() {
     
     print_info "Configuration:"
     echo "   Tokenizer: Anticipation $tokenizer_type"
+    echo "   Augment factor: $AUGMENT"
     echo "   Splits: ${SPLITS[*]}"
     echo "   Max attempts: $MAX_ATTEMPTS"
     echo "   Poll interval: ${POLL_INTERVAL}s"

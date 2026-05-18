@@ -47,16 +47,16 @@ def sample_top_p(probs, p):
 def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz):
     """
     Forward pass for music token generation.
-    
+
     Handles both custom transformers (EBT, Llama) and HuggingFace models.
-    
+
     Args:
         hparams: Hyperparameters containing model_name and inference settings
         model: The music generation model
         input_tokens: Input token sequences, shape (bsz, seq_len)
         start_pos: Starting position for KV caching (currently unused, set to 0)
         bsz: Batch size
-    
+
     Returns:
         logits: Raw logits for next token prediction, shape (bsz, seq_len, vocab_size) or (bsz, vocab_size)
     """
@@ -78,10 +78,13 @@ def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz):
             use_cache=False,
         )
         logits = outputs.logits  # (B, S, V)
+    elif hparams.model_name == "baseline_llama_transformer":
+        # Baseline Llama transformer - does NOT use start_pos parameter
+        logits = model.forward(input_tokens, learning=False, return_raw_logits=True)
     else:
-        # Baseline Llama transformer or other models
+        # Default: assume standard transformer interface
         logits = model.forward(input_tokens, start_pos=0, learning=False, return_raw_logits=True)
-    
+
     return logits
 
 
@@ -103,12 +106,12 @@ def generate_music(model, batch, hparams):
     """
     if hparams.tokenizer_type == "REMI":
         return generate_remi(model, batch, hparams)
-    elif hparams.tokenizer_type == "anticipation":
+    elif hparams.tokenizer_type.lower().startswith("anticipation"):
         return generate_anticipation(model, batch, hparams)
     else:
         raise ValueError(
             f"Unknown tokenizer type: {hparams.tokenizer_type}. "
-            f"Supported types: 'REMI', 'anticipation'"
+            f"Supported types: 'REMI', 'anticipation*'"
         )
 
 
@@ -138,6 +141,7 @@ def generate_remi(model, batch, hparams):
     
     Returns:
         dict: Generated sequences with keys:
+            - 'prompt_tokens': List of prompt token sequences
             - 'generation_tokens': List of generated token sequences (without prompt)
             - 'generation_logprobs': List of log probabilities (if tracking)
             - 'full_sequences': Full sequences including prompt (if echo=True)
@@ -157,8 +161,10 @@ def generate_remi(model, batch, hparams):
     prompt_tokens = []
     for row_ids in ids:
         row_ids = row_ids.squeeze() if row_ids.dim() > 1 else row_ids
-        seq_len = len(row_ids)
-        prompt_tokens.append(row_ids[:seq_len].tolist())
+        prompt = row_ids.tolist()
+        while prompt and prompt[-1] == pad_token_id:
+            prompt.pop()
+        prompt_tokens.append(prompt)
     
     # Get model parameters (for custom transformers)
     params = model.transformer.params if hasattr(model, 'transformer') and hasattr(model.transformer, 'params') else None
@@ -176,18 +182,21 @@ def generate_remi(model, batch, hparams):
         f"Prompt length {max_prompt_len} exceeds context length {hparams.context_length}"
     
     total_len = min(hparams.context_length, max_gen_len + max_prompt_len)
-    
+
+    # Determine device from hparams
+    device = getattr(hparams, 'device', 'cuda')
+
     # Initialize token tensor
     tokens = torch.full(
         (bsz, total_len),
         pad_token_id,
         dtype=torch.long,
-        device="cuda"
+        device=device
     )
-    
+
     # Populate prompt tokens
     for k, t in enumerate(prompt_tokens):
-        tokens[k, :len(t)] = torch.tensor(t, dtype=torch.long, device="cuda").clone().detach()
+        tokens[k, :len(t)] = torch.tensor(t, dtype=torch.long, device=device).clone().detach()
     
     # Initialize log probability tracking if requested
     if logprobs:
@@ -278,6 +287,7 @@ def generate_remi(model, batch, hparams):
     
     # Prepare output
     result = {
+        'prompt_tokens': prompt_tokens,
         'generation_tokens': out_tokens,
         'full_sequences': [toks for toks in tokens.tolist()] if echo else out_tokens,
     }
@@ -291,207 +301,157 @@ def generate_remi(model, batch, hparams):
 def generate_anticipation(model, batch, hparams) -> Dict:
     """
     Generate music with Anticipation tokenization (time-aware structured tokens).
-    
-    Tokens are structured as (time, duration, note) triplets with special handling for:
-    - Time constraints (don't generate events in the past)
-    - Anticipatory controls (melody constraints, instrument limits)
-    - Anticipation infilling mode
-    
-    Features:
-    - Time-aware token generation
-    - Supports control inputs (e.g., melody constraints)
-    - Top-p nucleus sampling with constraint-aware masking
-    - Anticipatory and autoregressive modes
-    
+
+    infer_max_gen_len is interpreted as a token count (same units as REMI).
+    Dividing by 3 gives the number of event triplets to generate.
+
     Args:
         model: The music generation model
-        batch: Input batch containing 'input_ids' and optional 'controls'
+        batch: Input batch containing 'input_ids'
         hparams: Hyperparameters including:
-            - infer_max_gen_len: Maximum seconds to generate
+            - infer_max_gen_len: Total tokens to generate (divided by 3 → events)
             - infer_temp: Temperature for sampling (0 = greedy)
             - infer_topp: Top-p threshold for nucleus sampling
-            - context_length: Maximum context in seconds
-            - anticipation_delta: Time delta for anticipation (seconds)
-            - anticipation_lookback: Lookback window for history (tokens)
-    
+            - anticipation_lookback: Lookback window size in tokens (default 1020)
+
     Returns:
-        dict: Generated sequences with keys:
-            - 'generation_tokens': List of generated token sequences
-            - 'generation_logprobs': List of log probabilities (if tracking)
-    
-    Note:
-        This implementation adapts the Anticipation library's generate() function
-        for use with arbitrary model architectures. Token structure:
-        - Token triplets: [TIME, DURATION, NOTE, TIME, DURATION, NOTE, ...]
-        - Special tokens used for mode selection and controls
+        dict with 'prompt_tokens', 'generation_tokens', and optionally
+        'generation_logprobs'.
     """
     try:
         from anticipation import ops
-        from anticipation.config import (
+        from anticipation.config import TIME_RESOLUTION
+        from anticipation.vocab_selector import (
             AUTOREGRESS, ANTICIPATE, CONTROL_OFFSET, SPECIAL_OFFSET,
-            TIME_OFFSET, DUR_OFFSET, NOTE_OFFSET, ATIME_OFFSET, ADUR_OFFSET,
-            ANOTE_OFFSET, MAX_DUR, MAX_TIME, MAX_INSTR, MAX_PITCH,
-            TIME_RESOLUTION, DELTA
+            TIME_OFFSET,
         )
-        from tqdm import tqdm
     except ImportError:
         raise ImportError(
             "Anticipation tokenization requires the anticipation library. "
-            "Make sure anticipation is installed as a submodule."
+            "Make sure anticipation is installed as a submodule in "
+            "data/mus/symbolic/tokenization/anticipation/ and that "
+            "load_tokenizer() was called before generate_anticipation()."
         )
-    
-    # Extract configuration
+
     ids = batch['input_ids']
-    controls = batch.get('controls', None)
-    max_gen_len = hparams.infer_max_gen_len
+    max_gen_len = hparams.infer_max_gen_len   # total tokens; /3 → events
     temperature = hparams.infer_temp
     top_p = hparams.infer_topp
     logprobs = hparams.infer_logprobs
-    
-    # Convert seconds to time units
-    anticipation_delta = getattr(hparams, 'anticipation_delta', DELTA * TIME_RESOLUTION)
     lookback_tokens = getattr(hparams, 'anticipation_lookback', 1020)
-    
-    # Extract prompt and controls
+    device = getattr(hparams, 'device', 'cuda')
+
+    pad_token_id = model.pad_token_id if hasattr(model, 'pad_token_id') else CONTROL_OFFSET - 1
+
+    # Extract prompt tokens, stripping padding
     prompt_tokens = []
     for row_ids in ids:
         row_ids = row_ids.squeeze() if row_ids.dim() > 1 else row_ids
-        prompt_tokens.append(row_ids.tolist())
-    
-    if controls is not None:
-        control_tokens = []
-        for row_ids in controls:
-            row_ids = row_ids.squeeze() if row_ids.dim() > 1 else row_ids
-            control_tokens.append(row_ids.tolist())
-    else:
-        control_tokens = [[] for _ in prompt_tokens]
-    
+        prompt = row_ids.tolist()
+        while prompt and prompt[-1] == pad_token_id:
+            prompt.pop()
+        prompt_tokens.append(prompt)
+
     bsz = len(prompt_tokens)
     generated_all = []
     generated_logprobs_all = []
-    
-    # Generate for each item in batch
+
     for batch_idx in range(bsz):
         prompt = prompt_tokens[batch_idx]
-        controls = control_tokens[batch_idx] if control_tokens else []
-        
-        # Determine start and end times
-        start_time = int(TIME_RESOLUTION * 0)  # Start from beginning
-        end_time = int(TIME_RESOLUTION * max_gen_len)  # Generate max_gen_len seconds
-        
-        # Prepare prompt and future events
-        prompt_padded = ops.pad(
-            ops.clip(prompt, 0, start_time, clip_duration=False, seconds=False),
-            start_time
-        )
-        
-        future = ops.clip(
-            prompt, start_time + 1,
-            ops.max_time(prompt, seconds=False) if len(prompt) > 0 else 0,
-            clip_duration=False, seconds=False
-        )
-        
-        controls_clipped = ops.clip(
-            controls, DELTA,
-            ops.max_time(controls, seconds=False) if len(controls) > 0 else 0,
-            clip_duration=False, seconds=False
-        )
-        
-        # Determine mode: ANTICIPATE if controls/future, else AUTOREGRESS
-        mode = [ANTICIPATE] if (len(controls_clipped) > 0 or len(future) > 0) else [AUTOREGRESS]
-        
-        # Interleave controls with future events
-        tokens_list = prompt_padded.copy()
-        control_sorted = ops.sort(controls_clipped + [CONTROL_OFFSET + t for t in future])
-        
-        if len(control_sorted) > 0:
-            tokens_list_new, _ = ops.anticipate(tokens_list, control_sorted)
-            tokens_list = tokens_list_new
-        
-        # Initialize tracking
-        current_time = ops.max_time(prompt_padded, seconds=False) if len(prompt_padded) > 0 else 0
+
+        # Strip mode token (first token) if present
+        if len(prompt) > 0 and prompt[0] in (AUTOREGRESS, ANTICIPATE):
+            event_tokens = prompt[1:]
+        else:
+            event_tokens = list(prompt)
+
+        # Trim to triplet boundary so stride-3 indexing is always aligned
+        remainder = len(event_tokens) % 3
+        if remainder != 0:
+            event_tokens = event_tokens[:-remainder]
+
+        # For ANTICIPATE-mode prompts, controls are interleaved with events.
+        # Strip them so tokens_list contains only event triplets and current_time
+        # reflects the actual last *event* time, not the max control lookahead time.
+        # Always generate in AUTOREGRESS mode — the model's training objective is
+        # left-to-right event prediction, regardless of the prompt's mode token.
+        events_only, _ = ops.split(event_tokens) if len(event_tokens) > 0 else ([], [])
+        mode = [AUTOREGRESS]
+
+        # tokens_list holds absolute-time event vocab IDs (no mode token, no controls)
+        tokens_list = list(events_only)
+
+        # current_time: absolute ticks of the last event in the prompt
+        current_time = ops.max_time(tokens_list, seconds=False) if len(tokens_list) > 0 else 0
+
+        # Number of event triplets to generate
+        max_events = max(1, max_gen_len // 3)
+
         generated = []
         gen_logprobs = []
-        
-        # Anticipation generation loop
-        try:
-            with torch.no_grad():
-                for step in range(end_time - start_time):
-                    # Truncate history to lookback window
-                    lookback_start = max(len(tokens_list) - lookback_tokens, 0)
-                    history = tokens_list[lookback_start:].copy()
-                    time_offset = ops.min_time(history, seconds=False) if len(history) > 0 else 0
-                    
-                    # Relativize times
-                    history[::3] = [t - time_offset for t in history[::3]]
-                    
-                    # Generate 3 tokens (time, duration, note)
-                    new_token_triplet = []
-                    for triplet_idx in range(3):
-                        # Prepare input
-                        input_seq = mode + history + new_token_triplet
-                        input_tensor = torch.tensor(
-                            input_seq,
-                            dtype=torch.long,
-                            device="cuda" if torch.cuda.is_available() else "cpu"
-                        ).unsqueeze(0)
-                        
-                        # Get logits from model
-                        logits = call_model_forward_decode(hparams, model, input_tensor, 0, 1)
-                        
-                        # Extract last position logits
-                        if logits.dim() == 3:
-                            last_logits = logits[0, -1, :]
-                        else:
-                            last_logits = logits[0]
-                        
-                        # Apply constraints based on token position in triplet
-                        last_logits = mask_invalid_anticipation_tokens(
-                            last_logits, triplet_idx, current_time - time_offset,
-                            tokens_list
-                        )
-                        
-                        # Sample
-                        if temperature > 0:
-                            probs = torch.softmax(last_logits / temperature, dim=-1)
-                            next_token = sample_top_p(probs, top_p)
-                        else:
-                            next_token = torch.argmax(last_logits, dim=-1)
-                        
-                        next_token_val = int(next_token.item())
-                        new_token_triplet.append(next_token_val)
-                        
-                        # Track logprobs
-                        if logprobs:
-                            logprob = F.log_softmax(last_logits, dim=-1)[next_token]
-                            gen_logprobs.append(float(logprob.item()))
-                    
-                    # Adjust time back to global frame
-                    new_token_triplet[0] += time_offset
-                    
-                    # Check if we've exceeded end time
-                    new_time = new_token_triplet[0] - TIME_OFFSET
-                    if new_time >= end_time:
-                        break
-                    
-                    tokens_list.extend(new_token_triplet)
-                    generated.extend(new_token_triplet)
-                    current_time = new_time
-        
-        except Exception as e:
-            print(f"Warning: Generation interrupted at step {step}: {e}")
-        
+
+        with torch.no_grad():
+            for _step in range(max_events):
+                # Align lookback window to a triplet boundary
+                raw_start = max(len(tokens_list) - lookback_tokens, 0)
+                lookback_start = raw_start - (raw_start % 3)
+                history = tokens_list[lookback_start:].copy()
+
+                time_offset = ops.min_time(history, seconds=False) if len(history) > 0 else 0
+
+                # Relativize all TIME positions (0, 3, 6, ...) in the history
+                history[::3] = [t - time_offset for t in history[::3]]
+
+                new_token_triplet = []
+                for triplet_idx in range(3):
+                    input_seq = mode + history + new_token_triplet
+                    input_tensor = torch.tensor(
+                        input_seq, dtype=torch.long, device=device
+                    ).unsqueeze(0)
+
+                    logits = call_model_forward_decode(hparams, model, input_tensor, 0, 1)
+
+                    if logits.dim() == 3:
+                        last_logits = logits[0, -1, :]
+                    else:
+                        last_logits = logits[0]
+
+                    # Mask invalid tokens; relative current time = current_time - time_offset
+                    rel_current = max(0, current_time - time_offset)
+                    last_logits = mask_invalid_anticipation_tokens(
+                        last_logits.clone(), triplet_idx, rel_current, tokens_list
+                    )
+
+                    if temperature > 0:
+                        probs = torch.softmax(last_logits / temperature, dim=-1)
+                        next_token = sample_top_p(probs, top_p)
+                    else:
+                        next_token = torch.argmax(last_logits, dim=-1)
+
+                    next_token_val = int(next_token.item())
+                    new_token_triplet.append(next_token_val)
+
+                    if logprobs:
+                        lp = float(F.log_softmax(last_logits, dim=-1)[next_token_val].item())
+                        gen_logprobs.append(lp)
+
+                # Restore absolute time for the TIME token
+                new_token_triplet[0] += time_offset
+
+                current_time = new_token_triplet[0] - TIME_OFFSET
+                tokens_list.extend(new_token_triplet)
+                generated.extend(new_token_triplet)
+
         generated_all.append(generated)
         generated_logprobs_all.append(gen_logprobs)
-    
-    # Format output
+
     result = {
+        'prompt_tokens': prompt_tokens,
         'generation_tokens': generated_all,
     }
-    
     if logprobs:
         result['generation_logprobs'] = generated_logprobs_all
-    
+
     return result
 
 
@@ -514,8 +474,10 @@ def mask_invalid_anticipation_tokens(logits: torch.Tensor, triplet_idx: int,
     """
     try:
         from anticipation.config import (
-            TIME_OFFSET, DUR_OFFSET, NOTE_OFFSET, CONTROL_OFFSET, SPECIAL_OFFSET,
             MAX_DUR, MAX_TIME, MAX_INSTR, MAX_PITCH
+        )
+        from anticipation.vocab_selector import (
+            TIME_OFFSET, DUR_OFFSET, NOTE_OFFSET, CONTROL_OFFSET, SPECIAL_OFFSET
         )
         from anticipation import ops
     except ImportError:
