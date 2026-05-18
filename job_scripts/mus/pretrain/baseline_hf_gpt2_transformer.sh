@@ -39,6 +39,8 @@ if [[ -z "${PROJECT_ROOT}" ]]; then
     exit 1
 fi
 
+SCRATCH_LOGS_DIR="${HOME}/orcd/scratch/rebcecca/music_EBT_logs"
+
 export PYTHONPATH="${PROJECT_ROOT}:${HOME}/music-EBT/data/mus/symbolic:$PYTHONPATH"
 export PATH="${HOME}/.conda/envs/music_EBT/bin:${PATH}"
 export PYTHONUNBUFFERED=1
@@ -107,7 +109,7 @@ MAX_STEPS=100000
 # Auto-detect last checkpoint from a previous run window.
 # Excludes current job ID to avoid picking the newly created empty directory.
 if [[ -z "${RESUME_CKPT}" ]]; then
-    PREV_CKPT_DIR=$(ls -td "${PROJECT_ROOT}/logs/checkpoints/${BASE_RUN_NAME}"* 2>/dev/null | grep -v "job${SLURM_JOB_ID}" | head -1)
+    PREV_CKPT_DIR=$(ls -td "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"* 2>/dev/null | grep -v "job${SLURM_JOB_ID}" | head -1)
     if [[ -n "${PREV_CKPT_DIR}" && -f "${PREV_CKPT_DIR}/last.ckpt" ]]; then
         RESUME_CKPT="${PREV_CKPT_DIR}/last.ckpt"
         echo "Auto-resuming from: ${RESUME_CKPT}"
@@ -166,7 +168,7 @@ _do_resubmit() {
 }
 
 if [[ ${TRAIN_EXIT_CODE} -eq 0 ]]; then
-    LAST_STEP=$(ls "${PROJECT_ROOT}/logs/checkpoints/${BASE_RUN_NAME}"*/epoch=*.ckpt 2>/dev/null \
+    LAST_STEP=$(ls "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"*/epoch=*.ckpt 2>/dev/null \
         | grep -oE "step=step=[0-9]+" | grep -oE "[0-9]+$" | sort -n | tail -1)
     if [[ -n "${LAST_STEP}" && "${LAST_STEP}" -ge "${MAX_STEPS}" ]]; then
         echo "Training complete at step ${LAST_STEP}. Not resubmitting."

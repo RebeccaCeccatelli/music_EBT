@@ -27,11 +27,16 @@ from utils import text_logger
 from base_model_trainer import *
 from inference.nlp.eval import nlp_eval_acc
 
+def get_scratch_logs_dir():
+    home = os.path.expanduser("~")
+    scratch_logs = os.path.join(home, "orcd/scratch/rebcecca/music_EBT_logs")
+    return scratch_logs
+
 @rank_zero_only # to ensure only one wandb run is created, if didnt do that then each GPU would create its own wandb run
-def setup_wandb(args): 
+def setup_wandb(args, logs_dir):
     import wandb
     if wandb.run is None:
-        run = wandb.init(dir="logs/", name=f'{args.run_name}', entity=f'{args.wandb_entity}', project=f'{args.wandb_project}', mode = "offline" if args.wandb_offline else "online") # this is solely used to force wandb to start tracking stdout in logs
+        run = wandb.init(dir=logs_dir, name=f'{args.run_name}', entity=f'{args.wandb_entity}', project=f'{args.wandb_project}', mode = "offline" if args.wandb_offline else "online") # this is solely used to force wandb to start tracking stdout in logs
         wandb.define_metric("__init", hidden=True)
         return run
     return None
@@ -41,24 +46,29 @@ def main(args):
         seed_everything(random.randint(0,1000000), workers=True)
     else:
         seed_everything(33, workers=True) #33 is default
-        
+
     if args.debug_mode:
         args.no_wandb = True
         args.detect_anomaly = True
         args.limit_train_batches = 1
 
-    os.makedirs("./logs", exist_ok=True)
+    logs_dir = get_scratch_logs_dir()
+    os.makedirs(logs_dir, exist_ok=True)
+    os.makedirs(os.path.join(logs_dir, "checkpoints"), exist_ok=True)
+
+    if args.infer_output_dir is None:
+        args.infer_output_dir = os.path.join(logs_dir, "inference")
 
     wandb_logger = None
     if not args.no_wandb: # put this early so can capture text logs later
         run = None # need both lines since setup_wandb is a @rank_zero_only function
-        run = setup_wandb(args)
+        run = setup_wandb(args, logs_dir)
 
-        wandb_logger = WandbLogger(save_dir="logs/", name=f'{args.run_name}', entity=f'{args.wandb_entity}', project=f'{args.wandb_project}', offline = args.wandb_offline, experiment=run)
+        wandb_logger = WandbLogger(save_dir=logs_dir, name=f'{args.run_name}', entity=f'{args.wandb_entity}', project=f'{args.wandb_project}', offline = args.wandb_offline, experiment=run)
         if args.wandb_tags != None:
             wandb_logger.experiment.tags = args.wandb_tags
     else:
-        console_log_file_path = os.path.join("./logs", args.console_log_filename)
+        console_log_file_path = os.path.join(logs_dir, args.console_log_filename)
         sys.stdout = text_logger.Tee(sys.stdout, console_log_file_path)
         sys.stderr = text_logger.Tee(sys.stderr, console_log_file_path)
         print("$$$$$$$$$ NOTE THAT NOT ALL STDOUT LOGS (i.e. pytorch lighting logs) ARE CAPTURED THROUGH CONSOLE LOGGER, THIS IS ONLY RECOMMENDED FOR DEBUGGING $$$$$$$$$$")
@@ -179,7 +189,7 @@ def main(args):
         torch.set_float32_matmul_precision(args.set_matmul_precision)
     
     checkpoint_filename = "epoch={epoch}-step={step}-" + args.checkpoint_monitor_string + "={"+args.checkpoint_monitor_string+":.4f}"
-    checkpoint_callback = ModelCheckpoint(monitor=args.checkpoint_monitor_string, mode = args.checkpoint_monitor_mode, save_top_k=args.save_top_k_ckpts, save_last = True, dirpath=f"./logs/checkpoints/{args.run_name}_{dt_string}_", filename=checkpoint_filename, verbose=True)
+    checkpoint_callback = ModelCheckpoint(monitor=args.checkpoint_monitor_string, mode = args.checkpoint_monitor_mode, save_top_k=args.save_top_k_ckpts, save_last = True, dirpath=os.path.join(logs_dir, "checkpoints", f"{args.run_name}_{dt_string}_"), filename=checkpoint_filename, verbose=True)
     
     for name, param in model_trainer.model.named_parameters():
         if not param.requires_grad:
@@ -628,7 +638,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--infer_echo", help="[Inference] Include input prompt in the output", type=bool, default=False)
     
-    parser.add_argument("--infer_output_dir", type=str, default="./logs/inference")
+    parser.add_argument("--infer_output_dir", type=str, default=None)
 
     # NLP INFERENCE ########################################################################
     

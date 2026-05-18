@@ -57,7 +57,7 @@ fi
 WANDB_ENTITY="${WANDB_ENTITY:-rceccatelli}"
 
 "${HOME}/.conda/envs/music_EBT/bin/python" "${PROJECT_ROOT}/inference/mus/infer_baselines_interactive.py" \
---checkpoint "/home/rebcecca/music-EBT/logs/checkpoints/baseline-hf-gpt2-small-remi-job13735276_2026-05-11_11-29-14_/epoch=epoch=8-step=step=4788-valid_loss=valid_loss=0.6630.ckpt" \
+--checkpoint "/home/rebcecca/orcd/scratch/rebcecca/music_EBT_logs/checkpoints/baseline-hf-gpt2-small-remi-job13735276_2026-05-11_11-29-14_/epoch=epoch=8-step=step=4788-valid_loss=valid_loss=0.6630.ckpt" \
 --model_name baseline_hf_gpt2_transformer \
 --prompt_length 128 \
 --generation_length 256 \
