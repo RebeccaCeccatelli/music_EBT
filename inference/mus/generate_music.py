@@ -61,6 +61,21 @@ def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz):
         logits: Raw logits for next token prediction, shape (bsz, seq_len, vocab_size) or (bsz, vocab_size)
     """
     if hparams.model_name == "ebt":
+        # EBT attention splits the sequence into real/predicted halves using
+        # original_seqlen = (full_seqlen+1)//2, then indexes rotary embeddings as
+        # freqs_cis[2:original_seqlen+1]. This requires original_seqlen >= 2,
+        # i.e. the input must have at least 2 tokens. Pad short inputs with the
+        # pad token so the slice is never empty.
+        MIN_EBT_INPUT = 2
+        if input_tokens.shape[1] < MIN_EBT_INPUT:
+            pad = torch.zeros(
+                input_tokens.shape[0],
+                MIN_EBT_INPUT - input_tokens.shape[1],
+                dtype=input_tokens.dtype,
+                device=input_tokens.device,
+            )
+            input_tokens = torch.cat([input_tokens, pad], dim=1)
+
         # Energy-Based Transformer with MCMC refinement
         if hparams.infer_ebt_advanced:
             ebt_outputs = model.ebt_advanced_inference(input_tokens, start_pos=0, learning=False)

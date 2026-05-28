@@ -49,6 +49,60 @@ def _checkpoint_label(ckpt_path: str) -> str:
 def upload_run(run_dir: Path, wandb_project: str, wandb_entity: str, log_file: Path = None):
     import wandb
 
+    # Detect if this is an EBT run (flat structure) or baseline run (gpt2/llama subdirs)
+    is_ebt_run = (run_dir / "midi").exists() and (run_dir / "wav").exists()
+
+    if is_ebt_run:
+        # EBT inference: flat structure with midi/, wav/, piano_rolls/, tokens/ subdirs
+        timestamp_match = re.search(r'(\d{8}_\d{6})', run_dir.name)
+        timestamp = timestamp_match.group(1) if timestamp_match else run_dir.name
+        run_name = f"ebt-infer-{timestamp}"
+
+        run = wandb.init(
+            project=wandb_project,
+            entity=wandb_entity or None,
+            name=run_name,
+            tags=["inference", "symbolic", "ebt"],
+        )
+
+        log_dict = {}
+        midi_dir        = run_dir / "midi"
+        wav_dir         = run_dir / "wav"
+        piano_rolls_dir = run_dir / "piano_rolls"
+
+        # (kind, audio_rank, roll_rank) — rank prefixes drive alphabetical sort in wandb
+        UPLOAD_KINDS = [
+            ("prompt",       "01", "02"),
+            ("ground_truth", "03", "04"),
+            ("generated",    "05", "06"),
+        ]
+
+        sample_indices = sorted(set(
+            f.stem.split("_")[1]
+            for f in midi_dir.glob("sample_*_generated.mid")
+        ), key=int)
+
+        for sample_idx in sample_indices:
+            for kind, audio_rank, roll_rank in UPLOAD_KINDS:
+                wav_file = wav_dir / f"sample_{sample_idx}_{kind}.wav"
+                if wav_file.exists():
+                    key = f"sample_{sample_idx}/{audio_rank}_{kind}_audio"
+                    log_dict[key] = wandb.Audio(str(wav_file), caption=f"sample {sample_idx} — {kind}")
+
+                if piano_rolls_dir.exists():
+                    png_file = piano_rolls_dir / f"sample_{sample_idx}_{kind}.png"
+                    if png_file.exists():
+                        key = f"sample_{sample_idx}/{roll_rank}_{kind}_piano_roll"
+                        log_dict[key] = wandb.Image(str(png_file), caption=f"sample {sample_idx} — {kind}")
+
+        if log_dict:
+            wandb.log(log_dict)
+
+        print(f"✅ Uploaded to wandb: {run.url}")
+        wandb.finish()
+        return
+
+    # Original baseline logic for gpt2/llama
     # Gather config from both models' metadata
     config = {"run_id": run_dir.name}
     for model_name in ["gpt2", "llama"]:
@@ -118,7 +172,7 @@ def upload_run(run_dir: Path, wandb_project: str, wandb_entity: str, log_file: P
                     log_dict[key] = wandb.Image(str(png), caption=f"sample {idx} — {display_name}")
 
     if log_file and log_file.exists():
-        wandb.save(str(log_file), base_path=str(log_file.parent))
+        wandb.save(str(log_file), base_path=str(log_file.parent.parent))
 
     wandb.log(log_dict)
     wandb.finish()

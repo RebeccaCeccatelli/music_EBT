@@ -323,6 +323,11 @@ class ModelTrainer(L.LightningModule):
             optimizer = self.trainer.optimizers[0]
             optimizer.update_epoch(self.current_epoch)   
 
+    def on_validation_epoch_end(self):
+        # Free fragmented GPU cache after validation so the first training step
+        # doesn't OOM on resume (PL runs a full val pass before training begins).
+        torch.cuda.empty_cache()
+
     def validation_step(self, batch, batch_idx):
         eval_step_dict = self.eval_step(batch, "valid")
         self.log_metrics(eval_step_dict, "valid")
@@ -687,10 +692,7 @@ class ModelTrainer(L.LightningModule):
                     pad_id = getattr(self.model, 'pad_token_id', 0)
                     self.test_ds = CustomMusicDataset(self.hparams, 'giga-midi', split='test', tokenizer_type=dir_name, pad_token_id=pad_id)
                 else:
-                    full_ds = GigaMIDIDataset(self.hparams)
-                    train_samples = int(len(full_ds) * (1 - self.hparams.validation_split_pct))
-                    test_samples = len(full_ds) - train_samples
-                    _, self.test_ds = random_split(full_ds, [train_samples, test_samples])
+                    self.test_ds = GigaMIDIMiditokDataset(self.hparams, split="validation")
             else:
                 # Try to load as custom dataset
                 try:
