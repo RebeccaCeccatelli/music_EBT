@@ -9,7 +9,8 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --time=6:00:00
 #SBATCH --mem=80GB
-#SBATCH --partition=mit_normal_gpu
+#SBATCH --partition=mit_preemptable
+#SBATCH --requeue
 #SBATCH --output=./logs/slurm_%j.out
 
 ### ADDITIONAL RUN INFO ###
@@ -83,8 +84,8 @@ case "${TOKENIZER_TYPE}" in
         LIMIT_VAL_BATCHES="${LIMIT_VAL_BATCHES:-1072}"
         ;;
     *)
-        BATCH_SIZE="${BATCH_SIZE:-8}"
-        ACCUM_STEPS="${ACCUM_STEPS:-32}"
+        BATCH_SIZE="${BATCH_SIZE:-4}"
+        ACCUM_STEPS="${ACCUM_STEPS:-64}"
         VAL_CHECK_INTERVAL="${VAL_CHECK_INTERVAL:-100}"
         LIMIT_VAL_BATCHES="${LIMIT_VAL_BATCHES:-1.0}"
         ;;
@@ -106,7 +107,7 @@ MAX_STEPS=100000
 
 # Auto-resume from last checkpoint of a previous run with the same base name.
 if [[ -z "${RESUME_CKPT}" ]]; then
-    PREV_CKPT_DIR=$(ls -td "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"* 2>/dev/null | grep -v "job${SLURM_JOB_ID}" | head -1)
+    PREV_CKPT_DIR=$(ls -td "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"* 2>/dev/null | head -1)
     if [[ -n "${PREV_CKPT_DIR}" && -f "${PREV_CKPT_DIR}/last.ckpt" ]]; then
         RESUME_CKPT="${PREV_CKPT_DIR}/last.ckpt"
         echo "Auto-resuming from: ${RESUME_CKPT}"
@@ -179,9 +180,6 @@ if [[ ${TRAIN_EXIT_CODE} -eq 0 ]]; then
         echo "Clean exit but incomplete (last step: ${LAST_STEP:-none}). Resubmitting..."
         _do_resubmit
     fi
-elif [[ ${TRAIN_EXIT_CODE} -eq 143 ]]; then
-    echo "SIGTERM before PL could handle it. Resubmitting..."
-    _do_resubmit
 else
     echo "Training failed (exit ${TRAIN_EXIT_CODE}). Not resubmitting."
     exit ${TRAIN_EXIT_CODE}
