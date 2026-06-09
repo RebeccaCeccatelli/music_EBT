@@ -7,9 +7,11 @@
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
-#SBATCH --time=6:00:00
+#SBATCH --time=24:00:00
 #SBATCH --mem=80GB
 #SBATCH --partition=mit_normal_gpu
+#SBATCH --account=mit_amf_standard_gpu
+#SBATCH --qos=mit_amf_standard_gpu
 #SBATCH --output=./logs/slurm_%j.out
 
 ### ADDITIONAL RUN INFO ###
@@ -145,7 +147,7 @@ python train_model.py \
 --wandb_project 'mus_symb_baseline_pretrain' \
 --log_model_archi \
 --log_gradients \
---log_every_n_steps 200 \
+--log_every_n_steps 100 \
 --set_matmul_precision "medium" \
 --wandb_watch \
 --val_check_interval "${VAL_CHECK_INTERVAL}" \
