@@ -46,7 +46,7 @@ def _checkpoint_label(ckpt_path: str) -> str:
     return step_part + loss_part
 
 
-def upload_run(run_dir: Path, wandb_project: str, wandb_entity: str, log_file: Path = None):
+def upload_run(run_dir: Path, wandb_project: str, wandb_entity: str, log_file: Path = None, temperature: float = None):
     import wandb
 
     # Detect if this is an EBT run (flat structure) or baseline run (gpt2/llama subdirs)
@@ -56,7 +56,11 @@ def upload_run(run_dir: Path, wandb_project: str, wandb_entity: str, log_file: P
         # EBT inference: flat structure with midi/, wav/, piano_rolls/, tokens/ subdirs
         timestamp_match = re.search(r'(\d{8}_\d{6})', run_dir.name)
         timestamp = timestamp_match.group(1) if timestamp_match else run_dir.name
-        run_name = f"ebt-infer-{timestamp}"
+        # e.g. "ebt_ant-at-full_20260608_163104" → tok_slug = "ant-at-full"
+        tok_slug_match = re.match(r'ebt_(.+?)_\d{8}_\d{6}', run_dir.name)
+        tok_prefix = tok_slug_match.group(1) if tok_slug_match else "unknown-tok"
+        temp_tag = f"-t{temperature}" if temperature is not None else ""
+        run_name = f"{tok_prefix}-ebt-infer{temp_tag}-{timestamp}"
 
         run = wandb.init(
             project=wandb_project,
@@ -82,12 +86,18 @@ def upload_run(run_dir: Path, wandb_project: str, wandb_entity: str, log_file: P
             for f in midi_dir.glob("sample_*_generated.mid")
         ), key=int)
 
+        _AUDIO_SIZE_LIMIT = 50 * 1024 * 1024   # 50 MB — wandb renders fail above this
+
         for sample_idx in sample_indices:
             for kind, audio_rank, roll_rank in UPLOAD_KINDS:
                 wav_file = wav_dir / f"sample_{sample_idx}_{kind}.wav"
                 if wav_file.exists():
-                    key = f"sample_{sample_idx}/{audio_rank}_{kind}_audio"
-                    log_dict[key] = wandb.Audio(str(wav_file), caption=f"sample {sample_idx} — {kind}")
+                    wav_size = wav_file.stat().st_size
+                    if wav_size > _AUDIO_SIZE_LIMIT:
+                        print(f"  ⚠️  Skipping {wav_file.name} ({wav_size // 1024 // 1024} MB > {_AUDIO_SIZE_LIMIT // 1024 // 1024} MB limit)")
+                    else:
+                        key = f"sample_{sample_idx}/{audio_rank}_{kind}_audio"
+                        log_dict[key] = wandb.Audio(str(wav_file), caption=f"sample {sample_idx} — {kind}")
 
                 if piano_rolls_dir.exists():
                     png_file = piano_rolls_dir / f"sample_{sample_idx}_{kind}.png"
@@ -185,10 +195,11 @@ if __name__ == "__main__":
     parser.add_argument("--wandb_project", default="music_inference_baselines")
     parser.add_argument("--wandb_entity", default="")
     parser.add_argument("--log_file", type=Path, default=None)
+    parser.add_argument("--temperature", type=float, default=None)
     args = parser.parse_args()
 
     if not args.run_dir.exists():
         print(f"❌ Run directory not found: {args.run_dir}")
         sys.exit(1)
 
-    upload_run(args.run_dir, args.wandb_project, args.wandb_entity, args.log_file)
+    upload_run(args.run_dir, args.wandb_project, args.wandb_entity, args.log_file, args.temperature)

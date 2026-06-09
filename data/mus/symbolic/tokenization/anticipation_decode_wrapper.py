@@ -35,6 +35,33 @@ class AnticipationTokenizerWrapper:
         else:
             os.environ['ANTICIPATION_VANILLA'] = 'false'
 
+    def _filter_malformed_triplets(self, tokens, ops):
+        """
+        Drop event triplets whose token values fall outside the expected vocab
+        sub-ranges. ops.split classifies triplets by note < CONTROL_OFFSET, so a
+        triplet that has a dur-range value in the note slot passes as an "event"
+        but then causes a negative-value AssertionError in events_to_compound.
+        """
+        from anticipation.vocab_selector import (
+            TIME_OFFSET, DUR_OFFSET, NOTE_OFFSET, CONTROL_OFFSET, REST
+        )
+        from anticipation.config import MAX_TIME, MAX_DUR
+
+        valid = []
+        n_bad = 0
+        for i in range(0, len(tokens) - 2, 3):
+            t, d, n = tokens[i], tokens[i + 1], tokens[i + 2]
+            if (TIME_OFFSET <= t < TIME_OFFSET + MAX_TIME
+                    and DUR_OFFSET <= d < DUR_OFFSET + MAX_DUR
+                    and NOTE_OFFSET <= n <= REST):
+                valid.extend([t, d, n])
+            else:
+                n_bad += 1
+        if n_bad > 0:
+            print(f"  [decode] filtered {n_bad} malformed event triplet(s) — "
+                  f"check for triplet-boundary misalignment in generated_tokens")
+        return valid
+
     def decode(self, tokens):
         """
         Convert anticipation tokens to MIDI.
@@ -81,6 +108,12 @@ class AnticipationTokenizerWrapper:
         if len(tokens) > 0:
             events_only, _ = ops.split(tokens)
             tokens = list(events_only)
+
+        # Validate that every event triplet has tokens in the correct vocabulary
+        # sub-ranges. Misaligned sequences (e.g. from a bad prompt+generated
+        # concatenation) produce triplets where time/dur values land in the wrong
+        # slot, causing AssertionError (empty message) in events_to_compound.
+        tokens = self._filter_malformed_triplets(tokens, ops)
 
         # Normalize timestamps to start at 0 — dataset windows use absolute times, so a
         # window starting mid-song would otherwise produce leading silence in the MIDI.
