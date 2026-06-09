@@ -50,7 +50,8 @@ SCRATCH_LOGS_DIR="${HOME}/orcd/scratch/rebcecca/music_EBT_logs"
 MODEL_SIZE="small"
 TOKENIZER_TYPE="REMI"
 NUM_SAMPLES="${NUM_SAMPLES:-5}"
-GENERATION_LENGTH="${GENERATION_LENGTH:-256}"
+GENERATION_LENGTH="${GENERATION_LENGTH:-512}"
+PROMPT_LENGTH="${PROMPT_LENGTH:-}"          # auto-set below based on tokenizer
 TEMPERATURE="${TEMPERATURE:-0.7}"
 TOP_P="${TOP_P:-0.9}"
 MCMC_NUM_STEPS="${MCMC_NUM_STEPS:-}"
@@ -66,15 +67,29 @@ while [[ $# -gt 0 ]]; do
         --checkpoint)        CHECKPOINT="$2";             shift 2 ;;
         --num_samples)       NUM_SAMPLES="$2";            shift 2 ;;
         --generation_length) GENERATION_LENGTH="$2";      shift 2 ;;
+        --prompt_length)     PROMPT_LENGTH="$2";          shift 2 ;;
         --temperature)       TEMPERATURE="$2";            shift 2 ;;
         --top_p)             TOP_P="$2";                  shift 2 ;;
         --seed)              SEED="$2";                   shift 2 ;;
-        --mcmc_num_steps)    MCMC_NUM_STEPS="$2";            shift 2 ;;
+        --mcmc_num_steps)    MCMC_NUM_STEPS="$2";         shift 2 ;;
         --ebt_advanced)      EBT_ADVANCED="--ebt_advanced"; shift ;;
         --use_test_split)    USE_TEST_SPLIT="--use_test_split"; shift ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
+
+# Anticipation sequences are stored as 1024 tokens (2× the training context_length=512).
+# Using the full 1024 as prompt gives the EBT sliding window a much richer starting
+# position: the model sees the last 252 tokens of the prompt as its first lookback window.
+# REMI now uses a sliding context window (last 512 tokens fed at each step), so generation
+# is no longer capped at context_length=512. Prompt comes from the song's beginning.
+# 256 REMI tokens ≈ 30-60s of music depending on note density.
+if [[ -z "${PROMPT_LENGTH}" ]]; then
+    case "${TOKENIZER_TYPE}" in
+        Anticipation-*) PROMPT_LENGTH=1024 ;;
+        *)              PROMPT_LENGTH=256  ;;
+    esac
+fi
 
 # Tokenizer slug (matches ebt_s1.sh naming convention).
 case "${TOKENIZER_TYPE}" in
@@ -114,7 +129,9 @@ if [[ -z "${CHECKPOINT}" ]]; then
     echo "Auto-selected checkpoint (val_loss=${BEST_LOSS}): ${CHECKPOINT}"
 fi
 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+scontrol update JobId="${SLURM_JOB_ID}" JobName="ebt-infer-${TOK_SLUG}" 2>/dev/null || true
+
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)_${SLURM_JOB_ID}
 OUTPUT_DIR="${SCRATCH_LOGS_DIR}/inference/ebt_${TOK_SLUG}_${TIMESTAMP}"
 mkdir -p "${OUTPUT_DIR}"
 
@@ -126,6 +143,7 @@ echo "EBT Symbolic Music — Inference"
 echo "=========================================="
 echo "Checkpoint:   ${CHECKPOINT}"
 echo "Tokenizer:    ${TOKENIZER_TYPE}"
+echo "Prompt:       ${PROMPT_LENGTH} tokens"
 echo "Generate:     ${GENERATION_LENGTH} tokens × ${NUM_SAMPLES} samples"
 echo "Sampling:     temp=${TEMPERATURE}, top_p=${TOP_P}"
 echo "EBT advanced: ${EBT_ADVANCED:-off}"
@@ -138,6 +156,7 @@ python "${PROJECT_ROOT}/inference/mus/infer_ebt.py" \
     --checkpoint "${CHECKPOINT}" \
     --num_samples "${NUM_SAMPLES}" \
     --generation_length "${GENERATION_LENGTH}" \
+    --prompt_length "${PROMPT_LENGTH}" \
     --temperature "${TEMPERATURE}" \
     --top_p "${TOP_P}" \
     ${MCMC_NUM_STEPS:+--mcmc_num_steps "${MCMC_NUM_STEPS}"} \
@@ -159,7 +178,8 @@ echo "Uploading to wandb..."
 python "${PROJECT_ROOT}/inference/mus/upload_to_wandb.py" \
     "${OUTPUT_DIR}" \
     --wandb_project "music_inference_ebt" \
-    --wandb_entity "rceccatelli-eth-z-rich"
+    --wandb_entity "rceccatelli-eth-z-rich" \
+    --temperature "${TEMPERATURE}"
 
 echo ""
 echo "=========================================="

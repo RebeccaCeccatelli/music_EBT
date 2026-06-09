@@ -17,6 +17,7 @@ import torch
 import argparse
 import os
 import json
+import traceback
 from pathlib import Path
 from argparse import Namespace
 from typing import Tuple
@@ -143,13 +144,24 @@ def main():
     for i, dataset_idx in enumerate(sample_indices):
         print(f"  Sample {i+1}/{num_samples} (dataset idx {dataset_idx})...", end="", flush=True)
         try:
-            full_tokens = dataset[dataset_idx]['input_ids'].tolist()
+            # Use get_full_tokens when available: bypasses the training-time
+            # context_length clip so prompt_length can exceed 512.
+            # For REMI this also gives tokens from the song's start rather than
+            # the random window __getitem__ uses for data augmentation.
+            if hasattr(dataset, 'get_full_tokens'):
+                full_tokens = dataset.get_full_tokens(dataset_idx)
+            else:
+                full_tokens = dataset[dataset_idx]['input_ids'].tolist()
             # Strip padding
             while full_tokens and full_tokens[-1] == pad_token_id:
                 full_tokens.pop()
 
             prompt_len = min(args.prompt_length, len(full_tokens))
             prompt = full_tokens[:prompt_len]
+            # Cap ground truth to prompt + generation length so REMI songs
+            # (which can be thousands of tokens via get_full_tokens) don't
+            # produce 30MB WAV files that break wandb rendering.
+            full_tokens = full_tokens[:prompt_len + args.generation_length]
 
             batch = {
                 'input_ids': torch.tensor(prompt, dtype=torch.long, device=args.device).unsqueeze(0)
@@ -159,16 +171,30 @@ def main():
                 result = generate_music(model, batch, hparams)
 
             generated = result['generation_tokens'][0]
+
+            # For Anticipation tokenizer the raw prompt is interleaved
+            # (events + controls) and its length after stripping the mode
+            # token is rarely a multiple of 3. Naively doing prompt + generated
+            # shifts the triplet boundary for every generated token, putting
+            # time-range values in dur slots and dur-range values in note slots.
+            # generate_anticipation already produces a clean, triplet-aligned
+            # event sequence (events_only from prompt + new events); use that.
+            if 'full_event_sequences' in result:
+                full_generated = result['full_event_sequences'][0]
+            else:
+                full_generated = prompt + generated
+
             all_generations.append({
                 'sample_idx':        i,
                 'prompt_tokens':     prompt,
                 'ground_truth_tokens': full_tokens,
-                'generated_tokens':  prompt + generated,
+                'generated_tokens':  full_generated,
             })
             print(f" ✅ ({len(generated)} new tokens)")
 
         except Exception as e:
             print(f" ❌ {e}")
+            traceback.print_exc()
             all_generations.append({
                 'sample_idx':        i,
                 'prompt_tokens':     [],
@@ -204,6 +230,7 @@ def main():
                 print(f"  ✅ {path.name}")
             except Exception as e:
                 print(f"  ❌ sample_{idx:03d}_{kind}: {e}")
+                traceback.print_exc()
 
     # ── Synthesize WAV ────────────────────────────────────────────────────────
     print("\nSynthesizing WAV files...")

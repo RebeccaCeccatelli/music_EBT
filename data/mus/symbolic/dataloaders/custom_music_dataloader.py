@@ -91,11 +91,19 @@ class CustomMusicDataset(Dataset):
             self._file = open(self.token_file, 'rb')
         return self._file
 
-    def __getitem__(self, idx):
+    def get_full_tokens(self, idx):
+        """Return the raw token list for sequence `idx` without clipping or padding.
+
+        Useful for inference when prompt_length may exceed context_length.
+        All stored sequences are 1024 tokens; __getitem__ clips to context_length=512.
+        """
         f = self._get_file()
         f.seek(int(self.offsets[idx]))
         line = f.readline().decode('utf-8').strip()
-        tokens = list(map(int, line.split()))
+        return list(map(int, line.split()))
+
+    def __getitem__(self, idx):
+        tokens = self.get_full_tokens(idx)
 
         if len(tokens) < self.context_length:
             tokens = tokens + [self.pad_token_id] * (self.context_length - len(tokens))

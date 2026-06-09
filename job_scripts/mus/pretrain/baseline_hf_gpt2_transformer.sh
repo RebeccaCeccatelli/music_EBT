@@ -146,7 +146,7 @@ python train_model.py \
 --wandb_project 'mus_symb_baseline_pretrain' \
 --log_model_archi \
 --log_gradients \
---log_every_n_steps 200 \
+--log_every_n_steps 100 \
 --set_matmul_precision "medium" \
 --wandb_watch \
 --val_check_interval "${VAL_CHECK_INTERVAL}" \

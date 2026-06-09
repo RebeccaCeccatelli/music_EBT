@@ -132,47 +132,45 @@ def generate_music(model, batch, hparams):
 
 def generate_remi(model, batch, hparams):
     """
-    Generate music with REMI tokenization (flat autoregressive token stream).
-    
-    Simple autoregressive generation where each token is predicted independently.
-    Works for any model architecture (EBT, Baseline Llama, Baseline HF GPT2).
-    
-    Features:
-    - Temperature-controlled sampling
-    - Top-p (nucleus) sampling
-    - Log probability tracking
-    - Supports unconditional generation (empty prompt)
-    
+    Generate music with REMI tokenization using a sliding context window.
+
+    Each generation step feeds the last context_length tokens to the model,
+    so generation length is no longer bounded by context_length. A prompt
+    longer than context_length is handled by seeding the window with its
+    last context_length tokens (most recent musical context).
+
     Args:
         model: The music generation model
         batch: Input batch containing 'input_ids' (conditioning tokens)
         hparams: Hyperparameters including:
-            - infer_max_gen_len: Maximum tokens to generate
+            - infer_max_gen_len: Exact number of new tokens to generate
             - infer_temp: Temperature for sampling (0 = greedy)
             - infer_topp: Top-p threshold for nucleus sampling
             - infer_logprobs: Whether to track log probabilities
-            - infer_echo: Whether to return prompt tokens in output
-            - context_length: Maximum sequence length
-    
+            - infer_echo: Whether to include prompt in full_sequences output
+            - context_length: Sliding window size
+
     Returns:
-        dict: Generated sequences with keys:
-            - 'prompt_tokens': List of prompt token sequences
-            - 'generation_tokens': List of generated token sequences (without prompt)
-            - 'generation_logprobs': List of log probabilities (if tracking)
-            - 'full_sequences': Full sequences including prompt (if echo=True)
+        dict with keys:
+            - 'prompt_tokens': List of prompt token lists
+            - 'generation_tokens': List of generated token lists (no prompt)
+            - 'generation_logprobs': List of log-prob lists (if infer_logprobs)
+            - 'full_sequences': prompt + generated (if echo), else generated only
     """
-    # Extract configuration
     ids = batch['input_ids']
     max_gen_len = hparams.infer_max_gen_len
     temperature = hparams.infer_temp
     top_p = hparams.infer_topp
     logprobs = hparams.infer_logprobs
     echo = hparams.infer_echo
-    
-    # Get padding token ID from the model
+    context_length = hparams.context_length
+
     pad_token_id = model.pad_token_id if hasattr(model, 'pad_token_id') else 0
-    
-    # Extract prompt tokens (non-padded portion)
+    device = getattr(hparams, 'device', 'cuda')
+
+    params = model.transformer.params if hasattr(model, 'transformer') and hasattr(model.transformer, 'params') else None
+
+    # Extract prompt tokens, stripping padding
     prompt_tokens = []
     for row_ids in ids:
         row_ids = row_ids.squeeze() if row_ids.dim() > 1 else row_ids
@@ -180,136 +178,66 @@ def generate_remi(model, batch, hparams):
         while prompt and prompt[-1] == pad_token_id:
             prompt.pop()
         prompt_tokens.append(prompt)
-    
-    # Get model parameters (for custom transformers)
-    params = model.transformer.params if hasattr(model, 'transformer') and hasattr(model.transformer, 'params') else None
+
     bsz = len(prompt_tokens)
-    
     if params is not None:
         assert bsz <= params.max_batch_size, f"Batch size {bsz} exceeds model max {params.max_batch_size}"
-    
-    # Determine sequence lengths
-    min_prompt_len = min(len(t) for t in prompt_tokens) if prompt_tokens else 0
-    max_prompt_len = max(len(t) for t in prompt_tokens) if prompt_tokens else 0
-    
-    # Ensure prompts fit in context
-    assert max_prompt_len <= hparams.context_length, \
-        f"Prompt length {max_prompt_len} exceeds context length {hparams.context_length}"
-    
-    total_len = min(hparams.context_length, max_gen_len + max_prompt_len)
 
-    # Determine device from hparams
-    device = getattr(hparams, 'device', 'cuda')
-
-    # Initialize token tensor
-    tokens = torch.full(
-        (bsz, total_len),
-        pad_token_id,
-        dtype=torch.long,
-        device=device
-    )
-
-    # Populate prompt tokens
-    for k, t in enumerate(prompt_tokens):
-        tokens[k, :len(t)] = torch.tensor(t, dtype=torch.long, device=device).clone().detach()
-    
-    # Initialize log probability tracking if requested
-    if logprobs:
-        token_logprobs = torch.zeros_like(tokens, dtype=torch.float)
-    
-    # Create input mask to track which tokens are part of prompt vs generated
-    input_text_mask = tokens != pad_token_id
-    
-    # Autoregressive generation
-    with torch.no_grad():
-        # If min prompt length equals total length, compute logits once and we're done
-        if min_prompt_len == total_len:
-            logits = call_model_forward_decode(hparams, model, tokens, 0, bsz)
-            if logprobs:
-                # Handle both (B, S, V) and (B, V) shaped logits
-                if logits.dim() == 3:
-                    token_logprobs = -F.cross_entropy(
-                        input=logits.transpose(1, 2),
-                        target=tokens,
-                        reduction="none",
-                        ignore_index=pad_token_id,
-                    )
-        
-        # Generate tokens one at a time
-        for cur_pos in range(min_prompt_len, total_len):
-            # Get model prediction
-            input_tokens = tokens[:, :cur_pos]
-            logits = call_model_forward_decode(hparams, model, input_tokens, 0, bsz)
-            
-            # Extract last token logits
-            if logits.dim() == 3:
-                last_logits = logits[:, -1, :]  # (B, V)
-            else:
-                last_logits = logits  # Already (B, V)
-            
-            # Sample next token
-            if temperature > 0:
-                # Temperature-scaled sampling
-                probs = torch.softmax(last_logits / temperature, dim=-1)
-                next_token = sample_top_p(probs, top_p)
-            else:
-                # Greedy decoding
-                next_token = torch.argmax(last_logits, dim=-1)
-            
-            next_token = next_token.reshape(-1)
-            
-            # Only use generated token if we haven't reached the end of prompt
-            next_token = torch.where(
-                input_text_mask[:, cur_pos],
-                tokens[:, cur_pos],
-                next_token
-            )
-            
-            tokens[:, cur_pos] = next_token
-            
-            # Track log probabilities
-            if logprobs:
-                token_logprobs[:, cur_pos] = -F.cross_entropy(
-                    input=last_logits.unsqueeze(1).transpose(1, 2),
-                    target=tokens[:, cur_pos:cur_pos + 1],
-                    reduction="none",
-                    ignore_index=pad_token_id,
-                ).squeeze()
-    
-    # Convert log probabilities to list format
-    if logprobs:
-        token_logprobs = token_logprobs.tolist()
-    
-    # Extract generation results
     out_tokens = []
     out_logprobs = []
-    
-    for i, toks in enumerate(tokens.tolist()):
-        # Find where prompt ends (first pad token or use original prompt length)
-        prompt_len = len(prompt_tokens[i])
-        
-        # Generated tokens (exclude prompt)
-        generated = toks[prompt_len:]
-        # Remove trailing padding
-        generated = [t for t in generated if t != pad_token_id]
-        
+
+    for batch_idx in range(bsz):
+        prompt = prompt_tokens[batch_idx]
+
+        # Seed the sliding window with the last context_length tokens of the prompt.
+        # If the prompt is shorter, use it as-is; if longer, this keeps the most
+        # recent musical context at the start of generation.
+        context = list(prompt[-context_length:]) if len(prompt) > context_length else list(prompt)
+
+        generated = []
+        gen_logprobs = []
+
+        with torch.no_grad():
+            for _ in range(max_gen_len):
+                window = context[-context_length:]
+                input_tensor = torch.tensor(
+                    window, dtype=torch.long, device=device
+                ).unsqueeze(0)
+
+                logits = call_model_forward_decode(hparams, model, input_tensor, 0, 1)
+
+                if logits.dim() == 3:
+                    last_logits = logits[0, -1, :]
+                else:
+                    last_logits = logits[0]
+
+                if temperature > 0:
+                    probs = torch.softmax(last_logits / temperature, dim=-1)
+                    next_token = sample_top_p(probs, top_p)
+                else:
+                    next_token = torch.argmax(last_logits, dim=-1)
+
+                next_token_val = int(next_token.reshape(-1)[0].item())
+
+                if logprobs:
+                    lp = float(F.log_softmax(last_logits, dim=-1)[next_token_val].item())
+                    gen_logprobs.append(lp)
+
+                context.append(next_token_val)
+                generated.append(next_token_val)
+
         out_tokens.append(generated)
-        
-        if logprobs:
-            # Log probs for generated portion
-            gen_logprobs = token_logprobs[i][prompt_len:prompt_len + len(generated)]
-            out_logprobs.append(gen_logprobs)
-    
-    # Prepare output
+        out_logprobs.append(gen_logprobs)
+
     result = {
         'prompt_tokens': prompt_tokens,
         'generation_tokens': out_tokens,
-        'full_sequences': [toks for toks in tokens.tolist()] if echo else out_tokens,
+        'full_sequences': [p + g for p, g in zip(prompt_tokens, out_tokens)] if echo else out_tokens,
     }
-    
+
     if logprobs:
         result['generation_logprobs'] = out_logprobs
-    
+
     return result
 
 
@@ -354,6 +282,15 @@ def generate_anticipation(model, batch, hparams) -> Dict:
     top_p = hparams.infer_topp
     logprobs = hparams.infer_logprobs
     lookback_tokens = getattr(hparams, 'anticipation_lookback', 1020)
+    # EBT concatenates real + predicted embeddings before the transformer, doubling
+    # the sequence length to 2*S. The rotary embeddings are precomputed up to
+    # max_seq_len = context_length + 1. So we need 2*(1 + history + 2) ≤ max_seq_len,
+    # i.e. history ≤ context_length // 2 - 2, then trim to a triplet boundary.
+    if getattr(hparams, 'model_name', '') == 'ebt':
+        ebt_max_seq = getattr(hparams, 'context_length', 1024) + 1
+        ebt_max_history = (ebt_max_seq // 2) - 3   # 509 for context_length=1024
+        ebt_max_history -= ebt_max_history % 3      # align to triplet boundary → 507
+        lookback_tokens = min(lookback_tokens, ebt_max_history)
     device = getattr(hparams, 'device', 'cuda')
 
     pad_token_id = model.pad_token_id if hasattr(model, 'pad_token_id') else CONTROL_OFFSET - 1
@@ -369,6 +306,7 @@ def generate_anticipation(model, batch, hparams) -> Dict:
 
     bsz = len(prompt_tokens)
     generated_all = []
+    full_event_sequences = []
     generated_logprobs_all = []
 
     for batch_idx in range(bsz):
@@ -458,11 +396,17 @@ def generate_anticipation(model, batch, hparams) -> Dict:
                 generated.extend(new_token_triplet)
 
         generated_all.append(generated)
+        full_event_sequences.append(list(tokens_list))
         generated_logprobs_all.append(gen_logprobs)
 
     result = {
         'prompt_tokens': prompt_tokens,
         'generation_tokens': generated_all,
+        # events_only extracted from prompt + newly generated events, all triplet-aligned.
+        # Use this instead of prompt + generated when decoding Anticipation sequences to
+        # avoid the triplet-boundary mismatch that occurs when the raw prompt length is
+        # not a multiple of 3 (after stripping the mode token).
+        'full_event_sequences': full_event_sequences,
     }
     if logprobs:
         result['generation_logprobs'] = generated_logprobs_all
