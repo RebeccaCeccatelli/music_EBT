@@ -7,9 +7,12 @@
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
-#SBATCH --time=6:00:00
+#SBATCH --time=24:00:00
 #SBATCH --mem=80GB
 #SBATCH --partition=mit_normal_gpu
+#SBATCH --account=mit_amf_standard_gpu
+#SBATCH --qos=mit_amf_standard_gpu
+#SBATCH --requeue
 #SBATCH --output=./logs/slurm_%j.out
 
 ### ADDITIONAL RUN INFO ###
@@ -53,21 +56,28 @@ cd "${PROJECT_ROOT}" || exit 1
 #   Anticipation-Vanilla      - arrival-time, no control block, smaller vocab
 DATASET_NAME="giga_midi"
 TOKENIZER_TYPE="REMI"
+MODEL_SIZE="small"
 RESUME_CKPT=""
+FRESH_START=""
 BATCH_SIZE=""
 ACCUM_STEPS=""
 VAL_CHECK_INTERVAL=""
 LIMIT_VAL_BATCHES=""
+MCMC_STEP_SIZE_LR_MULT=""
+PEAK_LR=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --dataset_name)           DATASET_NAME="$2";       shift 2 ;;
         --tokenizer_type)         TOKENIZER_TYPE="$2";     shift 2 ;;
+        --model_size)             MODEL_SIZE="$2";         shift 2 ;;
         --resume_training_ckpt)   RESUME_CKPT="$2";        shift 2 ;;
+        --fresh_start)            FRESH_START="1";          shift ;;
         --batch_size_per_device)  BATCH_SIZE="$2";         shift 2 ;;
         --accumulate_grad_batches) ACCUM_STEPS="$2";       shift 2 ;;
         --val_check_interval)     VAL_CHECK_INTERVAL="$2"; shift 2 ;;
         --limit_val_batches)      LIMIT_VAL_BATCHES="$2";  shift 2 ;;
+        --peak_learning_rate)     PEAK_LR="$2";            shift 2 ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
@@ -75,18 +85,21 @@ done
 # Tokenizer-aware defaults.
 # Anticipation vocab (55028) is ~120x larger than REMI (~452);
 # use smaller batch and more frequent checkpoints.
+# Also use lower MCMC step size learning rate for Anticipation to prevent divergence.
 case "${TOKENIZER_TYPE}" in
     Anticipation-*)
         BATCH_SIZE="${BATCH_SIZE:-4}"
         ACCUM_STEPS="${ACCUM_STEPS:-16}"
         VAL_CHECK_INTERVAL="${VAL_CHECK_INTERVAL:-100}"
         LIMIT_VAL_BATCHES="${LIMIT_VAL_BATCHES:-1072}"
+        MCMC_STEP_SIZE_LR_MULT="${MCMC_STEP_SIZE_LR_MULT:-2}"
         ;;
     *)
-        BATCH_SIZE="${BATCH_SIZE:-8}"
-        ACCUM_STEPS="${ACCUM_STEPS:-32}"
+        BATCH_SIZE="${BATCH_SIZE:-4}"
+        ACCUM_STEPS="${ACCUM_STEPS:-64}"
         VAL_CHECK_INTERVAL="${VAL_CHECK_INTERVAL:-100}"
         LIMIT_VAL_BATCHES="${LIMIT_VAL_BATCHES:-1.0}"
+        MCMC_STEP_SIZE_LR_MULT="${MCMC_STEP_SIZE_LR_MULT:-100}"
         ;;
 esac
 
@@ -98,15 +111,18 @@ case "${TOKENIZER_TYPE}" in
     *)                          TOK_SLUG=$(echo "${TOKENIZER_TYPE}" | tr '[:upper:]' '[:lower:]') ;;
 esac
 
-PEAK_LR="${lr[${SLURM_ARRAY_TASK_ID}]}"
+# Use provided peak_learning_rate or default from array
+if [[ -z "${PEAK_LR}" ]]; then
+    PEAK_LR="${lr[${SLURM_ARRAY_TASK_ID}]}"
+fi
 BASE_RUN_NAME="ebt-symb-${MODEL_SIZE}-${TOK_SLUG}-s1"
 FULL_RUN_NAME="${BASE_RUN_NAME}-job${SLURM_JOB_ID:-local}"
 scontrol update JobId="${SLURM_JOB_ID}" Name="${FULL_RUN_NAME}" 2>/dev/null || true
 MAX_STEPS=100000
 
 # Auto-resume from last checkpoint of a previous run with the same base name.
-if [[ -z "${RESUME_CKPT}" ]]; then
-    PREV_CKPT_DIR=$(ls -td "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"* 2>/dev/null | grep -v "job${SLURM_JOB_ID}" | head -1)
+if [[ -z "${RESUME_CKPT}" && -z "${FRESH_START}" ]]; then
+    PREV_CKPT_DIR=$(ls -td "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"* 2>/dev/null | head -1)
     if [[ -n "${PREV_CKPT_DIR}" && -f "${PREV_CKPT_DIR}/last.ckpt" ]]; then
         RESUME_CKPT="${PREV_CKPT_DIR}/last.ckpt"
         echo "Auto-resuming from: ${RESUME_CKPT}"
@@ -126,7 +142,7 @@ python train_model.py \
 --denoising_initial_condition "random_noise" \
 --mcmc_step_size_learnable \
 --mcmc_step_size 1 \
---mcmc_step_size_lr_multiplier 100 \
+--mcmc_step_size_lr_multiplier "${MCMC_STEP_SIZE_LR_MULT}" \
 --mcmc_num_steps 2 \
 --clamp_futures_grad \
 \
@@ -179,9 +195,6 @@ if [[ ${TRAIN_EXIT_CODE} -eq 0 ]]; then
         echo "Clean exit but incomplete (last step: ${LAST_STEP:-none}). Resubmitting..."
         _do_resubmit
     fi
-elif [[ ${TRAIN_EXIT_CODE} -eq 143 ]]; then
-    echo "SIGTERM before PL could handle it. Resubmitting..."
-    _do_resubmit
 else
     echo "Training failed (exit ${TRAIN_EXIT_CODE}). Not resubmitting."
     exit ${TRAIN_EXIT_CODE}

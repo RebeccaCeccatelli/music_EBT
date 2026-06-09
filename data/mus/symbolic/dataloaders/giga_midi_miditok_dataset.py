@@ -51,9 +51,17 @@ class GigaMIDIMiditokDataset(Dataset):
     def __len__(self):
         return len(self.files)
 
-    def __getitem__(self, idx):
+    def get_full_tokens(self, idx):
+        """Return the full token list for song `idx` from the beginning of the song.
+
+        Useful for inference when you want a prompt from the song's actual start
+        rather than the random window __getitem__ samples for data augmentation.
+        """
         with open(self.files[idx]) as f:
-            ids = json.load(f)["ids"]
+            return json.load(f)["ids"]
+
+    def __getitem__(self, idx):
+        ids = self.get_full_tokens(idx)
 
         if len(ids) <= self.context_length:
             # Pad short sequences with zeros (pad token id)
