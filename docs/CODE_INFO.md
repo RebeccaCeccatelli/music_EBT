@@ -1,3 +1,5 @@
+> **Note:** This file was inherited from the original forked codebase and is no longer fully up to date. Directory structure, requirements files, and some referenced scripts have changed. Use it as a general orientation guide only.
+
 ## Tools/Software being used
 
 - The repository uses [Pytorch Lightning](https://lightning.ai/docs/pytorch/stable/common/trainer.html)
