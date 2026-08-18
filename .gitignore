@@ -146,6 +146,9 @@ misc/images/
 misc/plots/
 
 
+# generated outputs
+eval/training_curves/
+
 # custom
 bash_scripts/debug/env.sh
 test.py
