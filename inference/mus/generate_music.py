@@ -170,6 +170,27 @@ def generate_remi(model, batch, hparams):
 
     params = model.transformer.params if hasattr(model, 'transformer') and hasattr(model.transformer, 'params') else None
 
+    # ── Density attribute control (R³) setup ─────────────────────────────────
+    density_target  = getattr(hparams, 'density_target',  None)
+    lambda_density  = getattr(hparams, 'lambda_density',  0.0)
+    density_ckpt    = getattr(hparams, 'density_regressor_ckpt', None)
+    density_steering = (density_target is not None and lambda_density > 0 and density_ckpt is not None)
+
+    density_regressor = None
+    emb_weight        = None
+    if density_steering:
+        from attribute_control.note_density import NoteDensityRegressor
+        ckpt_data = torch.load(density_ckpt, map_location='cpu', weights_only=False)
+        density_regressor = NoteDensityRegressor(
+            emb_dim=ckpt_data['emb_dim'], hidden_dim=ckpt_data['hidden_dim']
+        ).to(device).eval()
+        density_regressor.load_state_dict(ckpt_data['model_state'])
+        # Embedding table from the EBT checkpoint stored in the density ckpt
+        ebt_ckpt = torch.load(ckpt_data['ebt_checkpoint'], map_location='cpu', weights_only=False)
+        emb_weight = ebt_ckpt['state_dict']['model.embeddings.weight'].float().to(device)
+        print(f"  Density control (R³): target={density_target:.3f}  λ={lambda_density}")
+    # ─────────────────────────────────────────────────────────────────────────
+
     # Extract prompt tokens, stripping padding
     prompt_tokens = []
     for row_ids in ids:
@@ -197,13 +218,23 @@ def generate_remi(model, batch, hparams):
         generated = []
         gen_logprobs = []
 
-        with torch.no_grad():
-            for _ in range(max_gen_len):
-                window = context[-context_length:]
-                input_tensor = torch.tensor(
-                    window, dtype=torch.long, device=device
-                ).unsqueeze(0)
+        # Accumulate hard embeddings for prompt tokens (passed to R³ density control)
+        if density_steering:
+            with torch.no_grad():
+                prompt_idx = torch.tensor(prompt, dtype=torch.long, device=device)
+                hard_emb_sum = emb_weight[prompt_idx].sum(0)   # (emb_dim,)
+            n_hard = len(prompt)
+        else:
+            hard_emb_sum = None
+            n_hard = 0
 
+        for _ in range(max_gen_len):
+            window = context[-context_length:]
+            input_tensor = torch.tensor(
+                window, dtype=torch.long, device=device
+            ).unsqueeze(0)
+
+            with torch.no_grad():
                 logits = call_model_forward_decode(hparams, model, input_tensor, 0, 1)
 
                 if logits.dim() == 3:
@@ -211,20 +242,31 @@ def generate_remi(model, batch, hparams):
                 else:
                     last_logits = logits[0]
 
-                if temperature > 0:
-                    probs = torch.softmax(last_logits / temperature, dim=-1)
-                    next_token = sample_top_p(probs, top_p)
-                else:
-                    next_token = torch.argmax(last_logits, dim=-1)
+            # TODO: R³ density control — compose density energy inside EBT MCMC loop
+            # (hard_emb_sum, n_hard, density_target, lambda_density, density_regressor,
+            #  emb_weight are all available here for passing into model.forward())
 
-                next_token_val = int(next_token.reshape(-1)[0].item())
+            if temperature > 0:
+                probs = torch.softmax(last_logits / temperature, dim=-1)
+                next_token = sample_top_p(probs, top_p)
+            else:
+                next_token = torch.argmax(last_logits, dim=-1)
 
-                if logprobs:
+            next_token_val = int(next_token.reshape(-1)[0].item())
+
+            if logprobs:
+                with torch.no_grad():
                     lp = float(F.log_softmax(last_logits, dim=-1)[next_token_val].item())
-                    gen_logprobs.append(lp)
+                gen_logprobs.append(lp)
 
-                context.append(next_token_val)
-                generated.append(next_token_val)
+            context.append(next_token_val)
+            generated.append(next_token_val)
+
+            # Update running hard embedding sum with the decided token
+            if density_steering:
+                with torch.no_grad():
+                    hard_emb_sum = hard_emb_sum + emb_weight[next_token_val]
+                n_hard += 1
 
         out_tokens.append(generated)
         out_logprobs.append(gen_logprobs)

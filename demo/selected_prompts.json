@@ -1,0 +1,13 @@
+{
+  "Autumn leaves": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/a43329abcea93211fdf8dd467f722528.mid",
+  "Billy Joel -- Just The Way You Are": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/b4f0f9c5e897508c20a112115d53f8c3.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Ain't She Sweet?": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/18f55b1b6dd52fbd22c19776aca2e507.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  }
+}
