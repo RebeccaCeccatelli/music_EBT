@@ -12,6 +12,8 @@
 #SBATCH --partition=mit_normal_gpu
 #SBATCH --account=mit_amf_standard_gpu
 #SBATCH --qos=mit_amf_standard_gpu
+#SBATCH --requeue
+#SBATCH --signal=TERM@120
 #SBATCH --output=./logs/slurm_%j.out
 
 ### ADDITIONAL RUN INFO ###

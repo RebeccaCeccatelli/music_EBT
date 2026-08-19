@@ -10,9 +10,11 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --time=24:00:00
 #SBATCH --mem=80GB
-#SBATCH --partition=mit_normal_gpu
-#SBATCH --account=mit_amf_standard_gpu
-#SBATCH --qos=mit_amf_standard_gpu
+#SBATCH --partition=mit_preemptable
+#SBATCH --account=mit_general
+#SBATCH --qos=normal
+#SBATCH --requeue
+#SBATCH --signal=TERM@120
 #SBATCH --output=./logs/slurm_%j.out
 #SBATCH --array=0
 
