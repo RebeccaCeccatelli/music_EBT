@@ -32,12 +32,48 @@ def get_scratch_logs_dir():
     scratch_logs = os.path.join(home, "orcd/scratch/rebcecca/music_EBT_logs")
     return scratch_logs
 
+_WANDB_RUN_ID_FILENAME = "wandb_run_id.txt"
+
+
+def _find_wandb_run_id(resume_ckpt_path: str) -> str | None:
+    """Walk up from the checkpoint file to find a saved WandB run ID.
+    Returns None if not found (fresh run)."""
+    from pathlib import Path as _Path
+    ckpt = _Path(resume_ckpt_path)
+    for directory in [ckpt.parent, ckpt.parent.parent]:
+        candidate = directory / _WANDB_RUN_ID_FILENAME
+        if candidate.exists():
+            return candidate.read_text().strip() or None
+    return None
+
+
+@rank_zero_only
+def _save_wandb_run_id(run_id: str, ckpt_dir: str):
+    from pathlib import Path as _Path
+    out = _Path(ckpt_dir) / _WANDB_RUN_ID_FILENAME
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(run_id)
+
+
 @rank_zero_only # to ensure only one wandb run is created, if didnt do that then each GPU would create its own wandb run
-def setup_wandb(args, logs_dir):
+def setup_wandb(args, logs_dir, resume_run_id: str | None = None):
     import wandb
     if wandb.run is None:
-        run = wandb.init(dir=logs_dir, name=f'{args.run_name}', entity=f'{args.wandb_entity}', project=f'{args.wandb_project}', mode = "offline" if args.wandb_offline else "online") # this is solely used to force wandb to start tracking stdout in logs
+        init_kwargs = dict(
+            dir=logs_dir,
+            name=f'{args.run_name}',
+            entity=f'{args.wandb_entity}',
+            project=f'{args.wandb_project}',
+            mode="offline" if args.wandb_offline else "online",
+        )
+        if resume_run_id:
+            # Resume the existing run so all jobs appear as one continuous curve
+            init_kwargs['id']     = resume_run_id
+            init_kwargs['resume'] = 'allow'
+            print(f"Resuming WandB run {resume_run_id}")
+        run = wandb.init(**init_kwargs)
         wandb.define_metric("__init", hidden=True)
+        wandb.define_metric("*", step_metric="trainer/global_step")
         return run
     return None
 
@@ -61,8 +97,12 @@ def main(args):
 
     wandb_logger = None
     if not args.no_wandb: # put this early so can capture text logs later
+        # If resuming, reuse the same WandB run so all jobs form one continuous curve
+        resume_ckpt = args.resume_training_ckpt if args.resume_training_ckpt else None
+        resume_run_id = _find_wandb_run_id(resume_ckpt) if resume_ckpt else None
+
         run = None # need both lines since setup_wandb is a @rank_zero_only function
-        run = setup_wandb(args, logs_dir)
+        run = setup_wandb(args, logs_dir, resume_run_id=resume_run_id)
 
         wandb_logger = WandbLogger(save_dir=logs_dir, name=f'{args.run_name}', entity=f'{args.wandb_entity}', project=f'{args.wandb_project}', offline = args.wandb_offline, experiment=run)
         if args.wandb_tags != None:
@@ -190,6 +230,8 @@ def main(args):
     
     checkpoint_filename = "epoch={epoch}-step={step}-" + args.checkpoint_monitor_string + "={"+args.checkpoint_monitor_string+":.4f}"
     checkpoint_callback = ModelCheckpoint(monitor=args.checkpoint_monitor_string, mode = args.checkpoint_monitor_mode, save_top_k=args.save_top_k_ckpts, save_last = True, dirpath=os.path.join(logs_dir, "checkpoints", f"{args.run_name}_{dt_string}_"), filename=checkpoint_filename, verbose=True)
+    if wandb_logger is not None:
+        _save_wandb_run_id(wandb_logger.experiment.id, checkpoint_callback.dirpath)
     
     for name, param in model_trainer.model.named_parameters():
         if not param.requires_grad:

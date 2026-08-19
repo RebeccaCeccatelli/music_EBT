@@ -239,6 +239,11 @@ class ModelTrainer(L.LightningModule):
         if hasattr(self, 'lr_scheduler') and self.lr_scheduler is not None:
             if 'lr_scheduler_state' in checkpoint:
                 self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state'])
+        # PL runs a full validation pass before training starts on resume. For EBT this
+        # produces an unreliable (often way too low) loss because the fresh torch.randn
+        # MCMC initial noise and fresh dataloader state are unrepresentative of normal
+        # training. Flag it so on_validation_epoch_end blocks ModelCheckpoint from saving.
+        self._skip_first_val_checkpoint = True
 
     def create_hook(self, name): #this is only used for debugging with `debug_unused_parameters`
         def hook(grad):
@@ -327,6 +332,12 @@ class ModelTrainer(L.LightningModule):
         # Free fragmented GPU cache after validation so the first training step
         # doesn't OOM on resume (PL runs a full val pass before training begins).
         torch.cuda.empty_cache()
+        if getattr(self, '_skip_first_val_checkpoint', False):
+            self._skip_first_val_checkpoint = False
+            monitor = getattr(self.hparams, 'checkpoint_monitor_string', 'valid_loss')
+            if monitor in self.trainer.callback_metrics:
+                self.trainer.callback_metrics[monitor] = torch.tensor(float('inf'))
+            print("[Resume] First post-resume validation skipped for checkpointing (unreliable loss due to fresh random state).")
 
     def validation_step(self, batch, batch_idx):
         eval_step_dict = self.eval_step(batch, "valid")
