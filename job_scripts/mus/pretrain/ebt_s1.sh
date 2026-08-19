@@ -13,6 +13,7 @@
 #SBATCH --account=mit_amf_standard_gpu
 #SBATCH --qos=mit_amf_standard_gpu
 #SBATCH --requeue
+#SBATCH --signal=TERM@120
 #SBATCH --output=./logs/slurm_%j.out
 
 ### ADDITIONAL RUN INFO ###
@@ -180,22 +181,32 @@ _do_resubmit() {
     sbatch "${BASH_SOURCE[0]}" \
         --tokenizer_type "${TOKENIZER_TYPE}" \
         --dataset_name "${DATASET_NAME}" \
+        --model_size "${MODEL_SIZE}" \
+        --peak_learning_rate "${PEAK_LR}" \
         --batch_size_per_device "${BATCH_SIZE}" \
         --accumulate_grad_batches "${ACCUM_STEPS}" \
         --val_check_interval "${VAL_CHECK_INTERVAL}" \
         --limit_val_batches "${LIMIT_VAL_BATCHES}"
 }
 
+# Exit 0:   clean exit — either training finished or PL saved a checkpoint on SIGTERM.
+#           PL does NOT auto-requeue on this cluster, so we check the highest saved
+#           step to decide whether to resubmit.
+# Exit 143: SIGTERM reached bash before PL could handle it — resubmit unconditionally.
+# Anything else: crash (OOM, Python error, etc.) — do not resubmit.
 if [[ ${TRAIN_EXIT_CODE} -eq 0 ]]; then
     LAST_STEP=$(ls "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"*/epoch=*.ckpt 2>/dev/null \
         | grep -oE "step=step=[0-9]+" | grep -oE "[0-9]+$" | sort -n | tail -1)
     if [[ -n "${LAST_STEP}" && "${LAST_STEP}" -ge "${MAX_STEPS}" ]]; then
         echo "Training complete at step ${LAST_STEP}. Not resubmitting."
     else
-        echo "Clean exit but incomplete (last step: ${LAST_STEP:-none}). Resubmitting..."
+        echo "Clean exit but training incomplete (last step: ${LAST_STEP:-none}). Resubmitting..."
         _do_resubmit
     fi
+elif [[ ${TRAIN_EXIT_CODE} -eq 143 ]]; then
+    echo "Job killed by SIGTERM before PL could handle it. Resubmitting..."
+    _do_resubmit
 else
-    echo "Training failed (exit ${TRAIN_EXIT_CODE}). Not resubmitting."
+    echo "Training failed with exit code ${TRAIN_EXIT_CODE}. Not resubmitting."
     exit ${TRAIN_EXIT_CODE}
 fi
