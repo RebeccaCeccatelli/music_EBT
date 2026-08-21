@@ -162,4 +162,5 @@ logs
 data/mus/symbolic/datasets/**
 .env
 CLAUDE.md
+.gradio/
 .claude/

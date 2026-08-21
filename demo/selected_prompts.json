@@ -1,12 +1,1011 @@
 {
-  "Autumn leaves": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/a43329abcea93211fdf8dd467f722528.mid",
-  "Billy Joel -- Just The Way You Are": {
+  "Autumn Leaves": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/a43329abcea93211fdf8dd467f722528.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Billy Joel — Just The Way You Are": {
     "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/b4f0f9c5e897508c20a112115d53f8c3.mid",
     "start_token": 0,
     "duration_tokens": 256
   },
   "Ain't She Sweet?": {
     "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/18f55b1b6dd52fbd22c19776aca2e507.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Bleed It Out": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/000f11ebf4445a710070640060b7302c.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "High Hopes": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0093107fe3034ebdc76216823f1f5bd7.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Young Love": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/009448c7395c12e5f178f56d1596cf7c.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Give Me All Night": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/009e4d0b56ba12c4e5c49d2c874e6500.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "I love you": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/00dd2ccd7a941ad0a3201b7b3e37ef5f.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Don't Speak * No Doubt": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/00e42e43757a24ea9476fb556005b340.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Level 1: The Mountians (For Sale)": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0115a10c46e9db9d37e880c2886d4131.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Organized Chaos": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/01210c5ee821b1f001566b148a907d29.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Into Wily's Fortress": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/012fd8488b68013e9c643efd187437dd.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Bird and Mate": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0148c9c216484115f87daac532ef57db.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "jazz minor blues": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/015d3f1c728475473656f571b964a0b7.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "MASK THEME SONG": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0190556b19c63a4d6797449b75c95087.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Dominick The (Italian Christmas) Donkey": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/01b2c0259acaf7e36c35b14b311204bf.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Lost In Your Eyes": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/020ba0f1df06f06acfe222d1be963fe7.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "My Song": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/020c49090433c6dd4f8143f7ad4776ff.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Rocky Raccoon": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/023d5af39deebd28c36d06aee59d558e.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Supper Time": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0250273845fc849313679199284ed210.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Yellow River": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0282fd1165a93c38b01376ba4a13e212.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "We Will Meet Again": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0288cd4f950c96e9afd65d0c0ff43980.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "We Can Work It Out": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/07cf00022226dd6bcd3af08b1aa4ecbc.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Don't Give Up": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/02bb5cbb132f7d3d8a7dc06808f5261d.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "DOLCI SPERANZE (G. Buonandi)": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/02c8cba5841c3a086ab728c2a858cd9a.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "When_I_Take_My_Sugar_to_Tea_-_Frank_Sinatra": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/031482f2a06680c2d2b95aa68450a31a.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Dragon Force: \" Leon's Theme \"  by Matze  www.mdstudio.de  SC-8850 version": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/032c8475fd06e25234d2eb755621af86.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Buyo": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0346375e3e54a8d9b865cf8fb5ee9bd4.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Eit Auga Til Mimir": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/034ad2042963e45cf83f141825307ce9.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Isn't She Lovely": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/034fd58845bb353794134bad293c343f.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "I Was Almost Persuaded": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/035d4a2b122cd6703b3c963a977255fb.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Archive": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0362e0236896558e0e23ee09c6fed401.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "working title": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0364ef48838f33dbff5df323a9454ca9.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "My Favorite Mistake     by Sheryl Crow": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/03aa56e553010c5bcb0bae83adf36b71.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Old Bachelor": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/03cc059d4ecd1e541c66a6314ca5952b.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Axel Foley Theme": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/03de0ec82c000a7a6a4e0f08b5c47baa.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Go The Distance": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/03e92bcc7d0e8c0226a29855a279df48.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "DD.Come Undone": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/03f5acbfd6dc60e9da060aec116625d8.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Seq. por Wilian Osaku": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/047b675a773ada9918c65812199a81c6.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Ode to Deodorant": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/04b015d2ddaff938cd68eb17a3911041.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Get Big Item": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/04b12459e1a72889d1affe4e70557347.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "All I Really Want * Alanis Morrisette": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0500116dd872cf012cd2fdd0f65d4d5f.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Chelsea Hotel no.2": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/05177a822ce7f5ed985f5457d38fdcaf.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "\"Dragnet\"": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/051ff7e54b290cf255c9799342bec840.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Counterpoint/Pie Jesu": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/05229a5345e28cbc7dedba93f3169459.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "CHARRIOTS OF FIRE": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/054c3614375e2140c37a014b43eeb610.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "DRUMMIX": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/05605d10f26b856bd2c07b815c136f5a.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "\"Going After The Horizon\"  (Polish title: \"Goni¹c horyzont\")": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/056e4fe64822685cc68b33b70153d415.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Enter Sandman": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/05ad23fb33793f7eb3213f3453d0a37f.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Wind Beneath My Wings": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/05b38986de0f2946ddeb445580564b8b.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "At the End of the Rainbow": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/05d65eb00a95a8ea6d28d8a4b6329276.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "This Wonderful Day": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/05fee4e36642287aab3f1144e67a6185.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "LA TACTIQUE DU GENDARME": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0633169c2084ce3969a7dfadd3738e34.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Marines' Hymn": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/06660b4818417840a936925f95d59ee2.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Cari's Castle (Outside The Castle Walls)": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/06953bf79686607edc88b76864a79293.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "VooDoo": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/069fc2fd1aac2475e27e775772a89b08.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "First Love.": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/06b994e32ddd012af300360b35d2a516.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "For He's A Jolly Good Fellow": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/06c0963cd9e0c6decb8f897e2eb65e93.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Notte rosa": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/070b947e7a3dfb533fd21e9d30c9c729.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Final Fantasy 5 Battle Theme": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0726c7e7e4d9922d71a35d658bef9947.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "drums": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/07364a95c95cf57db28e58a3d45d07fe.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Baby Grand - B Joel": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0740cc15b3a52fc12ea3407f0be4aa9c.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "I Can't Quit You Baby from Coda": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/07613579b24bbe29475a1017256eb2ac.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Creep": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0776cca3b14bf3470ee00694840f1b5d.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "I Wanna Be Your Man": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/07c1e10260715a9b24c08a2113abc59f.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Dead Alone": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/07f253cec84026daa0bad08445397b72.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Paladin's Quest - Boss Battle": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0842a8f1e36b41af71e06f9fcbe0a58b.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Song of Never-Ending Strorms": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/088cdd12977ac11d2a05ec3f4644552a.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "All I Have To Offer You Is Me - Charley Pride": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/088ecb9f22110729f43e1a71aeeb3648.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Happy Together": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/08b6c99b672fc1c456d58c0511918267.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "MAKE IT HAPPEN": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/08dbbca3b6c616db651740c3d4f7e80e.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Texture": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/08f3144eda8bcbbca1eff2854d436186.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Good Bye Linda Love": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0913c55f49a0a05fee38978e78260f91.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "COWGIRL DE VILLE": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/092188dbf933f83608dd8a29b080a541.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Grave of Little Nell": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/096100af9e13823983552ce313430b47.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Frightened City": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/09b1d6b7b601b0aba62653d67dc929f8.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Piaaano": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/09ba88cd91e99edff7db9ecff4ffc3e0.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Feliz Navidad": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/09bdb3b39c5d7f89dc2b700d625cb8ea.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Introduction Mario Golf 64": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/09e1787e52c98043e25d28f5d72da2d0.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "A. Cordy: LA BONNE DU CURÉ": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0a0fd09e0e52a87c7ab672dd31393109.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Rosebush": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0a9925059ce2fe077e932e7566fbdfbb.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "La Vie En Rose": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0b462090627dba7d2147af86cba5fab1.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "O Tannenbaum": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0b5dc463f5519a43dc73947cfbbc6a8a.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Healing Hands-Elton John-(1989) tracks set": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0b969ad1c766a7507a18370f093a7b2f.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Sonic 3D Blast - Gene Gadget Zone 1": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0ba3ac9bc9aee04cb2f84101ade1750e.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Write to Me Over the Water": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0bdbeb8057663ecf7e7f0064ee4077ff.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The brisk young sailor": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0bec5a24f124334ad3a3678d5d2bc267.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Artful Dodger ft. Craig David - Rewind": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0c07d562e7e91ec9f60448884b98de58.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Conduct": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0c1581f8993a8ac4777f8ed30730b37e.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "I Disappear": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0c2cb78a630f6dc2e4f4ab2bb7c151af.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Too Thin; or, Darwin's Little Joke": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0c5eb056f0bdc604977cd420f9d3e6b8.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "other bike draft 1": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0c7d7942d9adeab76376b58d01e22370.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Blue Eyes Crying In The Rain": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0c87cac66adfbf7e514fe8d1021ba7f9.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Sunshine day - vers. Gustavo Pavan (1998)": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0c959678e5baa350db776641c25cd85d.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Toads Of The Short Forest": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0c9b71795dc801bc5ab17c21c7669270.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Bamboo Boogaloo": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0c9ba234ca4ad909768b06aa5c324162.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "\"Peter Gunn\"  (theme)": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0ceb33e0bf4c9d3cd627cda7de59bd60.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Love My Way": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0d9c9dcd828f1b2a19588661ce4e3480.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Mega Man 9 - \"Concrete Jungle\" Concrete Man's Stage (XG) - Sequenced by Teck": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0ddb772e900746e4987fe3c9150a6263.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "didi": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0def06a3dcb579d656de41578b7d9b35.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Come Softly To Me": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0df41de78e2bdb2a407a86d31e8d6a06.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "How Am I Supposed To Live Without You": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0e11f28e722f3b7a8299bb9a9ba41ee8.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Blowin' Smoke * Walthius": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0e1a6e3b80c42579cc2c325fed6b66a9.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Final Countdown": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0e453624bea65285a5b6a1870864c0f3.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Go west": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0e4ab3cd3c63f768e96eda0a99c3120b.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "JAZZ FAST STYLE DEMO SONG": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0e4ac881df6f2c4d50c09a43ce51aef1.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Good Words": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0ef51424668e60d84ed0e4aaf58d5e10.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "How I Could Just Kill A Man": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0f1d4e1ef12840e84bc113103bd4f8f9.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "I Just Fall In Love Again": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0f4f786919935e48fde29b0618ef931e.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Rien qu'un homme. Alain Barrière": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0f6c91d268117ff089ea27014c5b6c84.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Te extraño,te olvido y te amo de nuevo/ Ricky Martin by samuelluis": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0fc7d28e941592d810efc61ae8c0691a.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Time Is Black - Arch Enemy": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0fca240fc92be50d8eae74ed546c4311.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Devil's Dance": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0feb967f2289c337b3d4fff106492402.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Operator (That's Not The Way It Feels), Words and Music by Jim Croce": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/0ff8edf4834aaee20ed0f32a2e52a1b1.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Hollaback, you woman": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1017fb9f1758868cc3dc169125dadbeb.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "I'll Sail My Ship Alone": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/10244eaa6cb5386714366f935af2a882.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Beautiful Flowers of May": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/103033f49055ec35d8204a4d1199460a.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Barbarian": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/10870bc165fcdf299e492053dee8388a.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Lucky Man": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/10ae79bfa1b1f66dcff6211782376967.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Hail To The King": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/110f6f7d3ae1668d1c033663542c167d.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Heart Of My Heart .....GlowCanPick": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/114da5265fd5c338c41665dbce51a167.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Here Comes The Sun": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1c0fb586056036ab9bc4acbbd25d2f8b.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Mario Golf: Advance Tour - Tournoi Marion": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/117cfa50f5569f39dacd961e4785c154.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Only You (Sequenced By F.DiGiovannangelo)": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/119e9d3b053e67603e420f0351daeb85.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "BLUE WATER BLUE SKY": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/11a27f7124bac564c28ab3e15607560c.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "daniel": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/11bea17cb31735fda5baf0e5bd99dd1e.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Elemental Master - Introduction": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/120726a53a55d9a1ea75e05c8c4a3cde.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Fairest Lily There": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/121c3c79536e8f8404c81e7adcfccabe.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "I'm free by Rolling Stones": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/123f9c23a99f047601667663ab085827.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Dishonored Drumline": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/12807451c01c77aa886db4d9376fbc57.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "A Million Smiles": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1289eac207201ba6760eb9e5eeed4d69.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "LOST IN THE MIST": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/128dddd3b47f320a8447f80747576647.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Rising Sun": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/12b2bf6569c074188049c8885bb9b964.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "RockMan & Forte": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/12c53229c6aae3335b5465b7bbece8bb.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Feed Jake ,.,.,GlowCanPick": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/12c82db25bab1ae005ab4c967e6a09a4.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "red_rubber_ball": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/12d6a69110c50ef4320f2d61ead1e021.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Little Mac! Little Mac! You're the Very Man": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/12ddc1a28f24d45e19b18d9cc9e41776.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Pack Up Your Troubles in Your Old Kit-Bag and Smile, Smile, Smile": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/131217ab919a8e1727133f2c089f2acc.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "When De Boss Am Gome Away": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/131d23bb64dd2d7c75e560522a4c2e73.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "pump it up": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1381c41c0d046dc0682ad3121f911785.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Oh, Betapa Indahnya - Ev. Ben Soriton - arr. by Eddie Husnan": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/13c036683d38b4d524503e76c7da4cf0.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "(You're My) Soul and Inspiration": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/13c6ad13ecbe5b4b4f586123b3a8b792.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "El Bajon": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/13d8b55006715547a74da5850e54af91.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "From A Distance": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/13dcaefc1bbbace624c3b3ec62007daa.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "That Sunday, That Summer, Words and Music by Joe Sherman and": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/140610b4ac66fb2c946f4a6497ce4f65.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Honeysuckle Rose": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/144bdc39807635ff0fec084692d3fb0f.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Falling In Love With Love": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/144eae726312745c22aa1665667ff422.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Legend of Zelda: The Minish Cap - Minish Village": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/146e8226c0556210c162bbc342cbb33b.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Jaded": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1496d9088b0af8be2ec023f2bc123494.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Seek and Ye Shall Find": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/14ac9ea76466ab18bd528122d53dff12.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "FLIP FLOP FLY": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/14ae136694dcdb5758e392134f96af91.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Pokemon HGSS - Game Corner": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/14f52fb4440b24076aa1005379b073df.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "LOVE THE WORLD AWAY     \t     KEY:G       \t        K. RODGERS": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1526abce72208a2da9df8ceb97f167c4.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "mr_custer": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/15f04192ebec2884574ad2950ca31d44.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Days Of Sand And Shovels": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1616f66e3a78b439a1b8847b8342d9da.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Songs from the Wood": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1650602125ddca7fed5622774de02eaf.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "You Really Got Me": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/16a5182500cee602e1a68d9c1984ff39.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Mario Kart 64: Toad's Turnpike": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/16a592c68fd5d98d6d3bd3e57a249cdc.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Tsutsumikomu Youni": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/16ac8edbbd78c4fc2fbe9258be3a35bd.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Hey You  Pink Floyd": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/16b77870a3441c92ad40e90514fc9020.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Always, Words and Music by Irving Berlin, 1925": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/16d7a51b01093dac6ec5fae88ff544aa.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Pull the Bobbin, the Latch Will Fly Up": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/16dc08b1ea989a5526b8e3e5bd71c7ad.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Vocals": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/17470105bc8b47c316759e4093d6c38b.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "One Stop": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/17b25dd3f251529dcde8fe4c2381cb48.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Beautiful River": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/183c83a8f38006b8ce5d47ce1bf2d904.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "POR DEBAJO DE LA MESA": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/185a52cce6abe39f48e779bb1fdc2f41.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Mulher Brasileira": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1862dc6827d3c38c941e42806b4f9c44.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "ersf": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/187a57fffb3b701a8f040b1960a7289e.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "=== I'll Be Back ===": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1887932e3170a8c9e15da120f7f0f01d.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "tea in the sahara": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/18d74eabbf582bb0fa45fe098947a373.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Angel * Aerosmith": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/18e1b618fc6189bbdd717926398b6288.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Brack Eyed Susianna": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/18f9e1c70185b390ea49af5d14415382.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Send Doun": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/190aeb2ffdb7dc24dfdf0fa03568313e.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Oh Lonesome Me": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/193f6da78a623ece7593aa129c501a4f.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Kogoeru Yoru ni Saita Hana": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1941e73929b66294e173fd7c3327d596.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "She bang's": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/19509d3353af84455e3d6710e0430aff.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "CATCH A FALLING STAR": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/196faa9240247b411383f2a89cc17ac5.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Title Card 2": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/19819aa6770cb1657fc0bf91c9e39c01.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Seeds of dream": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/19c5893dc3fc91e66ee37b82b1287494.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "'You Are My Special Angel'": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/19dda6ea8a269e9647c5defd31330907.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Dolores": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/20e2d90d62b0b5f07f15b26f63487767.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Mother ending": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/19fe8b84a673b53c67d01469b9cdbd93.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Soft karaoke": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1a0fe2d92c78144a4ce16d3530f0849d.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Bad Medicine": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1a514de52a5b41fb5d081149f1181361.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Ya Snova Vizhu Tebia": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1a54fa4beae32578ce980b0b51a066e4.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "fnjdn": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1a6c8131c6cdbf0133679dd52c79442f.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Follow Up the Plow": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1a6d890ea8a1628b1b98ac306308134b.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Mission Impossible": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1a7b2b140bd5a0859542462421769897.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Asereje": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1a91f63c1cd95aae3a3d8f49883b579e.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Oh Lonesome Me (The mavericks)": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1a9fbe9499ea202c703320c092085411.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "DM.Personal Jesus": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1ae67ccec4cb6495c82e516dbad5d773.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Up To The Mountain (MLK Song)": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1af8e1ac0eef4de912817e1f0401507c.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "The Rise Of Sodom And Gomorrah": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1b5f789d3c91d5f042b3cb25570a1cbc.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Mambo Swing": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1bae26ac17215c62a04a4dc93cdee09d.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Better Than I Used To Be": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1bd0a7f277691a9425eccb04002c56df.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "I've Dreamed Of You": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1c2b78f5c63e17ab149263f614b0827e.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Danse Macabre": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1c31fc6bf6e88c581fee619d7c075a33.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Como es posible que a mi lado": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1c6a269171b0409d99907f76a7452bd3.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Chapel Of Love": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1c7e26b2c7d6062684968a7da4a0e11e.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Lembra de mim - Ivan Lins": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1c91c00fd3beb19d8d71b8b6cb9da1e0.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Heartaches, Words by John Klenner, Music by Al Hoffman, Recorded by Patsy Cline": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1cb0f8b8c4d45f7c1361a27f3badc167.mid",
+    "start_token": 0,
+    "duration_tokens": 256
+  },
+  "Chicago-Song For You": {
+    "path": "/home/rebcecca/orcd/pool/music_datasets/giga-midi/midi/validation/1cf05b5a83b7146c190564d5b5391bf6.mid",
     "start_token": 0,
     "duration_tokens": 256
   }
