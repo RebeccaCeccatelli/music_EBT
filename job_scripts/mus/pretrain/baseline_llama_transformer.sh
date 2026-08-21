@@ -126,7 +126,7 @@ SIGTERM_RECEIVED=0
 _handle_sigterm() {
     SIGTERM_RECEIVED=1
     echo "[$(date -Iseconds)] SIGTERM received — forwarding to Python (PID ${PYTHON_PID})..."
-    [[ ${PYTHON_PID} -ne 0 ]] && kill -TERM "${PYTHON_PID}" 2>/dev/null
+    [[ ${PYTHON_PID} -ne 0 ]] && kill -USR1 "${PYTHON_PID}" 2>/dev/null
 }
 trap '_handle_sigterm' TERM
 

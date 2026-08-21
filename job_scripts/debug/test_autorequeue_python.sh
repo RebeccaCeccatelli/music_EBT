@@ -1,13 +1,14 @@
 #!/bin/bash
-### End-to-end test: bash SIGTERM trap + Python SIGTERM handler + resubmit.
+### End-to-end test: bash SIGTERM trap → forwards as SIGUSR1 to Python → PL-style requeue.
 ###
 ### Simulates exactly what the real training scripts do:
 ###   bash wraps Python; --signal=TERM@60 fires SIGTERM 60s before wall time;
-###   Python catches it (like PL), saves checkpoint, exits 0;
-###   bash runs _do_resubmit.
+###   bash catches SIGTERM and forwards it as SIGUSR1 to Python (PL bypasses SIGTERM
+###   in SLURM auto-requeue mode; USR1 triggers its checkpoint-and-requeue handler);
+###   Python saves checkpoint and exits 0; bash resubmits.
 ###
 ### Expected flow:
-###   Job 1: ~15 steps (8s each = 2 min), SIGTERM at ~2 min → resubmit
+###   Job 1: ~15 steps (8s each = 2 min), SIGTERM at ~2 min → USR1 → checkpoint → resubmit
 ###   Job 2: resumes from step 15, completes to step 25
 ###
 ### Submit:
@@ -47,7 +48,7 @@ export PYTHONUNBUFFERED=1
 cd "${PROJECT_ROOT}" || exit 1
 
 MAX_STEPS=25
-CKPT_FILE="/tmp/test_pl_sigterm_ckpt_${USER}.txt"
+CKPT_FILE="${HOME}/orcd/scratch/rebcecca/music_EBT_logs/test_pl_sigterm_ckpt.txt"
 
 echo "=========================================="
 echo "test_autorequeue_python — job ${SLURM_JOB_ID}"
@@ -67,8 +68,9 @@ SIGTERM_RECEIVED=0
 
 _handle_sigterm() {
     SIGTERM_RECEIVED=1
-    echo "[bash] $(date -Iseconds) SIGTERM received — forwarding to Python (PID ${PYTHON_PID})..."
-    [[ ${PYTHON_PID} -ne 0 ]] && kill -TERM "${PYTHON_PID}" 2>/dev/null
+    echo "[bash] $(date -Iseconds) SIGTERM received — forwarding as SIGUSR1 to Python (PID ${PYTHON_PID})..."
+    # PL bypasses SIGTERM in SLURM auto-requeue mode; USR1 triggers its checkpoint-and-requeue handler.
+    [[ ${PYTHON_PID} -ne 0 ]] && kill -USR1 "${PYTHON_PID}" 2>/dev/null
 }
 trap '_handle_sigterm' TERM
 
