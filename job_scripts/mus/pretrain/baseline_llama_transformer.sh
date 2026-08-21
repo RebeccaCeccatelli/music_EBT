@@ -9,9 +9,9 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --time=24:00:00
 #SBATCH --mem=80GB
-#SBATCH --partition=mit_normal_gpu
-#SBATCH --account=mit_amf_standard_gpu
-#SBATCH --qos=mit_amf_standard_gpu
+#SBATCH --partition=mit_preemptable
+#SBATCH --account=mit_general
+#SBATCH --qos=normal
 #SBATCH --requeue
 #SBATCH --signal=TERM@120
 #SBATCH --output=./logs/slurm_%j.out
@@ -121,6 +121,15 @@ if [[ -z "${RESUME_CKPT}" ]]; then
     fi
 fi
 
+PYTHON_PID=0
+SIGTERM_RECEIVED=0
+_handle_sigterm() {
+    SIGTERM_RECEIVED=1
+    echo "[$(date -Iseconds)] SIGTERM received — forwarding to Python (PID ${PYTHON_PID})..."
+    [[ ${PYTHON_PID} -ne 0 ]] && kill -TERM "${PYTHON_PID}" 2>/dev/null
+}
+trap '_handle_sigterm' TERM
+
 python train_model.py \
 --run_name "${FULL_RUN_NAME}" \
 --modality "MUS_SYMB" \
@@ -154,8 +163,14 @@ python train_model.py \
 --wandb_watch \
 --val_check_interval "${VAL_CHECK_INTERVAL}" \
 ${RESUME_CKPT:+--resume_training_ckpt "${RESUME_CKPT}"} \
-${SLURM_ARRAY_TASK_ID:+--is_slurm_run}
+${SLURM_ARRAY_TASK_ID:+--is_slurm_run} &
+PYTHON_PID=$!
+wait "${PYTHON_PID}"
 TRAIN_EXIT_CODE=$?
+if [[ ${SIGTERM_RECEIVED} -eq 1 ]]; then
+    wait "${PYTHON_PID}" 2>/dev/null
+    TRAIN_EXIT_CODE=$?
+fi
 
 # Exit 0:   clean exit — either training finished or PL saved a checkpoint on SIGTERM.
 #           PL does NOT auto-requeue on this cluster, so we check the highest saved
