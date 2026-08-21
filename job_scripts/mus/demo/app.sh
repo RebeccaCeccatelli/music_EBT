@@ -12,9 +12,9 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --time=24:00:00
 #SBATCH --mem=40GB
-#SBATCH --partition=mit_normal_gpu
-#SBATCH --account=mit_amf_standard_gpu
-#SBATCH --qos=mit_amf_standard_gpu
+#SBATCH --partition=mit_preemptable
+#SBATCH --account=mit_general
+#SBATCH --qos=normal
 #SBATCH --output=./logs/slurm_demo_%j.out
 #SBATCH --job-name=ebt-demo
 

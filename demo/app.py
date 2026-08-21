@@ -24,6 +24,7 @@ from pathlib import Path
 from argparse import Namespace
 
 import torch
+import gradio as gr
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -32,6 +33,32 @@ SCRATCH_DIR = Path.home() / "orcd/scratch/rebcecca/music_EBT_logs"
 PROMPTS_FILE = ROOT / "demo/selected_prompts.json"
 WANDB_PROJECT = "music_inference_ebt"
 WANDB_ENTITY  = "rceccatelli-eth-z-rich"
+
+RANDOM_SONG_LABEL = "🎲 Random song"
+
+# ── Song list ─────────────────────────────────────────────────────────────────
+
+def _load_song_choices() -> list[str]:
+    """Return [RANDOM_SONG_LABEL] + sorted song titles from selected_prompts.json."""
+    try:
+        with open(PROMPTS_FILE) as f:
+            songs = json.load(f)
+        return [RANDOM_SONG_LABEL] + sorted(songs.keys())
+    except Exception:
+        return [RANDOM_SONG_LABEL]
+
+
+def _tokens_for_song(song_title: str, prompts: dict) -> list[int]:
+    """Load token ids for a named song from its pre-tokenized JSON file."""
+    entry = prompts[song_title]
+    midi_path = entry["path"] if isinstance(entry, dict) else entry
+    start_token = entry.get("start_token", 0) if isinstance(entry, dict) else 0
+    token_path = midi_path.replace("/midi/", "/tokens/miditok/").replace(".mid", ".json")
+    with open(token_path) as f:
+        return json.load(f)["ids"][start_token:]
+
+
+_SONG_CHOICES = _load_song_choices()
 
 # ── Model registry ────────────────────────────────────────────────────────────
 
@@ -196,7 +223,8 @@ def _get_preview_dataset_and_tokenizer(model_label: str, ckpt_path: str | None):
 PROMPT_LENGTH = 256  # tokens; ~30–60 s of REMI music
 
 
-def preview_prompt(model_label: str, ckpt_display: str, ckpt_paths_json: str, seed: int):
+def preview_prompt(model_label: str, ckpt_display: str, ckpt_paths_json: str,
+                   song_choice: str):
     """Convert a dataset sample to WAV without running the model."""
     try:
         ckpt_path = None
@@ -206,16 +234,29 @@ def preview_prompt(model_label: str, ckpt_display: str, ckpt_paths_json: str, se
             except Exception:
                 pass
 
-        dataset, tokenizer = _get_preview_dataset_and_tokenizer(model_label, ckpt_path)
-
-        rng = random.Random(int(seed))
-        sample_idx = rng.randint(0, len(dataset) - 1)
-        sample = dataset[sample_idx]
-
-        if hasattr(dataset, 'get_full_tokens'):
-            tokens = dataset.get_full_tokens(sample_idx)[:PROMPT_LENGTH]
+        if song_choice and song_choice != RANDOM_SONG_LABEL:
+            with open(PROMPTS_FILE) as f:
+                prompts = json.load(f)
+            all_tokens = _tokens_for_song(song_choice, prompts)
+            tokens = all_tokens[:PROMPT_LENGTH]
+            from data.mus.symbolic.tokenization.tokenizer_utils import load_tokenizer
+            info = _MODELS[model_label]
+            tokenizer, _, _ = load_tokenizer(
+                tokenizer_type=info["tokenizer_type"],
+                tokenizer_config_path=(
+                    "/home/rebcecca/orcd/pool/music_datasets/giga-midi/tokens/miditok/tokenizer.json"
+                ),
+                dataset_name="giga_midi",
+            )
+            label = f"Previewing: {song_choice}"
         else:
-            tokens = [int(t) for t in sample['input_ids'][:PROMPT_LENGTH]]
+            dataset, tokenizer = _get_preview_dataset_and_tokenizer(model_label, ckpt_path)
+            sample_idx = random.randint(0, len(dataset) - 1)
+            if hasattr(dataset, 'get_full_tokens'):
+                tokens = dataset.get_full_tokens(sample_idx)[:PROMPT_LENGTH]
+            else:
+                tokens = [int(t) for t in dataset[sample_idx]['input_ids'][:PROMPT_LENGTH]]
+            label = f"Previewing random validation sample {sample_idx}"
 
         from inference.mus.tokens_to_midi import tokens_to_midi
         from demo.convert_midi_simple import simple_synth
@@ -229,7 +270,7 @@ def preview_prompt(model_label: str, ckpt_display: str, ckpt_paths_json: str, se
         simple_synth(str(midi_path), str(wav_path))
 
         if wav_path.exists():
-            return str(wav_path), f"Previewing validation sample {sample_idx} (seed {seed})"
+            return str(wav_path), label
         return None, "⚠️ WAV synthesis failed (MIDI converted but synth produced no output)."
     except Exception as e:
         return None, f"❌ Preview failed:\n{e}\n{traceback.format_exc()}"
@@ -244,29 +285,48 @@ def generate(
     temperature: float,
     top_p: float,
     generation_length: int,
-    seed: int,
+    song_choice: str,
 ):
+    _loading = lambda lbl: gr.update(value=None, label=f"⏳ {lbl}")
+    _done    = lambda lbl, v: gr.update(value=v, label=lbl)
+
+    # Clear outputs immediately so stale audio doesn't linger
+    yield (
+        _loading("Prompt (input)"),
+        _loading("Generated continuation"),
+        _loading("Prompt + generated"),
+        _loading("Prompt + original continuation (ground truth)"),
+        "Starting…",
+    )
+
     if not ckpt_display or not ckpt_paths_json:
-        return None, None, None, None, "❌ Select a model and checkpoint first."
+        yield None, None, None, None, "❌ Select a model and checkpoint first."
+        return
 
     try:
         ckpt_paths = json.loads(ckpt_paths_json)
     except Exception:
-        return None, None, None, None, "❌ Checkpoint state corrupted — click Refresh."
+        yield None, None, None, None, "❌ Checkpoint state corrupted — click Refresh."
+        return
 
     ckpt_path = ckpt_paths.get(ckpt_display)
     if not ckpt_path:
-        return None, None, None, None, f"❌ Could not resolve checkpoint path for: {ckpt_display}"
+        yield None, None, None, None, f"❌ Could not resolve checkpoint path for: {ckpt_display}"
+        return
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     status_lines = [f"Device: {device} | Checkpoint: {Path(ckpt_path).parent.name}"]
 
     try:
-        status_lines.append("Loading model…")
+        cached = ckpt_path in _model_cache
+        yield None, None, None, None, "\n".join(status_lines + [
+            "⏳ Loading model (cached)…" if cached else "⏳ Loading model (first load — may take ~30s)…"
+        ])
         model, hparams, tokenizer = _load(model_label, ckpt_path, device)
-        status_lines[-1] = "✅ Model loaded (cached)" if ckpt_path in _model_cache else "✅ Model loaded"
+        status_lines.append("✅ Model loaded (cached)" if cached else "✅ Model loaded")
     except Exception as e:
-        return None, None, None, None, f"❌ Model load failed:\n{e}\n{traceback.format_exc()}"
+        yield None, None, None, None, f"❌ Model load failed:\n{e}\n{traceback.format_exc()}"
+        return
 
     # Generation hyperparams
     hparams.infer_temp      = temperature
@@ -276,18 +336,28 @@ def generate(
     hparams.infer_echo      = False
 
     try:
-        dataset = _get_dataset(hparams)
-        rng = random.Random(seed)
-        sample_idx = rng.randint(0, len(dataset) - 1)
-        sample = dataset[sample_idx]
-        prompt_tokens = sample['input_ids'][:PROMPT_LENGTH].unsqueeze(0).to(device)
-        gt_tokens = [int(t) for t in sample['input_ids'][PROMPT_LENGTH:PROMPT_LENGTH + generation_length]]
-        status_lines.append(f"Prompt: validation sample {sample_idx} (seed {seed})")
+        if song_choice and song_choice != RANDOM_SONG_LABEL:
+            with open(PROMPTS_FILE) as f:
+                prompts = json.load(f)
+            full_tokens = _tokens_for_song(song_choice, prompts)
+            status_lines.append(f"Prompt: {song_choice}")
+        else:
+            dataset = _get_dataset(hparams)
+            sample_idx = random.randint(0, len(dataset) - 1)
+            if hasattr(dataset, 'get_full_tokens'):
+                full_tokens = dataset.get_full_tokens(sample_idx)
+            else:
+                full_tokens = dataset[sample_idx]['input_ids'].tolist()
+            status_lines.append(f"Prompt: random validation sample {sample_idx}")
+        prompt_tokens = torch.tensor(full_tokens[:PROMPT_LENGTH], dtype=torch.long).unsqueeze(0).to(device)
+        gt_tokens = full_tokens[PROMPT_LENGTH:PROMPT_LENGTH + generation_length]
     except Exception as e:
-        return None, None, None, None, f"❌ Dataset error:\n{e}\n{traceback.format_exc()}"
+        yield None, None, None, None, f"❌ Dataset error:\n{e}\n{traceback.format_exc()}"
+        return
 
     try:
-        status_lines.append("Generating…")
+        status_lines.append("⏳ Generating tokens…")
+        yield None, None, None, None, "\n".join(status_lines)
         model_name = _MODELS[model_label]["model_name"]
         batch = {'input_ids': prompt_tokens}
 
@@ -304,15 +374,18 @@ def generate(
 
         generated_tokens = outputs['generation_tokens'][0]
         status_lines[-1] = f"✅ Generated {len(generated_tokens)} tokens"
+        status_lines.append("⏳ Converting to audio…")
+        yield None, None, None, None, "\n".join(status_lines)
     except Exception as e:
-        return None, None, None, None, f"❌ Generation failed:\n{e}\n{traceback.format_exc()}"
+        yield None, None, None, None, f"❌ Generation failed:\n{e}\n{traceback.format_exc()}"
+        return
 
     try:
         from inference.mus.tokens_to_midi import tokens_to_midi
         from demo.convert_midi_simple import simple_synth
 
         out_dir = Path(tempfile.mkdtemp(prefix="ebt_demo_"))
-        prompt_list      = [int(t) for t in prompt_tokens[0].cpu()]
+        prompt_list      = full_tokens[:PROMPT_LENGTH]
         gen_list         = [int(t) for t in generated_tokens]
         combined_list    = prompt_list + gen_list
         gt_combined_list = prompt_list + gt_tokens
@@ -335,7 +408,8 @@ def generate(
                 status_lines.append(f"⚠️ {name} conversion failed: {e}")
                 wav_paths[name] = None
     except Exception as e:
-        return None, None, None, None, f"❌ MIDI/WAV conversion failed:\n{e}\n{traceback.format_exc()}"
+        yield None, None, None, None, f"❌ MIDI/WAV conversion failed:\n{e}\n{traceback.format_exc()}"
+        return
 
     try:
         import wandb
@@ -344,29 +418,31 @@ def generate(
         for name, path in wav_paths.items():
             if path:
                 wandb.log({f"audio/{name}": wandb.Audio(path, sample_rate=44100)})
-        wandb.log({
+        log_meta = {
             "model": model_label, "checkpoint": ckpt_display,
             "temperature": temperature, "top_p": top_p,
-            "generation_length": generation_length, "seed": seed,
-            "sample_idx": sample_idx,
-        })
+            "generation_length": generation_length,
+        }
+        if song_choice and song_choice != RANDOM_SONG_LABEL:
+            log_meta["song"] = song_choice
+        else:
+            log_meta["sample_idx"] = sample_idx
+        wandb.log(log_meta)
         wandb.finish()
         status_lines.append("✅ Logged to WandB")
     except Exception as e:
         status_lines.append(f"⚠️ WandB logging failed: {e}")
 
-    return (
-        wav_paths.get("prompt"),
-        wav_paths.get("generated"),
-        wav_paths.get("combined"),
-        wav_paths.get("gt_combined"),
+    yield (
+        _done("Prompt (input)",                                 wav_paths.get("prompt")),
+        _done("Generated continuation",                         wav_paths.get("generated")),
+        _done("Prompt + generated",                             wav_paths.get("combined")),
+        _done("Prompt + original continuation (ground truth)",  wav_paths.get("gt_combined")),
         "\n".join(status_lines),
     )
 
 
 # ── UI ────────────────────────────────────────────────────────────────────────
-
-import gradio as gr
 
 def build_ui():
     with gr.Blocks(title="EBT Music Demo") as demo:
@@ -393,16 +469,16 @@ def build_ui():
                     refresh_btn = gr.Button("↻", scale=1, size="sm")
 
                 gr.Markdown("### Generation")
+                song_dd = gr.Dropdown(
+                    choices=_SONG_CHOICES,
+                    value=_SONG_CHOICES[1] if len(_SONG_CHOICES) > 1 else RANDOM_SONG_LABEL,
+                    label="Song / Prompt",
+                )
+                preview_audio = gr.Audio(label="Prompt preview", type="filepath")
+
                 temperature = gr.Slider(0.1, 2.0, value=0.7, step=0.05, label="Temperature")
                 top_p       = gr.Slider(0.0, 1.0, value=0.9, step=0.05, label="Top-p")
                 gen_length  = gr.Slider(64, 1024, value=512, step=64, label="Generation length (tokens)")
-
-                with gr.Row():
-                    seed_box = gr.Number(value=42, label="Seed", precision=0, scale=3)
-                    rand_btn = gr.Button("🎲", scale=1, size="sm")
-                    preview_btn = gr.Button("▶ Preview prompt", scale=2, size="sm")
-
-                preview_audio = gr.Audio(label="Prompt preview (before generating)", type="filepath")
 
                 generate_btn = gr.Button("Generate", variant="primary")
 
@@ -425,23 +501,27 @@ def build_ui():
 
         refresh_btn.click(on_refresh, inputs=[model_dd], outputs=[ckpt_dd, ckpt_paths_state, status_box])
         model_dd.change(on_model_change, inputs=[model_dd], outputs=[ckpt_dd, ckpt_paths_state, status_box])
-        rand_btn.click(lambda: random.randint(0, 99999), outputs=[seed_box])
 
-        preview_btn.click(
+        song_dd.change(
             preview_prompt,
-            inputs=[model_dd, ckpt_dd, ckpt_paths_state, seed_box],
+            inputs=[model_dd, ckpt_dd, ckpt_paths_state, song_dd],
             outputs=[preview_audio, status_box],
         )
 
         generate_btn.click(
             generate,
             inputs=[model_dd, ckpt_dd, ckpt_paths_state,
-                    temperature, top_p, gen_length, seed_box],
+                    temperature, top_p, gen_length, song_dd],
             outputs=[prompt_audio, generated_audio, combined_audio, gt_combined_audio, status_box],
         )
 
-        # Load checkpoints for default model on startup
+        # Load checkpoints and preview default song on startup
         demo.load(on_refresh, inputs=[model_dd], outputs=[ckpt_dd, ckpt_paths_state, status_box])
+        demo.load(
+            preview_prompt,
+            inputs=[model_dd, ckpt_dd, ckpt_paths_state, song_dd],
+            outputs=[preview_audio, status_box],
+        )
 
     return demo
 
