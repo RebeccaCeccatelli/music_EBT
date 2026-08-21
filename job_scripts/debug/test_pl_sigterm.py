@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Simulates PyTorch Lightning's SIGTERM behaviour:
-  - Catches SIGTERM, saves a checkpoint, exits 0.
+Simulates PyTorch Lightning's real SLURM auto-requeue signal behaviour:
+  - SIGTERM is BYPASSED (PL ignores it in SLURM auto-requeue mode).
+  - SIGUSR1 triggers checkpoint-save + clean exit (PL's actual requeue handler).
   - Reads prior checkpoint on startup to continue from saved step.
 
 Usage (via the bash wrapper):
@@ -26,19 +27,22 @@ if os.path.exists(CKPT_FILE):
 else:
     print(f"[Python] No checkpoint found, starting fresh.", flush=True)
 
-# ── SIGTERM handler — mirrors PL's GracefulKill ───────────────────────────────
-_sigterm = False
-
+# ── SIGTERM handler — mirrors PL's SLURM auto-requeue bypass ─────────────────
+# Real PL registers SIGTERM as a no-op bypass when SLURM auto-requeue is active.
 def _handle_sigterm(signum, frame):
-    global _sigterm
-    _sigterm = True
-    print(f"[Python] SIGTERM received at step {current_step}. Saving checkpoint...", flush=True)
+    print(f"[Python] Bypassing SIGTERM: {signum}  (PL auto-requeue mode — waiting for USR1)", flush=True)
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
+
+# ── SIGUSR1 handler — mirrors PL's actual checkpoint-and-requeue handler ──────
+def _handle_sigusr1(signum, frame):
+    print(f"[Python] SIGUSR1 received at step {current_step}. Saving checkpoint...", flush=True)
     with open(CKPT_FILE, "w") as f:
         f.write(str(current_step))
     print(f"[Python] Checkpoint saved (step={current_step}). Exiting cleanly.", flush=True)
     sys.exit(0)
 
-signal.signal(signal.SIGTERM, _handle_sigterm)
+signal.signal(signal.SIGUSR1, _handle_sigusr1)
 
 # ── Training loop ─────────────────────────────────────────────────────────────
 print(f"[Python] Training: steps {current_step}→{MAX_STEPS}, {STEP_SECS}s per step", flush=True)
