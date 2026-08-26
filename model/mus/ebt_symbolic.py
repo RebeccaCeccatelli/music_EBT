@@ -95,7 +95,7 @@ class EBT_MUS_SYMB(nn.Module):
     # =========================================================================
 
     def forward(self, x, start_pos=0, learning=True, return_raw_logits=False,
-                replay_buffer_logits=None, no_randomness=True):
+                replay_buffer_logits=None, no_randomness=True, attr_energy_fn=None):
         predicted_distributions = []
         predicted_energies = []
 
@@ -107,7 +107,8 @@ class EBT_MUS_SYMB(nn.Module):
         if replay_buffer_logits is not None:
             predicted_tokens[batch_size - replay_buffer_logits.shape[0]:] = replay_buffer_logits
 
-        alpha = torch.clamp(self.alpha, min=0.0001)
+        alpha_max = self.hparams.get('mcmc_step_size_max', 0.0)
+        alpha = torch.clamp(self.alpha, min=0.0001, max=alpha_max if alpha_max > 0.0 else None)
         if not no_randomness and self.hparams.get('randomize_mcmc_step_size_scale', 1) != 1:
             scale = self.hparams.get('randomize_mcmc_step_size_scale', 1)
             expanded_alpha = alpha.expand(batch_size, seq_length, 1)
@@ -197,9 +198,21 @@ class EBT_MUS_SYMB(nn.Module):
                 else:
                     create_graph = learning
 
-                predicted_tokens_grad = torch.autograd.grad(
-                    [energy_preds.sum()], [predicted_tokens], create_graph=create_graph
-                )[0]
+                if attr_energy_fn is not None:
+                    attr_energy = attr_energy_fn(predicted_tokens)
+                    ebt_grad = torch.autograd.grad(
+                        [energy_preds.sum()], [predicted_tokens],
+                        create_graph=create_graph, retain_graph=True,
+                    )[0]
+                    attr_grad = torch.autograd.grad([attr_energy], [predicted_tokens])[0]
+                    lam = getattr(attr_energy_fn, 'lambda_scale', 1.0)
+                    ebt_norm  = ebt_grad.norm().clamp(min=1e-8)
+                    attr_norm = attr_grad.norm().clamp(min=1e-8)
+                    predicted_tokens_grad = ebt_grad + lam * attr_grad * (ebt_norm / attr_norm)
+                else:
+                    predicted_tokens_grad = torch.autograd.grad(
+                        [energy_preds.sum()], [predicted_tokens], create_graph=create_graph
+                    )[0]
 
                 if clamp_grad:
                     min_and_max = self.hparams.get('clamp_futures_grad_max_change', 9.0) / alpha
@@ -311,7 +324,7 @@ class EBT_MUS_SYMB(nn.Module):
     # ADVANCED INFERENCE  (mirrors EBT_NLP.ebt_advanced_inference)
     # =========================================================================
 
-    def ebt_advanced_inference(self, original_real_input_ids, start_pos=0, learning=False):
+    def ebt_advanced_inference(self, original_real_input_ids, start_pos=0, learning=False, attr_energy_fn=None):
         real_embeddings_input = self.embeddings(original_real_input_ids)  # (B, S, D)
         original_predicted_tokens = self._corrupt_embeddings(real_embeddings_input)  # (B, S, V)
 
@@ -354,6 +367,7 @@ class EBT_MUS_SYMB(nn.Module):
             end = min(start + chunk_size, repeated_bs)
             final_chunk, energies_chunk, dists_chunk = self._run_ebt_inference_steps(
                 repeated_pred[start:end], repeated_real[start:end], alpha, noise, start_pos, learning,
+                attr_energy_fn=attr_energy_fn,
             )
             all_final_pred[start:end] = final_chunk
             energies_chunk = [e.reshape(end - start, -1) for e in energies_chunk]
@@ -389,7 +403,7 @@ class EBT_MUS_SYMB(nn.Module):
 
         return final_output, energies_accum, dists_accum
 
-    def _run_ebt_inference_steps(self, initial_pred_tokens, real_embeds, alpha, noise, start_pos, learning):
+    def _run_ebt_inference_steps(self, initial_pred_tokens, real_embeds, alpha, noise, start_pos, learning, attr_energy_fn=None):
         energies_list = []
         pred_states_list = [initial_pred_tokens]
 
@@ -419,6 +433,13 @@ class EBT_MUS_SYMB(nn.Module):
                 energies = energies.reshape(-1)
                 energies_list.append(energies.detach())
                 grad = torch.autograd.grad(energies.sum(), [cur_pred], create_graph=learning)[0]
+                if attr_energy_fn is not None:
+                    attr_energy = attr_energy_fn(cur_pred)
+                    attr_grad = torch.autograd.grad(attr_energy, [cur_pred])[0]
+                    lam = getattr(attr_energy_fn, 'lambda_scale', 1.0)
+                    ebt_norm  = grad.norm().clamp(min=1e-8)
+                    attr_norm = attr_grad.norm().clamp(min=1e-8)
+                    grad = grad + lam * attr_grad * (ebt_norm / attr_norm)
                 if clamp_grad:
                     mv = self.hparams.get('clamp_futures_grad_max_change', 9.0) / a
                     grad = torch.clamp(grad, -mv, mv)
