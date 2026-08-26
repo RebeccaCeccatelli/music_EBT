@@ -23,6 +23,13 @@ from typing import List
 REMI_PITCH_MIN = 5
 REMI_PITCH_MAX = 93
 
+# PitchDrum: separate token category for percussion note events (drum-kit
+# hits use these instead of Pitch). A density measure that only counts Pitch
+# is blind to drum-heavy/drum-only passages — e.g. a pure-drum prompt would
+# read as density=0 despite being full of rhythmic note events.
+REMI_PITCHDRUM_MIN = 222
+REMI_PITCHDRUM_MAX = 283
+
 
 # ── Anticipation constants ──────────────────────────────────────────────────
 ANT_TIME_OFFSET  = 0
@@ -34,11 +41,14 @@ ANT_TIME_RES     = 100     # bins per second
 # ── Density computation ─────────────────────────────────────────────────────
 
 def compute_density_remi(tokens: List[int]) -> float:
-    """Fraction of tokens that are Pitch events (0–1)."""
+    """Fraction of tokens that are note-onset events — Pitch or PitchDrum (0–1)."""
     if not tokens:
         return 0.0
-    n_pitch = sum(REMI_PITCH_MIN <= t <= REMI_PITCH_MAX for t in tokens)
-    return n_pitch / len(tokens)
+    n_notes = sum(
+        REMI_PITCH_MIN <= t <= REMI_PITCH_MAX or REMI_PITCHDRUM_MIN <= t <= REMI_PITCHDRUM_MAX
+        for t in tokens
+    )
+    return n_notes / len(tokens)
 
 
 def compute_density_anticipation(tokens: List[int]) -> float:

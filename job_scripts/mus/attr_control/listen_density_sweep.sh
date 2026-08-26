@@ -13,9 +13,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --time=01:30:00
 #SBATCH --mem=32GB
-#SBATCH --partition=mit_preemptable
+#SBATCH --partition=mit_normal_gpu
 #SBATCH --account=mit_general
-#SBATCH --qos=normal
 #SBATCH --output=./logs/slurm_%j.out
 
 ### Project Root Discovery ###
@@ -48,12 +47,36 @@ if [[ -z "${REGRESSOR_CKPT}" ]]; then
     exit 1
 fi
 
+# Defaults to the curated non-drum melodic prompt pool (built after finding
+# ~73% of this dataset's songs contain drums, which compute_density/etc. are
+# partly blind to — see attribute_control/note_density.py). Override with
+# PROMPT_INDICES=<comma list> for specific songs, or PROMPT_INDICES_FILE=""
+# to fall back to unrestricted random sampling.
+DEFAULT_PROMPT_POOL="${HOME}/orcd/scratch/rebcecca/music_EBT_logs/attr_control/clean_melodic_prompts.json"
+PROMPT_ARGS=()
+if [[ -n "${PROMPT_INDICES}" ]]; then
+    PROMPT_ARGS=(--prompt_indices "${PROMPT_INDICES}")
+elif [[ -n "${PROMPT_INDICES_FILE-${DEFAULT_PROMPT_POOL}}" ]]; then
+    PROMPT_ARGS=(--prompt_indices_file "${PROMPT_INDICES_FILE:-${DEFAULT_PROMPT_POOL}}")
+fi
+
+# TARGET_DELTAS (offsets from each prompt's own baseline) takes priority over
+# TARGETS (shared absolute values across prompts) when set.
+TARGET_ARGS=(--targets "${TARGETS:-0.05,0.10,0.15,0.20,0.25}")
+if [[ -n "${TARGET_DELTAS}" ]]; then
+    # =value (not a separate argv token) since deltas can start with "-",
+    # which argparse would otherwise misread as a new flag.
+    TARGET_ARGS=(--target_deltas="${TARGET_DELTAS}")
+fi
+
 python "${PROJECT_ROOT}/attribute_control/listen_density_sweep.py" \
     --regressor_checkpoint "${REGRESSOR_CKPT}" \
     --n_prompts "${N_PROMPTS:-5}" \
-    --targets "${TARGETS:-0.05,0.10,0.15,0.20,0.25}" \
+    "${TARGET_ARGS[@]}" \
+    --baseline_repeats "${BASELINE_REPEATS:-5}" \
     --lambdas "${LAMBDAS:-0.25,0.5,1,2,4}" \
     --gen_len "${GEN_LEN:-256}" \
     --seed "${SEED:-0}" \
+    "${PROMPT_ARGS[@]}" \
     --wandb_project "${WANDB_PROJECT:-mus_symb_attr_control}" \
     --wandb_run_name "${WANDB_RUN_NAME:-}"

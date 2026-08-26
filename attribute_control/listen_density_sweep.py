@@ -26,10 +26,12 @@ See also job_scripts/mus/attr_control/listen_density_sweep.sh.
 
 import sys
 import os
+import json
 import shutil
 import random
 import argparse
 import tempfile
+import statistics
 from pathlib import Path
 
 import torch
@@ -41,7 +43,7 @@ from inference.mus.infer_ebt import load_checkpoint, load_dataset
 from inference.mus.generate_music import generate_music
 from inference.mus.tokens_to_midi import tokens_to_midi
 from data.mus.symbolic.tokenization.tokenizer_utils import load_tokenizer
-from attribute_control.note_density import compute_density
+from attribute_control.attributes import ATTRIBUTES
 from attribute_control.musicality_metrics import build_bigram_logprob_table, score_sample
 from convert_midi_simple import simple_synth
 
@@ -61,12 +63,29 @@ def main():
     p = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--regressor_checkpoint", required=True)
+    p.add_argument("--attribute", default=None, choices=[None, "density", "velocity", "duration"],
+                   help="Override attribute (default: read from regressor metadata)")
     p.add_argument("--ebt_checkpoint", default=None,
                    help="Override the EBT checkpoint (default: read from regressor metadata)")
     p.add_argument("--tokenizer_type", default=None,
                    help="Override tokenizer type (default: read from regressor metadata)")
     p.add_argument("--n_prompts", type=int, default=5)
-    p.add_argument("--targets", type=str, default="0.05,0.10,0.15,0.20,0.25")
+    p.add_argument("--prompt_indices", type=str, default=None,
+                   help="Comma-separated explicit dataset indices to use as prompts "
+                        "(overrides --n_prompts random sampling entirely)")
+    p.add_argument("--prompt_indices_file", type=str, default=None,
+                   help="JSON file of candidate indices to sample --n_prompts from, e.g. a "
+                        "curated non-drum pool, instead of the whole dataset")
+    p.add_argument("--targets", type=str, default="0.05,0.10,0.15,0.20,0.25",
+                   help="Shared absolute targets for every prompt (ignored if --target_deltas given)")
+    p.add_argument("--target_deltas", type=str, default=None,
+                   help="Comma-separated offsets (e.g. '-0.04,-0.02,0,0.02,0.04') applied to "
+                        "EACH prompt's own measured baseline density instead of shared absolute "
+                        "--targets. Not clamped to any 'realistic' range — a dense prompt can be "
+                        "pushed denser, a sparse one sparser, following its own natural point.")
+    p.add_argument("--baseline_repeats", type=int, default=5,
+                   help="Generations to average for each prompt's baseline density reference "
+                        "(matters most for --target_deltas, since it anchors every target)")
     p.add_argument("--lambdas", type=str, default="0.25,0.5,1,2,4")
     p.add_argument("--prompt_len", type=int, default=64)
     p.add_argument("--gen_len", type=int, default=256)
@@ -81,6 +100,8 @@ def main():
     args = p.parse_args()
     targets = [float(t) for t in args.targets.split(",")]
     lambdas = [float(x) for x in args.lambdas.split(",")]
+    args.target_deltas = ([float(d) for d in args.target_deltas.split(",")]
+                           if args.target_deltas else None)
 
     device = args.device
     print(f"Device: {device}")
@@ -88,7 +109,11 @@ def main():
     reg_ckpt = torch.load(args.regressor_checkpoint, map_location="cpu", weights_only=False)
     ebt_checkpoint = args.ebt_checkpoint or reg_ckpt["ebt_checkpoint"]
     tokenizer_type = args.tokenizer_type or reg_ckpt.get("tokenizer_type", "REMI")
+    attribute = args.attribute or reg_ckpt.get("attribute", "density")
+    compute_fn = ATTRIBUTES[attribute]
     print(f"Regressor:  {args.regressor_checkpoint}")
+    print(f"Attribute:  {attribute}"
+          f"{'  (overridden)' if args.attribute else '  (from regressor metadata)'}")
     print(f"EBT ckpt:   {ebt_checkpoint}")
 
     model, hparams = load_checkpoint(ebt_checkpoint, device)
@@ -109,7 +134,14 @@ def main():
 
     dataset = load_dataset(hparams, split=args.split)
     rng = random.Random(args.seed)
-    sample_indices = rng.sample(range(len(dataset)), min(args.n_prompts, len(dataset)))
+    if args.prompt_indices:
+        sample_indices = [int(x) for x in args.prompt_indices.split(",")]
+    elif args.prompt_indices_file:
+        with open(args.prompt_indices_file) as f:
+            pool = json.load(f)
+        sample_indices = rng.sample(pool, min(args.n_prompts, len(pool)))
+    else:
+        sample_indices = rng.sample(range(len(dataset)), min(args.n_prompts, len(dataset)))
     print(f"Prompts ({len(sample_indices)}): {sample_indices}")
 
     bigram_table = None
@@ -128,6 +160,7 @@ def main():
     wandb.init(project=args.wandb_project, name=run_name, job_type="density_listening_sweep",
                config={
                    "regressor_checkpoint": args.regressor_checkpoint,
+                   "attribute": attribute,
                    "ebt_checkpoint": ebt_checkpoint,
                    "tokenizer_type": tokenizer_type,
                    "targets": targets,
@@ -140,7 +173,8 @@ def main():
                    "seed": args.seed,
                })
 
-    columns = ["prompt_id", "condition", "lambda", "target", "achieved_density",
+    columns = ["prompt_id", "condition", "lambda", "target", "target_delta",
+               "baseline_value", "achieved_value",
                "ebt_energy", "bigram_ll", "repetition_ratio", "audio"]
     table_rows = []
 
@@ -152,45 +186,87 @@ def main():
                 "input_ids": torch.tensor(prompt, dtype=torch.long, device=device).unsqueeze(0)
             }
 
+            # ── Ground truth: what the real song actually does next ────────────
+            # Not model output at all — the actual continuation from the dataset,
+            # same length as gen_len where available. The reference point neither
+            # baseline nor guided samples have been compared against so far.
+            gt_continuation = full_tokens[len(prompt): len(prompt) + args.gen_len]
+            if gt_continuation:
+                gt_achieved = compute_fn(gt_continuation, tokenizer_type)
+                gt_music = (score_sample(model, gt_continuation, device, bigram_table)
+                            if bigram_table is not None else {})
+                gt_wav = render_wav(gt_continuation, tokenizer, out_dir, f"p{pi}_ground_truth")
+                print(f"[prompt {pi}] ground truth: achieved={gt_achieved:.4f}  music={gt_music}")
+                table_rows.append([
+                    pi, "ground truth (real song)", None, None, None, None, gt_achieved,
+                    gt_music.get("ebt_energy"), gt_music.get("bigram_ll"),
+                    gt_music.get("repetition_ratio"),
+                    wandb.Audio(gt_wav, caption=f"p{pi} ground truth {attribute}={gt_achieved:.3f}"),
+                ])
+
             # ── Unguided baseline: the "outputs are good" reference point ──────
-            hparams.density_target = None
-            hparams.lambda_density = 0.0
-            hparams.density_regressor_ckpt = None
-            with torch.no_grad():
-                out = generate_music(model, batch, hparams)
-            gen = out["generation_tokens"][0]
-            achieved = compute_density(gen, tokenizer_type)
-            music = score_sample(model, gen, device, bigram_table) if bigram_table is not None else {}
-            wav = render_wav(prompt + gen, tokenizer, out_dir, f"p{pi}_baseline")
-            print(f"[prompt {pi}] baseline: achieved={achieved:.4f}  music={music}")
+            # Averaged over --baseline_repeats for a stable per-prompt reference
+            # (single-draw baselines can be noisy, especially for prompts that
+            # don't commit strongly to one instrument/style) — only matters for
+            # --target_deltas mode, where this value anchors every target below,
+            # but computed either way for the logged reference point.
+            hparams.attribute_target = None
+            hparams.lambda_attribute = 0.0
+            hparams.attribute_regressor_ckpt = None
+            baseline_vals = []
+            baseline_gen = None
+            for _ in range(args.baseline_repeats):
+                with torch.no_grad():
+                    out = generate_music(model, batch, hparams)
+                gen = out["generation_tokens"][0]
+                baseline_vals.append(compute_fn(gen, tokenizer_type))
+                if baseline_gen is None:
+                    baseline_gen = gen  # log audio for the first draw only
+            baseline_avg = statistics.mean(baseline_vals)
+            music = (score_sample(model, baseline_gen, device, bigram_table)
+                     if bigram_table is not None else {})
+            wav = render_wav(baseline_gen, tokenizer, out_dir, f"p{pi}_baseline")
+            print(f"[prompt {pi}] baseline: achieved={baseline_avg:.4f}  "
+                  f"(repeats={baseline_vals})  music={music}")
             table_rows.append([
-                pi, "baseline (no guidance)", 0.0, None, achieved,
+                pi, "baseline (no guidance)", 0.0, None, None, baseline_avg, baseline_avg,
                 music.get("ebt_energy"), music.get("bigram_ll"), music.get("repetition_ratio"),
-                wandb.Audio(wav, caption=f"p{pi} baseline density={achieved:.3f}"),
+                wandb.Audio(wav, caption=f"p{pi} baseline {attribute}={baseline_avg:.3f}"),
             ])
+
+            # Resolve this prompt's target list: either the shared --targets
+            # (same absolute values for every prompt), or --target_deltas
+            # offsets applied to THIS prompt's own baseline — deliberately not
+            # clamped to any "realistic" range, so e.g. an already-dense prompt
+            # can be pushed even denser to see what happens.
+            if args.target_deltas is not None:
+                prompt_targets = [(max(0.0, baseline_avg + d), d) for d in args.target_deltas]
+            else:
+                prompt_targets = [(t, None) for t in targets]
 
             # ── Guided grid: same prompt, every (lambda, target) combination ───
             for lam in lambdas:
-                for tgt in targets:
-                    hparams.density_target = tgt
-                    hparams.lambda_density = lam
-                    hparams.density_regressor_ckpt = args.regressor_checkpoint
+                for tgt, delta in prompt_targets:
+                    hparams.attribute_target = tgt
+                    hparams.lambda_attribute = lam
+                    hparams.attribute_regressor_ckpt = args.regressor_checkpoint
                     with torch.no_grad():
                         out = generate_music(model, batch, hparams)
                     gen = out["generation_tokens"][0]
-                    achieved = compute_density(gen, tokenizer_type)
+                    achieved = compute_fn(gen, tokenizer_type)
                     music = (score_sample(model, gen, device, bigram_table)
                              if bigram_table is not None else {})
-                    name = f"p{pi}_lam{lam}_tgt{tgt}".replace(".", "_")
-                    wav = render_wav(prompt + gen, tokenizer, out_dir, name)
-                    print(f"[prompt {pi}] lambda={lam}  target={tgt:.3f}  "
+                    name = f"p{pi}_lam{lam}_tgt{tgt:.4f}".replace(".", "_")
+                    wav = render_wav(gen, tokenizer, out_dir, name)
+                    delta_str = f"  (delta={delta:+.3f})" if delta is not None else ""
+                    print(f"[prompt {pi}] lambda={lam}  target={tgt:.4f}{delta_str}  "
                           f"achieved={achieved:.4f}  music={music}")
                     table_rows.append([
-                        pi, f"λ={lam}", lam, tgt, achieved,
+                        pi, f"λ={lam}", lam, tgt, delta, baseline_avg, achieved,
                         music.get("ebt_energy"), music.get("bigram_ll"),
                         music.get("repetition_ratio"),
-                        wandb.Audio(wav, caption=f"p{pi} λ={lam} target={tgt:.2f} "
-                                                  f"achieved={achieved:.3f}"),
+                        wandb.Audio(wav, caption=f"p{pi} λ={lam} target={tgt:.3f}"
+                                                  f"{delta_str} achieved={achieved:.3f}"),
                     ])
 
             # Log incrementally after each prompt — long job, keep progress visible/safe.
