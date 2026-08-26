@@ -12,9 +12,16 @@
 #SBATCH --partition=mit_preemptable
 #SBATCH --account=mit_general
 #SBATCH --qos=normal
-#SBATCH --requeue
 #SBATCH --signal=TERM@120
 #SBATCH --output=./logs/slurm_%j.out
+# mit_preemptable defaults Requeue=1 at the partition level (confirmed via
+# `scontrol show job` on a preempted run showing Restarts>0 with no --requeue
+# in this script). That means preemption both (a) natively restarts this same
+# job ID via SLURM's own requeue AND (b) triggers _do_resubmit() below via the
+# SIGTERM path — two independent restart mechanisms firing off one event,
+# producing a branching tree of duplicate jobs. --no-requeue disables (a) so
+# only this script's own (already-correct) resubmit logic ever runs.
+#SBATCH --no-requeue
 
 ### ADDITIONAL RUN INFO ###
 #SBATCH --array=0
@@ -65,6 +72,7 @@ ACCUM_STEPS=""
 VAL_CHECK_INTERVAL=""
 LIMIT_VAL_BATCHES=""
 MCMC_STEP_SIZE_LR_MULT=""
+MCMC_STEP_SIZE_MAX=""
 PEAK_LR=""
 
 while [[ $# -gt 0 ]]; do
@@ -79,6 +87,8 @@ while [[ $# -gt 0 ]]; do
         --val_check_interval)     VAL_CHECK_INTERVAL="$2"; shift 2 ;;
         --limit_val_batches)      LIMIT_VAL_BATCHES="$2";  shift 2 ;;
         --peak_learning_rate)     PEAK_LR="$2";            shift 2 ;;
+        --mcmc_step_size_lr_multiplier) MCMC_STEP_SIZE_LR_MULT="$2"; shift 2 ;;
+        --mcmc_step_size_max)     MCMC_STEP_SIZE_MAX="$2"; shift 2 ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
@@ -87,6 +97,11 @@ done
 # Anticipation vocab (55028) is ~120x larger than REMI (~452);
 # use smaller batch and more frequent checkpoints.
 # Also use lower MCMC step size learning rate for Anticipation to prevent divergence.
+# mcmc_step_size_max: upper clamp on the learnable MCMC step size (alpha).
+# Added after observing unbounded growth (1.76 -> 2.05 -> 2.16+, still climbing)
+# coincide with a sustained valid_loss regression (0.60 -> 0.76) on a REMI run —
+# alpha's LR multiplier had no ceiling to check it against. Applies to both
+# branches as a general safeguard.
 case "${TOKENIZER_TYPE}" in
     Anticipation-*)
         BATCH_SIZE="${BATCH_SIZE:-4}"
@@ -94,13 +109,17 @@ case "${TOKENIZER_TYPE}" in
         VAL_CHECK_INTERVAL="${VAL_CHECK_INTERVAL:-100}"
         LIMIT_VAL_BATCHES="${LIMIT_VAL_BATCHES:-1072}"
         MCMC_STEP_SIZE_LR_MULT="${MCMC_STEP_SIZE_LR_MULT:-2}"
+        MCMC_STEP_SIZE_MAX="${MCMC_STEP_SIZE_MAX:-2.0}"
         ;;
     *)
         BATCH_SIZE="${BATCH_SIZE:-4}"
         ACCUM_STEPS="${ACCUM_STEPS:-64}"
         VAL_CHECK_INTERVAL="${VAL_CHECK_INTERVAL:-100}"
         LIMIT_VAL_BATCHES="${LIMIT_VAL_BATCHES:-1.0}"
-        MCMC_STEP_SIZE_LR_MULT="${MCMC_STEP_SIZE_LR_MULT:-100}"
+        # Was 100 — a 100x-amplified LR with no ceiling let alpha run away
+        # once past warmup; lowered alongside adding the ceiling above.
+        MCMC_STEP_SIZE_LR_MULT="${MCMC_STEP_SIZE_LR_MULT:-20}"
+        MCMC_STEP_SIZE_MAX="${MCMC_STEP_SIZE_MAX:-2.0}"
         ;;
 esac
 
@@ -154,6 +173,7 @@ python train_model.py \
 --mcmc_step_size_learnable \
 --mcmc_step_size 1 \
 --mcmc_step_size_lr_multiplier "${MCMC_STEP_SIZE_LR_MULT}" \
+--mcmc_step_size_max "${MCMC_STEP_SIZE_MAX}" \
 --mcmc_num_steps 2 \
 --clamp_futures_grad \
 \
@@ -194,6 +214,23 @@ if [[ ${SIGTERM_RECEIVED} -eq 1 ]]; then
 fi
 
 _do_resubmit() {
+    # Fail SAFE, not open: if squeue itself fails (transient controller issue —
+    # observed happening specifically during a job's own shutdown), don't
+    # silently treat that as "no duplicates" and resubmit anyway.
+    local squeue_output
+    if ! squeue_output=$(squeue -u "$USER" -h -o "%i %j" 2>&1); then
+        echo "Could not query squeue to check for duplicates — skipping resubmit to be safe."
+        return 0
+    fi
+    local n_active
+    # Exclude the current job so it doesn't count itself; matches both plain
+    # ("21008484") and array-task ("21008484_0") squeue job-id formats.
+    n_active=$(echo "${squeue_output}" \
+        | grep "${BASE_RUN_NAME}" | grep -v -E "^${SLURM_JOB_ID}(_[0-9]+)? " | wc -l)
+    if [[ "${n_active}" -gt 0 ]]; then
+        echo "Skipping resubmit: ${n_active} other instance(s) of ${BASE_RUN_NAME} already in queue/running."
+        return 0
+    fi
     sbatch "${BASH_SOURCE[0]}" \
         --tokenizer_type "${TOKENIZER_TYPE}" \
         --dataset_name "${DATASET_NAME}" \
@@ -202,7 +239,9 @@ _do_resubmit() {
         --batch_size_per_device "${BATCH_SIZE}" \
         --accumulate_grad_batches "${ACCUM_STEPS}" \
         --val_check_interval "${VAL_CHECK_INTERVAL}" \
-        --limit_val_batches "${LIMIT_VAL_BATCHES}"
+        --limit_val_batches "${LIMIT_VAL_BATCHES}" \
+        --mcmc_step_size_lr_multiplier "${MCMC_STEP_SIZE_LR_MULT}" \
+        --mcmc_step_size_max "${MCMC_STEP_SIZE_MAX}"
 }
 
 # Exit 0:   clean exit — either training finished or PL saved a checkpoint on SIGTERM.

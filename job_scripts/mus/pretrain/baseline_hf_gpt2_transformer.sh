@@ -13,9 +13,16 @@
 #SBATCH --partition=mit_preemptable
 #SBATCH --account=mit_general
 #SBATCH --qos=normal
-#SBATCH --requeue
 #SBATCH --signal=TERM@120
 #SBATCH --output=./logs/slurm_%j.out
+# mit_preemptable defaults Requeue=1 at the partition level (confirmed via
+# `scontrol show job` on a preempted run showing Restarts>0 with no --requeue
+# in this script). That means preemption both (a) natively restarts this same
+# job ID via SLURM's own requeue AND (b) triggers _do_resubmit() below via the
+# SIGTERM path — two independent restart mechanisms firing off one event,
+# producing a branching tree of duplicate jobs. --no-requeue disables (a) so
+# only this script's own (already-correct) resubmit logic ever runs.
+#SBATCH --no-requeue
 #SBATCH --array=0
 
 ### LOG INFO ###
@@ -177,6 +184,23 @@ fi
 # Exit 143: SIGTERM reached bash before PL could handle it — resubmit unconditionally.
 # Anything else: crash (OOM, Python error, etc.) — do not resubmit.
 _do_resubmit() {
+    # Fail SAFE, not open: if squeue itself fails (transient controller issue —
+    # observed happening specifically during a job's own shutdown), don't
+    # silently treat that as "no duplicates" and resubmit anyway.
+    local squeue_output
+    if ! squeue_output=$(squeue -u "$USER" -h -o "%i %j" 2>&1); then
+        echo "Could not query squeue to check for duplicates — skipping resubmit to be safe."
+        return 0
+    fi
+    local n_active
+    # Exclude the current job so it doesn't count itself; matches both plain
+    # ("21008484") and array-task ("21008484_0") squeue job-id formats.
+    n_active=$(echo "${squeue_output}" \
+        | grep "${BASE_RUN_NAME}" | grep -v -E "^${SLURM_JOB_ID}(_[0-9]+)? " | wc -l)
+    if [[ "${n_active}" -gt 0 ]]; then
+        echo "Skipping resubmit: ${n_active} other instance(s) of ${BASE_RUN_NAME} already in queue/running."
+        return 0
+    fi
     sbatch "${BASH_SOURCE[0]}" \
         --tokenizer_type "${TOKENIZER_TYPE}" \
         --dataset_name "${DATASET_NAME}" \

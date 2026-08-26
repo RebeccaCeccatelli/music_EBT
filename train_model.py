@@ -439,6 +439,8 @@ if __name__ == '__main__':
     
     parser.add_argument("--mcmc_step_size_lr_multiplier", help="learning rate multiplier for mcmc step size, so to get lr of mcmc step size take lr multiply by this value", type=float, default=5000.0)
 
+    parser.add_argument("--mcmc_step_size_max", help="upper clamp on the learnable mcmc_step_size (alpha); 0 disables the clamp (no ceiling, only the min=0.0001 floor applies)", type=float, default=0.0)
+
     parser.add_argument("--randomize_mcmc_step_size_scale", help="randomize the value of mcmc_step_size by a factor specified, i.e. if is 2 will mult by 2 and div by 2 and thats the range to sample from uniformly", type=float, default=1)
     
     parser.add_argument("--mcmc_num_steps", help="number of MCMC steps, try 2-5, check data samples as well to see how many we need. NOTE if are using time embed or adaln is the number of energy landscapes", type=int, default=2)
