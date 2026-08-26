@@ -122,7 +122,14 @@ def load_model_and_data(args):
 
     dataset = load_dataset(hparams, split=args.split)
     rng = random.Random(args.seed)
-    sample_indices = rng.sample(range(len(dataset)), min(args.n_prompts, len(dataset)))
+    if args.prompt_indices:
+        sample_indices = [int(x) for x in args.prompt_indices.split(",")]
+    elif args.prompt_indices_file:
+        with open(args.prompt_indices_file) as f:
+            pool = json.load(f)
+        sample_indices = rng.sample(pool, min(args.n_prompts, len(pool)))
+    else:
+        sample_indices = rng.sample(range(len(dataset)), min(args.n_prompts, len(dataset)))
     print(f"Prompts ({len(sample_indices)}): {sample_indices}")
 
     bigram_table = None
@@ -308,6 +315,12 @@ def main():
                    help="Comma-separated targets to sweep, in the attribute's own units "
                         "(density/velocity/duration are all roughly 0-1 scale)")
     p.add_argument("--n_prompts", type=int, default=8)
+    p.add_argument("--prompt_indices", type=str, default=None,
+                   help="Comma-separated explicit dataset indices to use as prompts "
+                        "(overrides --n_prompts random sampling entirely)")
+    p.add_argument("--prompt_indices_file", type=str, default=None,
+                   help="JSON file of candidate indices to sample --n_prompts from, e.g. a "
+                        "curated non-drum pool, instead of the whole dataset")
     p.add_argument("--repeats", type=int, default=3,
                    help="Generations per (prompt, target) to average out sampling noise")
     p.add_argument("--prompt_len", type=int, default=64)

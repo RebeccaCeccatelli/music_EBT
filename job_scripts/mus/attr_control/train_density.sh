@@ -21,9 +21,8 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --time=04:00:00
 #SBATCH --mem=60GB
-#SBATCH --partition=mit_preemptable
+#SBATCH --partition=mit_normal_gpu
 #SBATCH --account=mit_general
-#SBATCH --qos=normal
 #SBATCH --output=./logs/slurm_%j.out
 
 ### Project Root Discovery ###

@@ -16,9 +16,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --time=00:45:00
 #SBATCH --mem=32GB
-#SBATCH --partition=mit_preemptable
+#SBATCH --partition=mit_normal_gpu
 #SBATCH --account=mit_general
-#SBATCH --qos=normal
 #SBATCH --output=./logs/slurm_%j.out
 
 ### Project Root Discovery ###
@@ -56,6 +55,19 @@ if [[ -n "${LAMBDAS}" ]]; then
     LAMBDA_ARGS=(--lambdas "${LAMBDAS}")
 fi
 
+# Defaults to the curated non-drum melodic prompt pool (built after finding
+# ~73% of this dataset's songs contain drums, which compute_density/etc. are
+# partly blind to — see attribute_control/note_density.py). Override with
+# PROMPT_INDICES=<comma list> for specific songs, or PROMPT_INDICES_FILE=""
+# to fall back to unrestricted random sampling.
+DEFAULT_PROMPT_POOL="${HOME}/orcd/scratch/rebcecca/music_EBT_logs/attr_control/clean_melodic_prompts.json"
+PROMPT_ARGS=()
+if [[ -n "${PROMPT_INDICES}" ]]; then
+    PROMPT_ARGS=(--prompt_indices "${PROMPT_INDICES}")
+elif [[ -n "${PROMPT_INDICES_FILE-${DEFAULT_PROMPT_POOL}}" ]]; then
+    PROMPT_ARGS=(--prompt_indices_file "${PROMPT_INDICES_FILE:-${DEFAULT_PROMPT_POOL}}")
+fi
+
 python "${PROJECT_ROOT}/attribute_control/benchmark_density_control.py" \
     --regressor_checkpoint "${REGRESSOR_CKPT}" \
     --targets "${TARGETS:-0.05,0.10,0.15,0.20,0.25}" \
@@ -64,5 +76,6 @@ python "${PROJECT_ROOT}/attribute_control/benchmark_density_control.py" \
     --gen_len "${GEN_LEN:-128}" \
     "${LAMBDA_ARGS[@]}" \
     --seed "${SEED:-0}" \
+    "${PROMPT_ARGS[@]}" \
     --wandb_project "${WANDB_PROJECT:-mus_symb_attr_control}" \
     --wandb_run_name "${WANDB_RUN_NAME:-}"
