@@ -10,6 +10,9 @@
 ###
 ### Override tokenizer:
 ###   TOKENIZER_TYPE=Anticipation-Arrival-Time sbatch job_scripts/mus/attr_control/train_density.sh
+###
+### Train a different attribute (density/velocity/duration):
+###   ATTRIBUTE=velocity sbatch job_scripts/mus/attr_control/train_density.sh
 
 ### SLURM CONFIGURATION ###
 #SBATCH --nodes=1
@@ -19,6 +22,8 @@
 #SBATCH --time=04:00:00
 #SBATCH --mem=60GB
 #SBATCH --partition=mit_preemptable
+#SBATCH --account=mit_general
+#SBATCH --qos=normal
 #SBATCH --output=./logs/slurm_%j.out
 
 ### Project Root Discovery ###
@@ -49,6 +54,7 @@ cd "${PROJECT_ROOT}" || exit 1
 SCRATCH_LOGS_DIR="${HOME}/orcd/scratch/rebcecca/music_EBT_logs"
 
 # ── Config (all overridable via environment) ────────────────────────────────
+ATTRIBUTE="${ATTRIBUTE:-density}"
 TOKENIZER_TYPE="${TOKENIZER_TYPE:-REMI}"
 EPOCHS="${EPOCHS:-10}"
 BATCH_SIZE="${BATCH_SIZE:-512}"
@@ -56,6 +62,7 @@ LR="${LR:-0.001}"
 HIDDEN_DIM="${HIDDEN_DIM:-256}"
 MAX_TRAIN_SAMPLES="${MAX_TRAIN_SAMPLES:-500000}"
 CHECKPOINT="${CHECKPOINT:-}"
+WANDB_PROJECT="${WANDB_PROJECT:-mus_symb_attr_control}"
 
 # ── Derive model slug from tokenizer (matches pretrain script naming) ────────
 case "${TOKENIZER_TYPE}" in
@@ -92,15 +99,16 @@ if [[ -z "${CHECKPOINT}" ]]; then
     echo "Auto-selected EBT checkpoint (val_loss=${BEST_LOSS}): ${CHECKPOINT}"
 fi
 
-scontrol update JobId="${SLURM_JOB_ID}" JobName="attr-density-${TOK_SLUG}" 2>/dev/null || true
+scontrol update JobId="${SLURM_JOB_ID}" JobName="attr-${ATTRIBUTE}-${TOK_SLUG}" 2>/dev/null || true
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)_${SLURM_JOB_ID}
-OUTPUT_DIR="${SCRATCH_LOGS_DIR}/attr_control/density_regressor_${MODEL_SLUG}_${TIMESTAMP}"
+OUTPUT_DIR="${SCRATCH_LOGS_DIR}/attr_control/${ATTRIBUTE}_regressor_${MODEL_SLUG}_${TIMESTAMP}"
 mkdir -p "${OUTPUT_DIR}"
 
 echo "=========================================="
-echo "Density Regressor Training"
+echo "${ATTRIBUTE} Regressor Training"
 echo "=========================================="
+echo "Attribute:    ${ATTRIBUTE}"
 echo "Tokenizer:    ${TOKENIZER_TYPE}"
 echo "EBT ckpt:     ${CHECKPOINT}"
 echo "Output:       ${OUTPUT_DIR}"
@@ -111,6 +119,7 @@ echo "=========================================="
 
 python "${PROJECT_ROOT}/attribute_control/train_density_regressor.py" \
     --checkpoint "${CHECKPOINT}" \
+    --attribute "${ATTRIBUTE}" \
     --tokenizer_type "${TOKENIZER_TYPE}" \
     --output_dir "${OUTPUT_DIR}" \
     --epochs "${EPOCHS}" \
@@ -119,7 +128,9 @@ python "${PROJECT_ROOT}/attribute_control/train_density_regressor.py" \
     --hidden_dim "${HIDDEN_DIM}" \
     --max_train_samples "${MAX_TRAIN_SAMPLES}" \
     --num_workers 8 \
-    --device cuda
+    --device cuda \
+    --wandb_project "${WANDB_PROJECT}" \
+    --wandb_run_name "${ATTRIBUTE}-${TOK_SLUG}-${TIMESTAMP}"
 
 EXIT_CODE=$?
 if [[ ${EXIT_CODE} -ne 0 ]]; then
@@ -129,6 +140,6 @@ fi
 
 echo ""
 echo "=========================================="
-echo "✅ Density regressor training complete"
+echo "✅ ${ATTRIBUTE} regressor training complete"
 echo "   Best checkpoint: ${OUTPUT_DIR}/best.pt"
 echo "=========================================="
