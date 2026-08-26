@@ -8,7 +8,7 @@
 #
 # Auto-shuts down after IDLE_MINUTES of no user activity (generate/preview calls).
 
-IDLE_MINUTES=20
+IDLE_MINUTES=60
 
 # ── Compute-node half ─────────────────────────────────────────────────────────
 if [[ -n "$SLURM_JOB_ID" ]]; then
@@ -48,7 +48,7 @@ if [[ -n "$SLURM_JOB_ID" ]]; then
     LAST_ACTIVE=$(date +%s)
     while kill -0 "${DEMO_PID}" 2>/dev/null; do
         sleep 30
-        COUNT=$(grep -Ec 'queue/join|run/predict' "${LOG}" 2>/dev/null) || COUNT=0
+        COUNT=$(grep -Ec 'queue/join|run/predict|/info|heartbeat|upload' "${LOG}" 2>/dev/null) || COUNT=0
         if [[ "${COUNT}" -ne "${PREV_COUNT}" ]]; then
             LAST_ACTIVE=$(date +%s)
             PREV_COUNT=${COUNT}
@@ -80,7 +80,7 @@ done
 SCRIPT="$(realpath "$0")"
 export EBT_PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "Requesting GPU node (partition: mit_preemptable)…"
+echo "Requesting GPU node (partition: mit_normal_gpu)…"
 srun --gpus=1 --mem=40GB --time=3:00:00 \
-     --partition=mit_preemptable --account=mit_general \
+     --partition=mit_normal_gpu --account=mit_general \
      bash "${SCRIPT}"
