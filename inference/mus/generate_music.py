@@ -44,7 +44,7 @@ def sample_top_p(probs, p):
     return next_token
 
 
-def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz):
+def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz, attr_energy_fn=None):
     """
     Forward pass for music token generation.
 
@@ -78,10 +78,12 @@ def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz):
 
         # Energy-Based Transformer with MCMC refinement
         if hparams.infer_ebt_advanced:
-            ebt_outputs = model.ebt_advanced_inference(input_tokens, start_pos=0, learning=False)
+            ebt_outputs = model.ebt_advanced_inference(input_tokens, start_pos=0, learning=False,
+                                                        attr_energy_fn=attr_energy_fn)
             logits = ebt_outputs[0]  # Final predicted logits
         else:
-            ebt_outputs = model.forward(input_tokens, start_pos=0, learning=False, return_raw_logits=True)
+            ebt_outputs = model.forward(input_tokens, start_pos=0, learning=False, return_raw_logits=True,
+                                        attr_energy_fn=attr_energy_fn)
             logits = ebt_outputs[0][-1]  # Use final MCMC step logits
     elif hparams.model_name == "baseline_hf_gpt2_transformer":
         # HuggingFace GPT2 model
@@ -170,25 +172,50 @@ def generate_remi(model, batch, hparams):
 
     params = model.transformer.params if hasattr(model, 'transformer') and hasattr(model.transformer, 'params') else None
 
-    # ── Density attribute control (R³) setup ─────────────────────────────────
-    density_target  = getattr(hparams, 'density_target',  None)
-    lambda_density  = getattr(hparams, 'lambda_density',  0.0)
-    density_ckpt    = getattr(hparams, 'density_regressor_ckpt', None)
-    density_steering = (density_target is not None and lambda_density > 0 and density_ckpt is not None)
+    # ── Attribute control (R³) setup ──────────────────────────────────────────
+    # Paper: Du et al. 2023, Eq. 6 — classifier guidance on the EBT MCMC state.
+    # ∇_x log p(x|y) = ∇_x log p_EBT(x) + λ ∇_x log p(y|x)
+    # p(y|x) is a learned attribute regressor (density/velocity/duration/...,
+    # see attribute_control/attributes.py) applied to a LOCAL window: the last
+    # `attr_hard_window` committed tokens plus the single soft (MCMC)
+    # distribution for the next token about to be sampled. Only that one
+    # position actually affects the output at each decode step, so the energy
+    # — and the resulting gradient — is restricted to it; pooling over the
+    # model's whole per-position prediction tensor (as an earlier version of
+    # this code did) diluted the guidance across mostly-discarded positions.
+    #
+    # Accepts either the generic hparam names (attribute_target/lambda_attribute/
+    # attribute_regressor_ckpt) or the legacy density-specific ones
+    # (density_target/lambda_density/density_regressor_ckpt, still set by
+    # demo/app.py) — both trigger the same mechanism below.
+    attr_target = getattr(hparams, 'attribute_target', None)
+    attr_lambda = getattr(hparams, 'lambda_attribute', 0.0)
+    attr_ckpt   = getattr(hparams, 'attribute_regressor_ckpt', None)
+    if attr_ckpt is None:
+        attr_target = getattr(hparams, 'density_target', None)
+        attr_lambda = getattr(hparams, 'lambda_density', 0.0)
+        attr_ckpt   = getattr(hparams, 'density_regressor_ckpt', None)
+    attr_steering = (attr_target is not None and attr_lambda > 0 and attr_ckpt is not None)
 
-    density_regressor = None
-    emb_weight        = None
-    if density_steering:
+    attr_regressor = None
+    emb_weight = None
+    attr_hard_window = 48
+    attr_name = 'density'
+    if attr_steering:
         from attribute_control.note_density import NoteDensityRegressor
-        ckpt_data = torch.load(density_ckpt, map_location='cpu', weights_only=False)
-        density_regressor = NoteDensityRegressor(
-            emb_dim=ckpt_data['emb_dim'], hidden_dim=ckpt_data['hidden_dim']
-        ).to(device).eval()
-        density_regressor.load_state_dict(ckpt_data['model_state'])
-        # Embedding table from the EBT checkpoint stored in the density ckpt
-        ebt_ckpt = torch.load(ckpt_data['ebt_checkpoint'], map_location='cpu', weights_only=False)
-        emb_weight = ebt_ckpt['state_dict']['model.embeddings.weight'].float().to(device)
-        print(f"  Density control (R³): target={density_target:.3f}  λ={lambda_density}")
+        reg_ckpt = torch.load(attr_ckpt, map_location='cpu', weights_only=False)
+        emb_dim  = reg_ckpt['emb_dim']
+        hidden   = reg_ckpt.get('hidden_dim', 256)
+        attr_hard_window = reg_ckpt.get('density_hard_window', 48)
+        attr_name = reg_ckpt.get('attribute', 'density')
+        attr_regressor = NoteDensityRegressor(emb_dim=emb_dim, hidden_dim=hidden)
+        attr_regressor.load_state_dict(reg_ckpt['model_state'])
+        attr_regressor.eval()
+        reg_device = next(model.parameters()).device
+        attr_regressor = attr_regressor.to(reg_device)
+        emb_weight = model.embeddings.weight.detach().to(reg_device)
+        print(f"  Attribute control (R³): attribute={attr_name}  target={attr_target:.3f}  "
+              f"λ={attr_lambda}  hard_window={attr_hard_window}")
     # ─────────────────────────────────────────────────────────────────────────
 
     # Extract prompt tokens, stripping padding
@@ -218,33 +245,84 @@ def generate_remi(model, batch, hparams):
         generated = []
         gen_logprobs = []
 
-        # Accumulate hard embeddings for prompt tokens (passed to R³ density control)
-        if density_steering:
-            with torch.no_grad():
-                prompt_idx = torch.tensor(prompt, dtype=torch.long, device=device)
-                hard_emb_sum = emb_weight[prompt_idx].sum(0)   # (emb_dim,)
-            n_hard = len(prompt)
-        else:
-            hard_emb_sum = None
-            n_hard = 0
-
         for _ in range(max_gen_len):
             window = context[-context_length:]
             input_tensor = torch.tensor(
                 window, dtype=torch.long, device=device
             ).unsqueeze(0)
 
+            # ── R³ attribute energy closure (Du et al. 2023, Eq. 6) ─────────────────
+            # x = predicted_tokens (B, S, V): the full MCMC state. Only the LAST
+            # position (predicted_tokens[:, -1:, :]) is ever sampled into the
+            # output — the rest are refined for training purposes but discarded
+            # every decode step — so the energy (and its gradient) is computed
+            # from a bounded local window: the last `attr_hard_window`
+            # committed tokens plus that one soft next-token distribution.
+            if attr_steering:
+                with torch.no_grad():
+                    local_hard = context[-attr_hard_window:]
+                    hard_tokens = torch.tensor(local_hard, dtype=torch.long,
+                                               device=emb_weight.device)
+                    hard_emb_sum = emb_weight[hard_tokens].sum(0)  # (D,)
+                    n_hard = len(local_hard)
+
+                _dbg_called = [False]
+
+                def _attribute_energy_fn(
+                    predicted_tokens,
+                    _h=hard_emb_sum,
+                    _n=n_hard,
+                    _reg=attr_regressor,
+                    _W=emb_weight,
+                    _tgt=attr_target,
+                    _name=attr_name,
+                    _dbg=_dbg_called,
+                ):
+                    # Only the last position affects the sampled output; slicing
+                    # here means autograd naturally zeros the gradient at every
+                    # other position, so gradient-norm-matching in ebt_symbolic.py
+                    # concentrates its whole budget on the one position that matters.
+                    last = predicted_tokens[:, -1:, :]              # (B, 1, V)
+                    # forward() with normalize_initial_condition=True passes softmax
+                    # probabilities; ebt_advanced_inference passes raw logits.
+                    if last.min() < 0 or last.max() > 1:
+                        probs = torch.softmax(last.float(), dim=-1)
+                    else:
+                        probs = last.float()  # already probabilities
+                    soft_emb_sum = (probs @ _W).sum(dim=1)          # (B, D)
+                    n_soft = 1
+                    total = _n + n_soft
+                    mean_emb = (_h.unsqueeze(0) + soft_emb_sum) / total
+                    pred_attr = _reg(mean_emb)                      # (B,)
+                    # Return unscaled energy; λ is applied in ebt_symbolic.py after
+                    # gradient normalisation so that λ=1 means "same magnitude as
+                    # EBT gradient" — interpretable and effective regardless of
+                    # regressor weight scale.
+                    energy = (total * (pred_attr - _tgt) ** 2).sum()
+                    if not _dbg[0]:
+                        _dbg[0] = True
+                        print(
+                            f"  [{_name}_fn] pred={pred_attr.item():.4f}  "
+                            f"target={_tgt:.4f}  energy={energy.item():.4f}  "
+                            f"n_hard={_n}  n_soft={n_soft}"
+                        )
+                    return energy
+
+                # λ is read by ebt_symbolic.py via getattr(attr_energy_fn, 'lambda_scale')
+                _attribute_energy_fn.lambda_scale = attr_lambda
+                attr_energy_fn = _attribute_energy_fn
+            else:
+                attr_energy_fn = None
+            # ──────────────────────────────────────────────────────────────────────
+
             with torch.no_grad():
-                logits = call_model_forward_decode(hparams, model, input_tensor, 0, 1)
+                logits = call_model_forward_decode(hparams, model, input_tensor, 0, 1,
+                                                   attr_energy_fn=attr_energy_fn)
 
                 if logits.dim() == 3:
                     last_logits = logits[0, -1, :]
                 else:
                     last_logits = logits[0]
-
-            # TODO: R³ density control — compose density energy inside EBT MCMC loop
-            # (hard_emb_sum, n_hard, density_target, lambda_density, density_regressor,
-            #  emb_weight are all available here for passing into model.forward())
 
             if temperature > 0:
                 probs = torch.softmax(last_logits / temperature, dim=-1)
@@ -262,12 +340,6 @@ def generate_remi(model, batch, hparams):
             context.append(next_token_val)
             generated.append(next_token_val)
 
-            # Update running hard embedding sum with the decided token
-            if density_steering:
-                with torch.no_grad():
-                    hard_emb_sum = hard_emb_sum + emb_weight[next_token_val]
-                n_hard += 1
-
         out_tokens.append(generated)
         out_logprobs.append(gen_logprobs)
 
@@ -279,6 +351,39 @@ def generate_remi(model, batch, hparams):
 
     if logprobs:
         result['generation_logprobs'] = out_logprobs
+
+    # ── Attribute guidance WandB logging ──────────────────────────────────────
+    if attr_steering and out_tokens:
+        try:
+            import wandb
+            from attribute_control.attributes import ATTRIBUTES
+            compute_fn = ATTRIBUTES.get(attr_name)
+            achieved = compute_fn(
+                [int(t) for t in out_tokens[0]],
+                hparams.tokenizer_type,
+            )
+            log_data = {
+                f'{attr_name}/target':   attr_target,
+                f'{attr_name}/achieved': achieved,
+                f'{attr_name}/error':    achieved - attr_target,
+                f'{attr_name}/lambda':   attr_lambda,
+                f'{attr_name}/gen_len':  len(out_tokens[0]),
+            }
+            if wandb.run is not None:
+                wandb.log(log_data)
+            else:
+                proj = getattr(hparams, 'wandb_project', 'mus_symb_attr_control')
+                wandb.init(
+                    project=proj,
+                    job_type='inference',
+                    reinit='allow',
+                    name=f"infer-{attr_name}-tgt{attr_target:.2f}-λ{attr_lambda:.1f}",
+                )
+                wandb.log(log_data)
+                wandb.finish()
+        except Exception:
+            pass
+    # ─────────────────────────────────────────────────────────────────────────
 
     return result
 

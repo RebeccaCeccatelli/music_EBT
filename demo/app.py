@@ -137,6 +137,74 @@ def refresh_checkpoints(model_label: str) -> tuple:
         f"Loaded {len(labels)} checkpoint(s) for {model_label}.",
     )
 
+# ── Attribute regressor discovery ────────────────────────────────────────────
+
+# UI metadata per attribute. max/default_target are in each attribute's own
+# compute_X() scale (density: pitch-token fraction; velocity/duration: both
+# normalized ~0-1 by attribute_control/attributes.py). Only density's λ range
+# has actually been benchmarked for musical-coherence impact so far (see
+# attribute_control/benchmark_density_control.py runs) — velocity/duration
+# guidance strength is untested, hence the caution note in the UI.
+_ATTRIBUTE_UI = {
+    "density":  {"max": 0.30, "default_target": 0.15,
+                 "label": "Target density  (0 = sparse · 0.30 = dense)"},
+    "velocity": {"max": 1.00, "default_target": 0.70,
+                 "label": "Target velocity  (0 = soft · 1.0 = loud; normalized MIDI velocity)"},
+    "duration": {"max": 1.00, "default_target": 0.08,
+                 "label": "Target note length  (0 = staccato · 1.0 = sustained; normalized bin rank)"},
+}
+
+
+def _find_attribute_regressor(attribute: str) -> tuple[str | None, str]:
+    """Return (ckpt_path, status_msg) for the most recently trained regressor
+    for this attribute."""
+    regressor_root = SCRATCH_DIR / "attr_control"
+    if not regressor_root.exists():
+        return None, f"No {attribute} regressor found — train one first."
+    candidates = sorted(
+        regressor_root.glob(f"{attribute}_regressor_remi_*/best.pt"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        return None, f"No {attribute} regressor found — train one first."
+    best = candidates[0]
+    return str(best), f"Regressor: {best.parent.name}"
+
+
+def _attribute_gauge_html(attribute: str, target: float, achieved: float) -> str:
+    max_v = _ATTRIBUTE_UI.get(attribute, {}).get("max", 1.0)
+    t_pct = min(target / max_v * 100, 100)
+    a_pct = min(achieved / max_v * 100, 100)
+    diff  = achieved - target
+    tol   = 0.02 * max_v
+    color = "#22c55e" if abs(diff) < tol else "#f59e0b" if abs(diff) < 3 * tol else "#ef4444"
+    sign  = "+" if diff >= 0 else ""
+    return f"""
+<div style="font-family:sans-serif;padding:10px 4px">
+  <b style="font-size:.9em">{attribute.capitalize()} guidance result</b>
+  <table style="width:100%;margin-top:8px;font-size:.82em;border-collapse:collapse">
+    <tr>
+      <td style="width:70px;color:#666;padding:2px 0">Target</td>
+      <td><div style="background:#e5e7eb;border-radius:4px;height:14px">
+        <div style="width:{t_pct:.1f}%;background:#6366f1;height:14px;border-radius:4px"></div>
+      </div></td>
+      <td style="padding-left:8px;white-space:nowrap">{target:.3f}</td>
+    </tr>
+    <tr style="height:6px"></tr>
+    <tr>
+      <td style="color:#666;padding:2px 0">Achieved</td>
+      <td><div style="background:#e5e7eb;border-radius:4px;height:14px">
+        <div style="width:{a_pct:.1f}%;background:{color};height:14px;border-radius:4px"></div>
+      </div></td>
+      <td style="padding-left:8px;white-space:nowrap;color:{color}">
+        {achieved:.3f}&nbsp;({sign}{diff:.3f})
+      </td>
+    </tr>
+  </table>
+</div>"""
+
+
 # ── Model + tokenizer cache ───────────────────────────────────────────────────
 
 _model_cache: dict[str, tuple] = {}  # ckpt_path -> (model, hparams, tokenizer)
@@ -286,6 +354,10 @@ def generate(
     top_p: float,
     generation_length: int,
     song_choice: str,
+    attribute_enabled: bool = False,
+    attribute_choice: str = "density",
+    attribute_target: float = 0.15,
+    lambda_attribute: float = 1.0,
 ):
     _loading = lambda lbl: gr.update(value=None, label=f"⏳ {lbl}")
     _done    = lambda lbl, v: gr.update(value=v, label=lbl)
@@ -297,21 +369,22 @@ def generate(
         _loading("Prompt + generated"),
         _loading("Prompt + original continuation (ground truth)"),
         "Starting…",
+        "",   # attribute gauge
     )
 
     if not ckpt_display or not ckpt_paths_json:
-        yield None, None, None, None, "❌ Select a model and checkpoint first."
+        yield None, None, None, None, "❌ Select a model and checkpoint first.", ""
         return
 
     try:
         ckpt_paths = json.loads(ckpt_paths_json)
     except Exception:
-        yield None, None, None, None, "❌ Checkpoint state corrupted — click Refresh."
+        yield None, None, None, None, "❌ Checkpoint state corrupted — click Refresh.", ""
         return
 
     ckpt_path = ckpt_paths.get(ckpt_display)
     if not ckpt_path:
-        yield None, None, None, None, f"❌ Could not resolve checkpoint path for: {ckpt_display}"
+        yield None, None, None, None, f"❌ Could not resolve checkpoint path for: {ckpt_display}", ""
         return
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -321,19 +394,35 @@ def generate(
         cached = ckpt_path in _model_cache
         yield None, None, None, None, "\n".join(status_lines + [
             "⏳ Loading model (cached)…" if cached else "⏳ Loading model (first load — may take ~30s)…"
-        ])
+        ]), ""
         model, hparams, tokenizer = _load(model_label, ckpt_path, device)
         status_lines.append("✅ Model loaded (cached)" if cached else "✅ Model loaded")
     except Exception as e:
-        yield None, None, None, None, f"❌ Model load failed:\n{e}\n{traceback.format_exc()}"
+        yield None, None, None, None, f"❌ Model load failed:\n{e}\n{traceback.format_exc()}", ""
         return
 
     # Generation hyperparams
-    hparams.infer_temp      = temperature
-    hparams.infer_topp      = top_p
+    hparams.infer_temp        = temperature
+    hparams.infer_topp        = top_p
     hparams.infer_max_gen_len = generation_length
-    hparams.infer_logprobs  = False
-    hparams.infer_echo      = False
+    hparams.infer_logprobs    = False
+    hparams.infer_echo        = False
+
+    # Attribute control (R³) — EBT only
+    is_ebt = _MODELS[model_label]["model_name"] == "ebt"
+    reg_path, reg_status = _find_attribute_regressor(attribute_choice)
+    use_attribute = is_ebt and attribute_enabled and lambda_attribute > 0
+    if use_attribute:
+        hparams.attribute_target         = attribute_target
+        hparams.lambda_attribute         = lambda_attribute
+        hparams.attribute_regressor_ckpt = reg_path
+        reg_note = f"  ({reg_status})" if reg_path is None else ""
+        status_lines.append(f"{attribute_choice.capitalize()} R³: target={attribute_target:.2f}  "
+                             f"λ={lambda_attribute:.1f}{reg_note}")
+    else:
+        hparams.attribute_target         = None
+        hparams.lambda_attribute         = 0.0
+        hparams.attribute_regressor_ckpt = None
 
     try:
         if song_choice and song_choice != RANDOM_SONG_LABEL:
@@ -352,12 +441,12 @@ def generate(
         prompt_tokens = torch.tensor(full_tokens[:PROMPT_LENGTH], dtype=torch.long).unsqueeze(0).to(device)
         gt_tokens = full_tokens[PROMPT_LENGTH:PROMPT_LENGTH + generation_length]
     except Exception as e:
-        yield None, None, None, None, f"❌ Dataset error:\n{e}\n{traceback.format_exc()}"
+        yield None, None, None, None, f"❌ Dataset error:\n{e}\n{traceback.format_exc()}", ""
         return
 
     try:
         status_lines.append("⏳ Generating tokens…")
-        yield None, None, None, None, "\n".join(status_lines)
+        yield None, None, None, None, "\n".join(status_lines), ""
         model_name = _MODELS[model_label]["model_name"]
         batch = {'input_ids': prompt_tokens}
 
@@ -374,10 +463,21 @@ def generate(
 
         generated_tokens = outputs['generation_tokens'][0]
         status_lines[-1] = f"✅ Generated {len(generated_tokens)} tokens"
+
+        # Attribute gauge: compare target vs. actual attribute value achieved
+        attribute_gauge = ""
+        if use_attribute:
+            from attribute_control.attributes import ATTRIBUTES
+            compute_fn = ATTRIBUTES[attribute_choice]
+            achieved = compute_fn([int(t) for t in generated_tokens], hparams.tokenizer_type)
+            attribute_gauge = _attribute_gauge_html(attribute_choice, attribute_target, achieved)
+            status_lines.append(f"{attribute_choice.capitalize()}: target={attribute_target:.3f}  "
+                                 f"achieved={achieved:.3f}")
+
         status_lines.append("⏳ Converting to audio…")
-        yield None, None, None, None, "\n".join(status_lines)
+        yield None, None, None, None, "\n".join(status_lines), attribute_gauge
     except Exception as e:
-        yield None, None, None, None, f"❌ Generation failed:\n{e}\n{traceback.format_exc()}"
+        yield None, None, None, None, f"❌ Generation failed:\n{e}\n{traceback.format_exc()}", ""
         return
 
     try:
@@ -408,7 +508,7 @@ def generate(
                 status_lines.append(f"⚠️ {name} conversion failed: {e}")
                 wav_paths[name] = None
     except Exception as e:
-        yield None, None, None, None, f"❌ MIDI/WAV conversion failed:\n{e}\n{traceback.format_exc()}"
+        yield None, None, None, None, f"❌ MIDI/WAV conversion failed:\n{e}\n{traceback.format_exc()}", ""
         return
 
     try:
@@ -439,6 +539,7 @@ def generate(
         _done("Prompt + generated",                             wav_paths.get("combined")),
         _done("Prompt + original continuation (ground truth)",  wav_paths.get("gt_combined")),
         "\n".join(status_lines),
+        attribute_gauge,
     )
 
 
@@ -480,6 +581,56 @@ def build_ui():
                 top_p       = gr.Slider(0.0, 1.0, value=0.9, step=0.05, label="Top-p")
                 gen_length  = gr.Slider(64, 1024, value=512, step=64, label="Generation length (tokens)")
 
+                with gr.Accordion("Attribute control (R³ · EBT only)", open=False):
+                    gr.Markdown(
+                        "Guide the EBT MCMC steps toward a target attribute value "
+                        "(Du et al. 2023, R³). A trained regressor steers the MCMC gradient: "
+                        "∇ log p(x|y) = ∇ log p_EBT(x) + λ ∇ log p(y|x). Only one attribute "
+                        "can be guided at a time."
+                    )
+                    attribute_choice = gr.Radio(
+                        choices=["density", "velocity", "duration"],
+                        value="density",
+                        label="Attribute",
+                    )
+                    attribute_enabled = gr.Checkbox(
+                        value=False,
+                        label="Enable guidance",
+                        interactive=True,
+                    )
+                    attribute_target = gr.Slider(
+                        0.00, _ATTRIBUTE_UI["density"]["max"], value=_ATTRIBUTE_UI["density"]["default_target"],
+                        step=0.01, label=_ATTRIBUTE_UI["density"]["label"],
+                    )
+                    lambda_attribute = gr.Slider(
+                        0.0, 5.0, value=1.0, step=0.1,
+                        label="Guidance strength  λ  (λ=1 ≈ equal weight as EBT energy. "
+                              "For density, benchmarking showed even λ=0.25 already noticeably hurts "
+                              "musical coherence — treat velocity/duration as UNTESTED at any λ until "
+                              "you've listened. Higher λ tracks the target more precisely but risks "
+                              "overriding coherence further.)",
+                    )
+                    reg_path_init, reg_msg_init = _find_attribute_regressor("density")
+                    regressor_status_md = gr.Markdown(
+                        f"*{reg_msg_init}*",
+                        elem_id="regressor_status",
+                    )
+
+                    def _on_attribute_change(attribute):
+                        meta = _ATTRIBUTE_UI[attribute]
+                        _, msg = _find_attribute_regressor(attribute)
+                        return (
+                            gr.update(minimum=0.0, maximum=meta["max"], value=meta["default_target"],
+                                      label=meta["label"]),
+                            f"*{msg}*",
+                        )
+
+                    attribute_choice.change(
+                        _on_attribute_change,
+                        inputs=[attribute_choice],
+                        outputs=[attribute_target, regressor_status_md],
+                    )
+
                 generate_btn = gr.Button("Generate", variant="primary")
 
             # ── Right column: outputs ─────────────────────────────────────────
@@ -489,7 +640,8 @@ def build_ui():
                 generated_audio   = gr.Audio(label="Generated continuation", type="filepath")
                 combined_audio    = gr.Audio(label="Prompt + generated", type="filepath")
                 gt_combined_audio = gr.Audio(label="Prompt + original continuation (ground truth)", type="filepath")
-                status_box = gr.Textbox(label="Status", lines=6, interactive=False)
+                attribute_gauge   = gr.HTML(value="", label="Attribute guidance")
+                status_box        = gr.Textbox(label="Status", lines=6, interactive=False)
 
         # ── Event wiring ──────────────────────────────────────────────────────
 
@@ -511,8 +663,10 @@ def build_ui():
         generate_btn.click(
             generate,
             inputs=[model_dd, ckpt_dd, ckpt_paths_state,
-                    temperature, top_p, gen_length, song_dd],
-            outputs=[prompt_audio, generated_audio, combined_audio, gt_combined_audio, status_box],
+                    temperature, top_p, gen_length, song_dd,
+                    attribute_enabled, attribute_choice, attribute_target, lambda_attribute],
+            outputs=[prompt_audio, generated_audio, combined_audio, gt_combined_audio,
+                     status_box, attribute_gauge],
         )
 
         # Load checkpoints and preview default song on startup
