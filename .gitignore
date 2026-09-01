@@ -164,3 +164,7 @@ data/mus/symbolic/datasets/**
 CLAUDE.md
 .gradio/
 .claude/
+
+# PyTorch Lightning SLURM auto-requeue checkpoints (written to project root,
+# not the scratch checkpoints dir; large, regenerated automatically)
+hpc_ckpt_*.ckpt
