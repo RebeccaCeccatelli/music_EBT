@@ -19,6 +19,58 @@ from typing import List, Optional, Dict
 import math
 
 
+def _remi_step_is_relevant(last_token: int, attribute: str) -> bool:
+    """
+    Whether the upcoming token-generation step can actually move `attribute`,
+    given the last committed token — used to gate R³ attribute guidance so it
+    only pushes on steps where it has a real lever, instead of firing
+    uniformly on every step regardless of token type (which was nudging e.g.
+    Pitch-value selection toward a density target that density doesn't even
+    measure — a likely source of the coherence damage seen at higher lambda).
+
+    Based on an empirical pass over 40 real validation songs (681k tokens):
+    Pitch/PitchDrum -> Velocity and Velocity -> Duration are both 100%
+    deterministic transitions in this REMI vocab, so those are exact,
+    reliable gates. Duration/Position -> next is NOT deterministic (dominant
+    next-category covers only ~27-33% of occurrences) — that's precisely the
+    "does another note start here" branch point density guidance should act
+    on, and the closest this vocab gets to a density-relevant decision.
+    See attribute_control/attributes.py for the REMI id ranges used here.
+    """
+    from attribute_control.note_density import (
+        REMI_PITCH_MIN, REMI_PITCH_MAX, REMI_PITCHDRUM_MIN, REMI_PITCHDRUM_MAX,
+    )
+    from attribute_control.attributes import (
+        REMI_VELOCITY_MIN_ID, REMI_VELOCITY_MAX_ID,
+        REMI_DURATION_MIN_ID, REMI_DURATION_MAX_ID,
+        REMI_POSITION_MIN_ID, REMI_POSITION_MAX_ID,
+        REMI_PROGRAM_MIN_ID, REMI_PROGRAM_MAX_ID,
+    )
+    is_pitch = (REMI_PITCH_MIN <= last_token <= REMI_PITCH_MAX
+                or REMI_PITCHDRUM_MIN <= last_token <= REMI_PITCHDRUM_MAX)
+    is_velocity = REMI_VELOCITY_MIN_ID <= last_token <= REMI_VELOCITY_MAX_ID
+    is_duration = REMI_DURATION_MIN_ID <= last_token <= REMI_DURATION_MAX_ID
+    is_position = REMI_POSITION_MIN_ID <= last_token <= REMI_POSITION_MAX_ID
+    is_program = REMI_PROGRAM_MIN_ID <= last_token <= REMI_PROGRAM_MAX_ID
+    if attribute == 'velocity':
+        return is_pitch
+    if attribute == 'duration':
+        return is_velocity
+    if attribute == 'density':
+        return is_duration or is_position
+    if attribute == 'pitch_register':
+        return is_program
+    if attribute == 'polyphony':
+        return is_duration or is_position
+    if attribute == 'rhythm':
+        return is_duration or is_position
+    if attribute == 'drum_density':
+        return is_program
+    if attribute == 'melodic_interval':
+        return is_program
+    return True  # unknown attribute: fail open, don't gate
+
+
 def sample_top_p(probs, p):
     """
     Perform top-p (nucleus) sampling on a probability distribution.
@@ -197,6 +249,18 @@ def generate_remi(model, batch, hparams):
         attr_ckpt   = getattr(hparams, 'density_regressor_ckpt', None)
     attr_steering = (attr_target is not None and attr_lambda > 0 and attr_ckpt is not None)
 
+    # Optional λ taper: hold at full strength for the first
+    # `attr_lambda_taper_hold_frac` of generation, then linearly decay to
+    # `attr_lambda_taper_floor` (a fraction of attr_lambda, not absolute) by
+    # the end. Motivated by the compounding-drift failure mode — guidance
+    # establishes the target trajectory early, then continuing to push at
+    # full strength on a context that's increasingly itself guided (rather
+    # than real data) seems to be what drives later-generation cacophony,
+    # not to prevent it.
+    attr_lambda_taper = getattr(hparams, 'attribute_lambda_taper', False)
+    attr_lambda_taper_hold_frac = getattr(hparams, 'attribute_lambda_taper_hold_frac', 0.4)
+    attr_lambda_taper_floor = getattr(hparams, 'attribute_lambda_taper_floor', 0.2)
+
     attr_regressor = None
     emb_weight = None
     attr_hard_window = 48
@@ -214,8 +278,10 @@ def generate_remi(model, batch, hparams):
         reg_device = next(model.parameters()).device
         attr_regressor = attr_regressor.to(reg_device)
         emb_weight = model.embeddings.weight.detach().to(reg_device)
+        taper_str = (f"  taper=hold{attr_lambda_taper_hold_frac:.0%}->floor{attr_lambda_taper_floor:.0%}"
+                     if attr_lambda_taper else "")
         print(f"  Attribute control (R³): attribute={attr_name}  target={attr_target:.3f}  "
-              f"λ={attr_lambda}  hard_window={attr_hard_window}")
+              f"λ={attr_lambda}  hard_window={attr_hard_window}{taper_str}")
     # ─────────────────────────────────────────────────────────────────────────
 
     # Extract prompt tokens, stripping padding
@@ -245,7 +311,7 @@ def generate_remi(model, batch, hparams):
         generated = []
         gen_logprobs = []
 
-        for _ in range(max_gen_len):
+        for step_idx in range(max_gen_len):
             window = context[-context_length:]
             input_tensor = torch.tensor(
                 window, dtype=torch.long, device=device
@@ -258,7 +324,15 @@ def generate_remi(model, batch, hparams):
             # every decode step — so the energy (and its gradient) is computed
             # from a bounded local window: the last `attr_hard_window`
             # committed tokens plus that one soft next-token distribution.
-            if attr_steering:
+            # Gate to steps where the attribute actually has a lever (REMI only —
+            # see _remi_step_is_relevant); other tokenizers fail open (ungated).
+            # hparams.attr_gate_by_token_type=False reproduces the old (ungated,
+            # fires-every-step) behavior for A/B comparison against this fix.
+            if attr_steering and (
+                not getattr(hparams, 'attr_gate_by_token_type', True)
+                or hparams.tokenizer_type != "REMI"
+                or _remi_step_is_relevant(context[-1], attr_name)
+            ):
                 with torch.no_grad():
                     local_hard = context[-attr_hard_window:]
                     hard_tokens = torch.tensor(local_hard, dtype=torch.long,
@@ -309,7 +383,19 @@ def generate_remi(model, batch, hparams):
                     return energy
 
                 # λ is read by ebt_symbolic.py via getattr(attr_energy_fn, 'lambda_scale')
-                _attribute_energy_fn.lambda_scale = attr_lambda
+                if attr_lambda_taper:
+                    progress = step_idx / max(1, max_gen_len - 1)  # 0.0 at start, 1.0 at end
+                    if progress <= attr_lambda_taper_hold_frac:
+                        current_lambda = attr_lambda
+                    else:
+                        decay_progress = ((progress - attr_lambda_taper_hold_frac)
+                                           / (1.0 - attr_lambda_taper_hold_frac))
+                        current_lambda = attr_lambda * (
+                            1.0 - decay_progress * (1.0 - attr_lambda_taper_floor)
+                        )
+                else:
+                    current_lambda = attr_lambda
+                _attribute_energy_fn.lambda_scale = current_lambda
                 attr_energy_fn = _attribute_energy_fn
             else:
                 attr_energy_fn = None
