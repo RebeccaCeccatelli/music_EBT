@@ -10,8 +10,14 @@ class GigaMIDIMiditokDataset(Dataset):
     Dataset for GigaMIDI pre-tokenized miditok JSON files.
 
     Each file contains {"ids": [token_id, ...]} for one song.
-    __getitem__ samples a random context_length window from the song,
-    so each epoch sees a different slice of each song (data augmentation).
+    __getitem__ samples a context_length window from the song. For the train
+    split this window is randomized per call (data augmentation — each epoch
+    sees a different slice). For validation/test it's a fixed, per-song
+    deterministic window (seeded by song index) instead, so valid_loss means
+    the same thing across checkpoints/epochs/resumes — an unseeded random
+    window there previously made validation content change from one check to
+    the next, confounding genuine model-quality changes with which slice of
+    each song happened to get sampled.
     Init only lists files — no file I/O at startup.
 
     Directory layout:
@@ -26,6 +32,7 @@ class GigaMIDIMiditokDataset(Dataset):
 
     def __init__(self, hparams, split="train"):
         self.context_length = hparams.context_length
+        self.split = split
         base = os.getenv(
             "CUSTOM_STORAGE_PATH", "/home/rebcecca/orcd/pool/music_datasets"
         )
@@ -67,8 +74,13 @@ class GigaMIDIMiditokDataset(Dataset):
             # Pad short sequences with zeros (pad token id)
             ids = ids + [0] * (self.context_length - len(ids) + 1)
 
-        # Random window so each epoch sees different slices
         max_start = len(ids) - self.context_length
-        start = random.randint(0, max_start)
+        if self.split == "train":
+            # Random window so each epoch sees different slices (augmentation).
+            start = random.randint(0, max_start)
+        else:
+            # Fixed per-song window, independent of global RNG state/epoch/
+            # worker — so this exact slice is scored the same way every time.
+            start = random.Random(idx).randint(0, max_start)
         chunk = ids[start : start + self.context_length]
         return {"input_ids": torch.tensor(chunk, dtype=torch.long)}
