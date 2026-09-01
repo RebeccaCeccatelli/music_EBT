@@ -14,14 +14,18 @@
 #SBATCH --qos=normal
 #SBATCH --signal=TERM@120
 #SBATCH --output=./logs/slurm_%j.out
-# mit_preemptable defaults Requeue=1 at the partition level (confirmed via
-# `scontrol show job` on a preempted run showing Restarts>0 with no --requeue
-# in this script). That means preemption both (a) natively restarts this same
-# job ID via SLURM's own requeue AND (b) triggers _do_resubmit() below via the
-# SIGTERM path — two independent restart mechanisms firing off one event,
-# producing a branching tree of duplicate jobs. --no-requeue disables (a) so
-# only this script's own (already-correct) resubmit logic ever runs.
-#SBATCH --no-requeue
+# mit_preemptable's GraceTime=0 (confirmed via `scontrol show partition`) means
+# a preempted job gets killed with NO warning — --signal=TERM@120 only governs
+# time-limit warnings, not preemption grace, which is this separate,
+# partition-level setting. So on preemption, our own SIGTERM trap below never
+# runs (no signal ever reaches it), and native SLURM requeue (Requeue=1 by
+# partition default) is the ONLY mechanism that reliably restarts the job —
+# it operates at the controller level and doesn't need a graceful process
+# exit. We used to disable it (--no-requeue) to stop it double-firing
+# alongside our own resubmit logic on time-limit events (which DO get the
+# full signal grace period); now _do_resubmit() itself checks for an
+# already-requeued instance of this exact job ID before submitting a new one,
+# so both mechanisms can coexist safely.
 
 ### ADDITIONAL RUN INFO ###
 #SBATCH --array=0
@@ -118,13 +122,26 @@ FULL_RUN_NAME="${BASE_RUN_NAME}-job${SLURM_JOB_ID:-local}"
 scontrol update JobId="${SLURM_JOB_ID}" Name="${FULL_RUN_NAME}" 2>/dev/null || true
 MAX_STEPS=100000
 
-# Auto-detect last checkpoint from a previous run window.
-# Excludes current job ID to avoid picking the newly created empty directory.
+# Auto-resume from the highest-step checkpoint of any previous run with the
+# same base name — selected by the step number embedded in the checkpoint
+# filename itself, NOT by directory modification time or job ID. The prior
+# version excluded any directory containing "job${SLURM_JOB_ID}" to skip the
+# newly created empty directory, but native requeue keeps the same job ID
+# across restarts and each restart creates a new timestamped directory — so
+# that exclusion ended up filtering out ALL of this job's own prior
+# checkpoint directories too, forcing a fallback to whichever unrelated
+# job's directory happened to have the most recent mtime. That silently
+# reset this run backwards by thousands of steps on every restart.
 if [[ -z "${RESUME_CKPT}" ]]; then
-    PREV_CKPT_DIR=$(ls -td "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"* 2>/dev/null | grep -v "job${SLURM_JOB_ID}" | head -1)
-    if [[ -n "${PREV_CKPT_DIR}" && -f "${PREV_CKPT_DIR}/last.ckpt" ]]; then
-        RESUME_CKPT="${PREV_CKPT_DIR}/last.ckpt"
-        echo "Auto-resuming from: ${RESUME_CKPT}"
+    BEST_CKPT=$(ls -1 "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"*/epoch=*.ckpt 2>/dev/null \
+        | while read -r f; do
+            step=$(echo "$f" | grep -oE "step=step=[0-9]+" | grep -oE "[0-9]+$")
+            [[ -n "$step" ]] && echo "${step} ${f}"
+          done \
+        | sort -n -k1,1 | tail -1 | cut -d' ' -f2-)
+    if [[ -n "${BEST_CKPT}" ]]; then
+        RESUME_CKPT="${BEST_CKPT}"
+        echo "Auto-resuming from highest-step checkpoint: ${RESUME_CKPT}"
     fi
 fi
 
@@ -189,8 +206,15 @@ _do_resubmit() {
     # observed happening specifically during a job's own shutdown), don't
     # silently treat that as "no duplicates" and resubmit anyway.
     local squeue_output
-    if ! squeue_output=$(squeue -u "$USER" -h -o "%i %j" 2>&1); then
+    if ! squeue_output=$(squeue -u "$USER" -h -o "%i %j %t" 2>&1); then
         echo "Could not query squeue to check for duplicates — skipping resubmit to be safe."
+        return 0
+    fi
+    # Native requeue (see --array comment above) may have already put this
+    # exact job ID back in the queue as PENDING by the time we get here —
+    # if so, don't also sbatch a separate new one.
+    if echo "${squeue_output}" | grep -qE "^${SLURM_JOB_ID}(_[0-9]+)? .* PD$"; then
+        echo "Already natively requeued as ${SLURM_JOB_ID} (state PD) — skipping manual resubmit."
         return 0
     fi
     local n_active
