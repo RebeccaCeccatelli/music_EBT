@@ -60,6 +60,7 @@ BATCH_SIZE="${BATCH_SIZE:-512}"
 LR="${LR:-0.001}"
 HIDDEN_DIM="${HIDDEN_DIM:-256}"
 MAX_TRAIN_SAMPLES="${MAX_TRAIN_SAMPLES:-500000}"
+HARD_WINDOW="${HARD_WINDOW:-48}"
 CHECKPOINT="${CHECKPOINT:-}"
 WANDB_PROJECT="${WANDB_PROJECT:-mus_symb_attr_control}"
 
@@ -126,6 +127,7 @@ python "${PROJECT_ROOT}/attribute_control/train_density_regressor.py" \
     --lr "${LR}" \
     --hidden_dim "${HIDDEN_DIM}" \
     --max_train_samples "${MAX_TRAIN_SAMPLES}" \
+    --density_hard_window "${HARD_WINDOW}" \
     --num_workers 8 \
     --device cuda \
     --wandb_project "${WANDB_PROJECT}" \
