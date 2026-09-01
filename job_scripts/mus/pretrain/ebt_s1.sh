@@ -14,14 +14,18 @@
 #SBATCH --qos=normal
 #SBATCH --signal=TERM@120
 #SBATCH --output=./logs/slurm_%j.out
-# mit_preemptable defaults Requeue=1 at the partition level (confirmed via
-# `scontrol show job` on a preempted run showing Restarts>0 with no --requeue
-# in this script). That means preemption both (a) natively restarts this same
-# job ID via SLURM's own requeue AND (b) triggers _do_resubmit() below via the
-# SIGTERM path — two independent restart mechanisms firing off one event,
-# producing a branching tree of duplicate jobs. --no-requeue disables (a) so
-# only this script's own (already-correct) resubmit logic ever runs.
-#SBATCH --no-requeue
+# mit_preemptable's GraceTime=0 (confirmed via `scontrol show partition`) means
+# a preempted job gets killed with NO warning — --signal=TERM@120 only governs
+# time-limit warnings, not preemption grace, which is this separate,
+# partition-level setting. So on preemption, our own SIGTERM trap below never
+# runs (no signal ever reaches it), and native SLURM requeue (Requeue=1 by
+# partition default) is the ONLY mechanism that reliably restarts the job —
+# it operates at the controller level and doesn't need a graceful process
+# exit. We used to disable it (--no-requeue) to stop it double-firing
+# alongside our own resubmit logic on time-limit events (which DO get the
+# full signal grace period); now _do_resubmit() itself checks for an
+# already-requeued instance of this exact job ID before submitting a new one,
+# so both mechanisms can coexist safely.
 
 ### ADDITIONAL RUN INFO ###
 #SBATCH --array=0
@@ -74,6 +78,17 @@ LIMIT_VAL_BATCHES=""
 MCMC_STEP_SIZE_LR_MULT=""
 MCMC_STEP_SIZE_MAX=""
 PEAK_LR=""
+# EBT-paper-suggested stabilization techniques (Section 3.3): off by default,
+# matching both this codebase's and the authors' own reference implementation's
+# defaults — must be explicitly opted into via these flags. Threaded through
+# both the initial python invocation AND _do_resubmit() below so they survive
+# a manual wall-time resubmit, not just a native SLURM requeue (which replays
+# the original sbatch command line regardless).
+LANGEVIN_NOISE=""
+RANDOMIZE_STEP_SCALE=""
+RANDOMIZE_NUM_STEPS=""
+REPLAY_BUFFER=""
+REPLAY_BUFFER_SIZE=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -89,6 +104,11 @@ while [[ $# -gt 0 ]]; do
         --peak_learning_rate)     PEAK_LR="$2";            shift 2 ;;
         --mcmc_step_size_lr_multiplier) MCMC_STEP_SIZE_LR_MULT="$2"; shift 2 ;;
         --mcmc_step_size_max)     MCMC_STEP_SIZE_MAX="$2"; shift 2 ;;
+        --langevin_dynamics_noise) LANGEVIN_NOISE="$2";    shift 2 ;;
+        --randomize_mcmc_step_size_scale) RANDOMIZE_STEP_SCALE="$2"; shift 2 ;;
+        --randomize_mcmc_num_steps) RANDOMIZE_NUM_STEPS="$2"; shift 2 ;;
+        --mcmc_replay_buffer)     REPLAY_BUFFER="1";       shift ;;
+        --mcmc_replay_buffer_size) REPLAY_BUFFER_SIZE="$2"; shift 2 ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
@@ -140,12 +160,23 @@ FULL_RUN_NAME="${BASE_RUN_NAME}-job${SLURM_JOB_ID:-local}"
 scontrol update JobId="${SLURM_JOB_ID}" Name="${FULL_RUN_NAME}" 2>/dev/null || true
 MAX_STEPS=100000
 
-# Auto-resume from last checkpoint of a previous run with the same base name.
+# Auto-resume from the highest-step checkpoint of any previous run with the
+# same base name — selected by the step number embedded in the checkpoint
+# filename itself, NOT by directory modification time. A prior mtime-based
+# version (`ls -td ... | head -1`) could pick an older, regressed checkpoint
+# whenever a less-progressed rerun happened to touch its directory more
+# recently than the true best run — this is exactly what caused this job to
+# silently reset to an epoch-19 checkpoint after a preemption+requeue cycle.
 if [[ -z "${RESUME_CKPT}" && -z "${FRESH_START}" ]]; then
-    PREV_CKPT_DIR=$(ls -td "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"* 2>/dev/null | head -1)
-    if [[ -n "${PREV_CKPT_DIR}" && -f "${PREV_CKPT_DIR}/last.ckpt" ]]; then
-        RESUME_CKPT="${PREV_CKPT_DIR}/last.ckpt"
-        echo "Auto-resuming from: ${RESUME_CKPT}"
+    BEST_CKPT=$(ls -1 "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"*/epoch=*.ckpt 2>/dev/null \
+        | while read -r f; do
+            step=$(echo "$f" | grep -oE "step=step=[0-9]+" | grep -oE "[0-9]+$")
+            [[ -n "$step" ]] && echo "${step} ${f}"
+          done \
+        | sort -n -k1,1 | tail -1 | cut -d' ' -f2-)
+    if [[ -n "${BEST_CKPT}" ]]; then
+        RESUME_CKPT="${BEST_CKPT}"
+        echo "Auto-resuming from highest-step checkpoint: ${RESUME_CKPT}"
     fi
 fi
 
@@ -203,6 +234,11 @@ python train_model.py \
 --log_every_n_steps 200 \
 --set_matmul_precision "medium" \
 --wandb_watch \
+${LANGEVIN_NOISE:+--langevin_dynamics_noise "${LANGEVIN_NOISE}"} \
+${RANDOMIZE_STEP_SCALE:+--randomize_mcmc_step_size_scale "${RANDOMIZE_STEP_SCALE}"} \
+${RANDOMIZE_NUM_STEPS:+--randomize_mcmc_num_steps "${RANDOMIZE_NUM_STEPS}"} \
+${REPLAY_BUFFER:+--mcmc_replay_buffer} \
+${REPLAY_BUFFER_SIZE:+--mcmc_replay_buffer_size "${REPLAY_BUFFER_SIZE}"} \
 ${RESUME_CKPT:+--resume_training_ckpt "${RESUME_CKPT}"} \
 ${SLURM_ARRAY_TASK_ID:+--is_slurm_run} &
 PYTHON_PID=$!
@@ -218,8 +254,15 @@ _do_resubmit() {
     # observed happening specifically during a job's own shutdown), don't
     # silently treat that as "no duplicates" and resubmit anyway.
     local squeue_output
-    if ! squeue_output=$(squeue -u "$USER" -h -o "%i %j" 2>&1); then
+    if ! squeue_output=$(squeue -u "$USER" -h -o "%i %j %t" 2>&1); then
         echo "Could not query squeue to check for duplicates — skipping resubmit to be safe."
+        return 0
+    fi
+    # Native requeue (see --array comment above) may have already put this
+    # exact job ID back in the queue as PENDING by the time we get here —
+    # if so, don't also sbatch a separate new one.
+    if echo "${squeue_output}" | grep -qE "^${SLURM_JOB_ID}(_[0-9]+)? .* PD$"; then
+        echo "Already natively requeued as ${SLURM_JOB_ID} (state PD) — skipping manual resubmit."
         return 0
     fi
     local n_active
@@ -241,7 +284,12 @@ _do_resubmit() {
         --val_check_interval "${VAL_CHECK_INTERVAL}" \
         --limit_val_batches "${LIMIT_VAL_BATCHES}" \
         --mcmc_step_size_lr_multiplier "${MCMC_STEP_SIZE_LR_MULT}" \
-        --mcmc_step_size_max "${MCMC_STEP_SIZE_MAX}"
+        --mcmc_step_size_max "${MCMC_STEP_SIZE_MAX}" \
+        ${LANGEVIN_NOISE:+--langevin_dynamics_noise "${LANGEVIN_NOISE}"} \
+        ${RANDOMIZE_STEP_SCALE:+--randomize_mcmc_step_size_scale "${RANDOMIZE_STEP_SCALE}"} \
+        ${RANDOMIZE_NUM_STEPS:+--randomize_mcmc_num_steps "${RANDOMIZE_NUM_STEPS}"} \
+        ${REPLAY_BUFFER:+--mcmc_replay_buffer} \
+        ${REPLAY_BUFFER_SIZE:+--mcmc_replay_buffer_size "${REPLAY_BUFFER_SIZE}"}
 }
 
 # Exit 0:   clean exit — either training finished or PL saved a checkpoint on SIGTERM.
