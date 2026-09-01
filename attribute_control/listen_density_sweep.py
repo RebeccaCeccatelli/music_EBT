@@ -44,10 +44,50 @@ from inference.mus.generate_music import generate_music
 from inference.mus.tokens_to_midi import tokens_to_midi
 from data.mus.symbolic.tokenization.tokenizer_utils import load_tokenizer
 from attribute_control.attributes import ATTRIBUTES
-from attribute_control.musicality_metrics import build_bigram_logprob_table, score_sample
+from attribute_control.musicality_metrics import build_bigram_logprob_table, score_sample, segment_scores
 from convert_midi_simple import simple_synth
 
 import wandb
+
+
+CORPUS_STATS_PATH = Path(__file__).parent / "corpus_stats.json"
+
+
+def load_corpus_stats(attribute: str) -> dict:
+    """
+    Mean/stdev of `attribute` over a large sample of the training split (see
+    compute_corpus_stats.py), used to express values/deltas in standard
+    deviations from what real music actually does — raw units are misleading
+    across attributes with very different natural spreads (e.g. density's
+    corpus stdev is ~0.01, velocity's is ~0.14: the same absolute delta of
+    0.03 is a mild nudge for one and a ~3-stdev, near-unrealistic ask for the
+    other).
+    """
+    with open(CORPUS_STATS_PATH) as f:
+        stats = json.load(f)
+    return stats[attribute]
+
+
+def zscore(value, mean: float, stdev: float):
+    if value is None or stdev == 0:
+        return None
+    return (value - mean) / stdev
+
+
+def early_late_scores(tokens, bigram_table):
+    """
+    First vs. last quarter's bigram_ll/grammar_violation_rate/melodic_interval
+    — a whole-sequence average can hide a generation that's fine early on and
+    degenerates later (a pattern seen at higher lambda), so this exposes the
+    trend directly instead of only reporting one blended number.
+    """
+    if bigram_table is None:
+        return None, None, None, None, None, None
+    segs = segment_scores(tokens, bigram_table, n_segments=4)
+    early, late = segs[0], segs[-1]
+    return (early["bigram_ll"], late["bigram_ll"],
+            early["grammar_violation_rate"], late["grammar_violation_rate"],
+            early["melodic_interval"], late["melodic_interval"])
 
 
 def render_wav(tokens, tokenizer, out_dir: Path, name: str) -> str:
@@ -63,7 +103,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--regressor_checkpoint", required=True)
-    p.add_argument("--attribute", default=None, choices=[None, "density", "velocity", "duration"],
+    p.add_argument("--attribute", default=None,
+                   choices=[None, "density", "velocity", "duration", "pitch_register", "polyphony", "rhythm", "drum_density", "melodic_interval"],
                    help="Override attribute (default: read from regressor metadata)")
     p.add_argument("--ebt_checkpoint", default=None,
                    help="Override the EBT checkpoint (default: read from regressor metadata)")
@@ -83,6 +124,12 @@ def main():
                         "EACH prompt's own measured baseline density instead of shared absolute "
                         "--targets. Not clamped to any 'realistic' range — a dense prompt can be "
                         "pushed denser, a sparse one sparser, following its own natural point.")
+    p.add_argument("--target_deltas_std", type=str, default=None,
+                   help="Like --target_deltas, but in units of the attribute's corpus standard "
+                        "deviation (see attribute_control/corpus_stats.json) instead of raw "
+                        "value units — e.g. '-2,-1,1,2' means push 2 stdev below/above baseline. "
+                        "Comparable across attributes, unlike raw deltas. Takes priority over "
+                        "--target_deltas if both are given.")
     p.add_argument("--baseline_repeats", type=int, default=5,
                    help="Generations to average for each prompt's baseline density reference "
                         "(matters most for --target_deltas, since it anchors every target)")
@@ -97,11 +144,27 @@ def main():
     p.add_argument("--wandb_project", default="mus_symb_attr_control")
     p.add_argument("--wandb_run_name", default=None)
     p.add_argument("--no_musicality", action="store_true")
+    p.add_argument("--no_step_gating", action="store_true",
+                   help="Disable REMI token-type gating of attribute guidance (old "
+                        "behavior: the R³ energy gradient fires on every generation "
+                        "step regardless of token type, not just the ones where it "
+                        "has a real lever on the target attribute)")
+    p.add_argument("--lambda_taper", action="store_true",
+                   help="Hold lambda at full strength for --lambda_taper_hold_frac of "
+                        "generation, then linearly decay to --lambda_taper_floor (a "
+                        "fraction of lambda) by the end — targets the compounding-drift "
+                        "failure mode where continued full-strength guidance on an "
+                        "increasingly self-generated (not real) context degrades into "
+                        "cacophony later in long generations")
+    p.add_argument("--lambda_taper_hold_frac", type=float, default=0.4)
+    p.add_argument("--lambda_taper_floor", type=float, default=0.2)
     args = p.parse_args()
     targets = [float(t) for t in args.targets.split(",")]
     lambdas = [float(x) for x in args.lambdas.split(",")]
     args.target_deltas = ([float(d) for d in args.target_deltas.split(",")]
                            if args.target_deltas else None)
+    args.target_deltas_std = ([float(d) for d in args.target_deltas_std.split(",")]
+                               if args.target_deltas_std else None)
 
     device = args.device
     print(f"Device: {device}")
@@ -111,10 +174,19 @@ def main():
     tokenizer_type = args.tokenizer_type or reg_ckpt.get("tokenizer_type", "REMI")
     attribute = args.attribute or reg_ckpt.get("attribute", "density")
     compute_fn = ATTRIBUTES[attribute]
+    corpus_stats = load_corpus_stats(attribute)
+    corpus_mean, corpus_stdev = corpus_stats["mean"], corpus_stats["stdev"]
     print(f"Regressor:  {args.regressor_checkpoint}")
     print(f"Attribute:  {attribute}"
           f"{'  (overridden)' if args.attribute else '  (from regressor metadata)'}")
     print(f"EBT ckpt:   {ebt_checkpoint}")
+    print(f"Corpus:     mean={corpus_mean:.4f}  stdev={corpus_stdev:.4f}  "
+          f"(train split, n={corpus_stats['n_samples']})")
+
+    if args.target_deltas_std is not None:
+        args.target_deltas = [d * corpus_stdev for d in args.target_deltas_std]
+        print(f"Target deltas: {args.target_deltas_std} stdev  "
+              f"= {[round(d, 4) for d in args.target_deltas]} raw units")
 
     model, hparams = load_checkpoint(ebt_checkpoint, device)
     hparams.device = device
@@ -125,6 +197,14 @@ def main():
     hparams.infer_echo = False
     hparams.infer_ebt_advanced = False
     hparams.tokenizer_type = tokenizer_type
+    hparams.attr_gate_by_token_type = not args.no_step_gating
+    print(f"Step gating: {'off (legacy, fires every step)' if args.no_step_gating else 'on'}")
+    hparams.attribute_lambda_taper = args.lambda_taper
+    hparams.attribute_lambda_taper_hold_frac = args.lambda_taper_hold_frac
+    hparams.attribute_lambda_taper_floor = args.lambda_taper_floor
+    if args.lambda_taper:
+        print(f"Lambda taper: on (hold {args.lambda_taper_hold_frac:.0%}, "
+              f"floor {args.lambda_taper_floor:.0%})")
 
     tokenizer, vocab_size, pad_token_id = load_tokenizer(
         tokenizer_type=tokenizer_type,
@@ -161,6 +241,9 @@ def main():
                config={
                    "regressor_checkpoint": args.regressor_checkpoint,
                    "attribute": attribute,
+                   "corpus_mean": corpus_mean,
+                   "corpus_stdev": corpus_stdev,
+                   "step_gating": not args.no_step_gating,
                    "ebt_checkpoint": ebt_checkpoint,
                    "tokenizer_type": tokenizer_type,
                    "targets": targets,
@@ -173,9 +256,12 @@ def main():
                    "seed": args.seed,
                })
 
-    columns = ["prompt_id", "condition", "lambda", "target", "target_delta",
-               "baseline_value", "achieved_value",
-               "ebt_energy", "bigram_ll", "repetition_ratio", "audio"]
+    columns = ["prompt_id", "condition", "lambda", "target", "target_delta", "target_zscore",
+               "baseline_value", "achieved_value", "achieved_zscore",
+               "ebt_energy", "bigram_ll", "repetition_ratio", "grammar_violation_rate",
+               "bigram_ll_early", "bigram_ll_late",
+               "grammar_violation_rate_early", "grammar_violation_rate_late",
+               "melodic_interval_early", "melodic_interval_late", "audio"]
     table_rows = []
 
     try:
@@ -193,14 +279,20 @@ def main():
             gt_continuation = full_tokens[len(prompt): len(prompt) + args.gen_len]
             if gt_continuation:
                 gt_achieved = compute_fn(gt_continuation, tokenizer_type)
+                gt_z = zscore(gt_achieved, corpus_mean, corpus_stdev)
                 gt_music = (score_sample(model, gt_continuation, device, bigram_table)
                             if bigram_table is not None else {})
+                gt_bll_e, gt_bll_l, gt_gvr_e, gt_gvr_l, gt_mi_e, gt_mi_l = early_late_scores(gt_continuation, bigram_table)
                 gt_wav = render_wav(gt_continuation, tokenizer, out_dir, f"p{pi}_ground_truth")
-                print(f"[prompt {pi}] ground truth: achieved={gt_achieved:.4f}  music={gt_music}")
+                print(f"[prompt {pi}] ground truth: achieved={gt_achieved:.4f} (z={gt_z:+.2f})  "
+                      f"music={gt_music}  "
+                      f"early/late melodic_interval={gt_mi_e}/{gt_mi_l}")
                 table_rows.append([
-                    pi, "ground truth (real song)", None, None, None, None, gt_achieved,
+                    pi, "ground truth (real song)", None, None, None, None, None,
+                    gt_achieved, gt_z,
                     gt_music.get("ebt_energy"), gt_music.get("bigram_ll"),
-                    gt_music.get("repetition_ratio"),
+                    gt_music.get("repetition_ratio"), gt_music.get("grammar_violation_rate"),
+                    gt_bll_e, gt_bll_l, gt_gvr_e, gt_gvr_l, gt_mi_e, gt_mi_l,
                     wandb.Audio(gt_wav, caption=f"p{pi} ground truth {attribute}={gt_achieved:.3f}"),
                 ])
 
@@ -223,14 +315,22 @@ def main():
                 if baseline_gen is None:
                     baseline_gen = gen  # log audio for the first draw only
             baseline_avg = statistics.mean(baseline_vals)
+            baseline_z = zscore(baseline_avg, corpus_mean, corpus_stdev)
             music = (score_sample(model, baseline_gen, device, bigram_table)
                      if bigram_table is not None else {})
+            base_bll_e, base_bll_l, base_gvr_e, base_gvr_l, base_mi_e, base_mi_l = early_late_scores(baseline_gen, bigram_table)
             wav = render_wav(baseline_gen, tokenizer, out_dir, f"p{pi}_baseline")
-            print(f"[prompt {pi}] baseline: achieved={baseline_avg:.4f}  "
-                  f"(repeats={baseline_vals})  music={music}")
+            print(f"[prompt {pi}] baseline: achieved={baseline_avg:.4f} (z={baseline_z:+.2f})  "
+                  f"(repeats={baseline_vals})  music={music}  "
+                  f"early/late bigram_ll={base_bll_e}/{base_bll_l}  "
+                  f"early/late grammar_violation_rate={base_gvr_e}/{base_gvr_l}  "
+                  f"early/late melodic_interval={base_mi_e}/{base_mi_l}")
             table_rows.append([
-                pi, "baseline (no guidance)", 0.0, None, None, baseline_avg, baseline_avg,
+                pi, "baseline (no guidance)", 0.0, None, None, None,
+                baseline_avg, baseline_avg, baseline_z,
                 music.get("ebt_energy"), music.get("bigram_ll"), music.get("repetition_ratio"),
+                music.get("grammar_violation_rate"),
+                base_bll_e, base_bll_l, base_gvr_e, base_gvr_l, base_mi_e, base_mi_l,
                 wandb.Audio(wav, caption=f"p{pi} baseline {attribute}={baseline_avg:.3f}"),
             ])
 
@@ -254,17 +354,25 @@ def main():
                         out = generate_music(model, batch, hparams)
                     gen = out["generation_tokens"][0]
                     achieved = compute_fn(gen, tokenizer_type)
+                    tgt_z = zscore(tgt, corpus_mean, corpus_stdev)
+                    achieved_z = zscore(achieved, corpus_mean, corpus_stdev)
                     music = (score_sample(model, gen, device, bigram_table)
                              if bigram_table is not None else {})
+                    bll_e, bll_l, gvr_e, gvr_l, mi_e, mi_l = early_late_scores(gen, bigram_table)
                     name = f"p{pi}_lam{lam}_tgt{tgt:.4f}".replace(".", "_")
                     wav = render_wav(gen, tokenizer, out_dir, name)
                     delta_str = f"  (delta={delta:+.3f})" if delta is not None else ""
-                    print(f"[prompt {pi}] lambda={lam}  target={tgt:.4f}{delta_str}  "
-                          f"achieved={achieved:.4f}  music={music}")
+                    print(f"[prompt {pi}] lambda={lam}  target={tgt:.4f} (z={tgt_z:+.2f}){delta_str}  "
+                          f"achieved={achieved:.4f} (z={achieved_z:+.2f})  music={music}  "
+                          f"early/late bigram_ll={bll_e}/{bll_l}  "
+                          f"early/late grammar_violation_rate={gvr_e}/{gvr_l}  "
+                          f"early/late melodic_interval={mi_e}/{mi_l}")
                     table_rows.append([
-                        pi, f"λ={lam}", lam, tgt, delta, baseline_avg, achieved,
+                        pi, f"λ={lam}", lam, tgt, delta, tgt_z,
+                        baseline_avg, achieved, achieved_z,
                         music.get("ebt_energy"), music.get("bigram_ll"),
-                        music.get("repetition_ratio"),
+                        music.get("repetition_ratio"), music.get("grammar_violation_rate"),
+                        bll_e, bll_l, gvr_e, gvr_l, mi_e, mi_l,
                         wandb.Audio(wav, caption=f"p{pi} λ={lam} target={tgt:.3f}"
                                                   f"{delta_str} achieved={achieved:.3f}"),
                     ])

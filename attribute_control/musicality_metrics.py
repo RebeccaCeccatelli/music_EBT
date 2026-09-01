@@ -26,6 +26,15 @@ from typing import List
 import numpy as np
 import torch
 
+from attribute_control.note_density import (
+    REMI_PITCH_MIN, REMI_PITCH_MAX, REMI_PITCHDRUM_MIN, REMI_PITCHDRUM_MAX,
+)
+from attribute_control.attributes import (
+    REMI_VELOCITY_MIN_ID, REMI_VELOCITY_MAX_ID,
+    REMI_DURATION_MIN_ID, REMI_DURATION_MAX_ID,
+    compute_melodic_interval,
+)
+
 
 MIN_EBT_INPUT = 2  # matches inference/mus/generate_music.py's EBT padding requirement
 
@@ -107,10 +116,69 @@ def ebt_self_energy(model, tokens: List[int], device) -> float:
     return float(energies[-1].mean().detach().item())
 
 
+def grammar_violation_rate(tokens: List[int]) -> float:
+    """
+    Fraction of Pitch/PitchDrum-> and Velocity-> transitions that violate
+    REMI's grammar, which is empirically 100% deterministic at these two
+    points (checked over 681k real tokens: a Pitch/PitchDrum token is ALWAYS
+    followed by Velocity, a Velocity token is ALWAYS followed by Duration —
+    see generate_music.py's _remi_step_is_relevant). A well-formed sequence
+    should score ~0 here regardless of how "usual" its content is, unlike
+    bigram_ll — this catches literal format breakdown (the model emitting a
+    token sequence that isn't even valid REMI), not just unusual-sounding
+    but still well-formed output.
+    """
+    violations = 0
+    checked = 0
+    for a, b in zip(tokens, tokens[1:]):
+        is_note = (REMI_PITCH_MIN <= a <= REMI_PITCH_MAX
+                   or REMI_PITCHDRUM_MIN <= a <= REMI_PITCHDRUM_MAX)
+        is_velocity = REMI_VELOCITY_MIN_ID <= a <= REMI_VELOCITY_MAX_ID
+        if is_note:
+            checked += 1
+            if not (REMI_VELOCITY_MIN_ID <= b <= REMI_VELOCITY_MAX_ID):
+                violations += 1
+        elif is_velocity:
+            checked += 1
+            if not (REMI_DURATION_MIN_ID <= b <= REMI_DURATION_MAX_ID):
+                violations += 1
+    return violations / checked if checked else 0.0
+
+
+def segment_scores(tokens: List[int], bigram_table: np.ndarray, n_segments: int = 4) -> List[dict]:
+    """
+    Split `tokens` into `n_segments` equal-length chunks (last chunk absorbs
+    any remainder) and compute bigram_ll/repetition_ratio/grammar_violation_rate
+    independently on each — a single whole-sequence average can hide a piece
+    that's fine early on and degenerates later (or vice versa); this exposes
+    the trend directly. Returns a list of per-segment dicts, ordered start to
+    end. Doesn't include ebt_energy (would need one model forward pass per
+    segment per sample — left out here to keep sweep cost down).
+    """
+    n = len(tokens)
+    if n < n_segments:
+        n_segments = max(1, n)
+    chunk = n // n_segments
+    segments = []
+    for i in range(n_segments):
+        start = i * chunk
+        end = n if i == n_segments - 1 else (i + 1) * chunk
+        seg = tokens[start:end]
+        segments.append({
+            "bigram_ll": bigram_log_likelihood(seg, bigram_table),
+            "repetition_ratio": repetition_ratio(seg),
+            "grammar_violation_rate": grammar_violation_rate(seg),
+            "melodic_interval": compute_melodic_interval(seg, 'REMI'),
+        })
+    return segments
+
+
 def score_sample(model, tokens: List[int], device, bigram_table: np.ndarray) -> dict:
     """Convenience wrapper: all three metrics for one generated sample."""
     return {
         "ebt_energy": ebt_self_energy(model, tokens, device),
         "bigram_ll": bigram_log_likelihood(tokens, bigram_table),
         "repetition_ratio": repetition_ratio(tokens),
+        "grammar_violation_rate": grammar_violation_rate(tokens),
+        "melodic_interval": compute_melodic_interval(tokens, 'REMI'),
     }

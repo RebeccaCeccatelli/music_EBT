@@ -1,0 +1,65 @@
+{
+  "density": {
+    "mean": 0.22434230848434925,
+    "stdev": 0.011008555139113585,
+    "min": 0.18359375,
+    "max": 0.24609375,
+    "n_samples": 1821,
+    "split": "train",
+    "window": 256
+  },
+  "velocity": {
+    "mean": 0.6913456242106202,
+    "stdev": 0.13585578851865562,
+    "min": 0.14663497251522806,
+    "max": 1.0,
+    "n_samples": 1821,
+    "split": "train",
+    "window": 256
+  },
+  "duration": {
+    "mean": 0.06203289041611334,
+    "stdev": 0.05148520194618233,
+    "min": 0.0,
+    "max": 0.39408866995073893,
+    "n_samples": 1821,
+    "split": "train",
+    "window": 256
+  },
+  "pitch_register": {
+    "mean": 0.4501977298877385,
+    "stdev": 0.0701388793064548,
+    "min": 0.1889763779527559,
+    "max": 0.7559055118110236,
+    "n_samples": 1727,
+    "split": "train",
+    "window": 256
+  },
+  "polyphony": {
+    "mean": 3.029667646428974,
+    "stdev": 1.5328057040969092,
+    "min": 1.0,
+    "max": 15.333333333333334,
+    "n_samples": 1821,
+    "split": "train",
+    "window": 256
+  },
+  "rhythm": {
+    "mean": 3.4808246591024283,
+    "stdev": 1.4737951532436153,
+    "min": 1.0,
+    "max": 15.0,
+    "n_samples": 1821,
+    "split": "train",
+    "window": 256
+  },
+  "drum_density": {
+    "mean": 0.42378705070106504,
+    "stdev": 0.2618975000769066,
+    "min": 0.0,
+    "max": 1.0,
+    "n_samples": 1821,
+    "split": "train",
+    "window": 256
+  }
+}
