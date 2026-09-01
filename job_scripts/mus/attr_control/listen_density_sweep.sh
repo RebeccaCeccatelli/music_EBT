@@ -60,13 +60,34 @@ elif [[ -n "${PROMPT_INDICES_FILE-${DEFAULT_PROMPT_POOL}}" ]]; then
     PROMPT_ARGS=(--prompt_indices_file "${PROMPT_INDICES_FILE:-${DEFAULT_PROMPT_POOL}}")
 fi
 
-# TARGET_DELTAS (offsets from each prompt's own baseline) takes priority over
-# TARGETS (shared absolute values across prompts) when set.
+# TARGET_DELTAS_STD (offsets in corpus stdev units) takes priority over
+# TARGET_DELTAS (raw-unit offsets), which takes priority over TARGETS (shared
+# absolute values across prompts), when set.
 TARGET_ARGS=(--targets "${TARGETS:-0.05,0.10,0.15,0.20,0.25}")
 if [[ -n "${TARGET_DELTAS}" ]]; then
     # =value (not a separate argv token) since deltas can start with "-",
     # which argparse would otherwise misread as a new flag.
     TARGET_ARGS=(--target_deltas="${TARGET_DELTAS}")
+fi
+if [[ -n "${TARGET_DELTAS_STD}" ]]; then
+    TARGET_ARGS=(--target_deltas_std="${TARGET_DELTAS_STD}")
+fi
+
+# STEP_GATING=0 reproduces the pre-gating behavior (guidance fires on every
+# generation step) for A/B comparison against the default gated mechanism.
+GATING_ARGS=()
+if [[ "${STEP_GATING:-1}" == "0" ]]; then
+    GATING_ARGS=(--no_step_gating)
+fi
+
+# LAMBDA_TAPER=1 holds lambda at full strength for LAMBDA_TAPER_HOLD_FRAC of
+# generation, then decays it to LAMBDA_TAPER_FLOOR (a fraction of lambda) —
+# see --lambda_taper in listen_density_sweep.py for the motivation.
+TAPER_ARGS=()
+if [[ "${LAMBDA_TAPER:-0}" == "1" ]]; then
+    TAPER_ARGS=(--lambda_taper
+                --lambda_taper_hold_frac "${LAMBDA_TAPER_HOLD_FRAC:-0.4}"
+                --lambda_taper_floor "${LAMBDA_TAPER_FLOOR:-0.2}")
 fi
 
 python "${PROJECT_ROOT}/attribute_control/listen_density_sweep.py" \
@@ -76,7 +97,11 @@ python "${PROJECT_ROOT}/attribute_control/listen_density_sweep.py" \
     --baseline_repeats "${BASELINE_REPEATS:-5}" \
     --lambdas "${LAMBDAS:-0.25,0.5,1,2,4}" \
     --gen_len "${GEN_LEN:-256}" \
+    --temperature "${TEMPERATURE:-0.7}" \
+    --top_p "${TOP_P:-0.9}" \
     --seed "${SEED:-0}" \
     "${PROMPT_ARGS[@]}" \
+    "${GATING_ARGS[@]}" \
+    "${TAPER_ARGS[@]}" \
     --wandb_project "${WANDB_PROJECT:-mus_symb_attr_control}" \
     --wandb_run_name "${WANDB_RUN_NAME:-}"
