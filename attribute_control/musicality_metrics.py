@@ -107,12 +107,20 @@ def ebt_self_energy(model, tokens: List[int], device) -> float:
     finds it more self-consistent). Runs the model's normal forward pass in
     scoring mode (learning=False) — no guidance, just "how does the model
     rate this sequence."
+
+    Only meaningful for EBT: it's the one architecture whose forward pass
+    returns a per-MCMC-step energy at all (baseline Llama/GPT2 have no such
+    concept — there's no energy to report). Returns NaN for any other model
+    rather than crashing, so score_sample() stays usable across architectures.
     """
     t = list(tokens)
     if len(t) < MIN_EBT_INPUT:
         t = t + [0] * (MIN_EBT_INPUT - len(t))
     x = torch.tensor(t, dtype=torch.long, device=device).unsqueeze(0)
-    _, energies = model.forward(x, start_pos=0, learning=False, return_raw_logits=True)
+    try:
+        _, energies = model.forward(x, start_pos=0, learning=False, return_raw_logits=True)
+    except TypeError:
+        return float('nan')
     return float(energies[-1].mean().detach().item())
 
 

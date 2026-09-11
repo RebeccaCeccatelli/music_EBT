@@ -151,6 +151,44 @@ def compute_rhythm_pace(tokens: List[int], tokenizer_type: str) -> float:
     return sum(gaps) / len(gaps) if gaps else 0.0
 
 
+def compute_syncopation(tokens: List[int], tokenizer_type: str) -> float:
+    """
+    Fraction of note onsets that fall off the main beat grid — 0 = every note
+    lands squarely on a beat, 1 = every note is syncopated (off-beat). With
+    32 Position slots per bar and an assumed 4/4 feel, the 4 main beats sit
+    at positions 0, 8, 16, 24 (every 8th slot); any onset elsewhere counts as
+    syncopated. Distinct from rhythm_pace (spacing between onsets in time)
+    and density/polyphony (how many notes, not where in the bar they land) —
+    a piece can have identical density/pacing and still be dead-straight or
+    heavily syncopated, which is exactly the point of measuring this
+    separately.
+
+    Counted per note onset (each Pitch/PitchDrum token under its governing
+    Position), not per unique Position value, so a chord's several notes at
+    one syncopated onset count several times — matching how density/polyphony
+    already count per-note rather than per-onset-group.
+    """
+    if tokenizer_type != 'REMI':
+        raise NotImplementedError("compute_syncopation only supports REMI for now")
+    is_note = lambda t: (REMI_PITCH_REGISTER_MIN_ID <= t <= REMI_PITCH_REGISTER_MAX_ID
+                          or REMI_PITCHDRUM_MIN <= t <= REMI_PITCHDRUM_MAX)
+    current_pos = None
+    on_beat = 0
+    off_beat = 0
+    for t in tokens:
+        if REMI_POSITION_MIN_ID <= t <= REMI_POSITION_MAX_ID:
+            current_pos = t - REMI_POSITION_MIN_ID
+        elif t == REMI_BAR_ID:
+            current_pos = 0  # a bar boundary with no Position token yet is beat 0
+        elif is_note(t) and current_pos is not None:
+            if current_pos % 8 == 0:
+                on_beat += 1
+            else:
+                off_beat += 1
+    total = on_beat + off_beat
+    return off_beat / total if total else 0.0
+
+
 def compute_drum_density(tokens: List[int], tokenizer_type: str) -> float:
     """
     Fraction of note tokens that are PitchDrum rather than Pitch — 0 = purely
@@ -209,4 +247,5 @@ ATTRIBUTES = {
     'rhythm': compute_rhythm_pace,
     'drum_density': compute_drum_density,
     'melodic_interval': compute_melodic_interval,
+    'syncopation': compute_syncopation,
 }

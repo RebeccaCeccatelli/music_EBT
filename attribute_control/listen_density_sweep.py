@@ -104,7 +104,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--regressor_checkpoint", required=True)
     p.add_argument("--attribute", default=None,
-                   choices=[None, "density", "velocity", "duration", "pitch_register", "polyphony", "rhythm", "drum_density", "melodic_interval"],
+                   choices=[None, "density", "velocity", "duration", "pitch_register", "polyphony", "rhythm", "drum_density", "melodic_interval", "syncopation"],
                    help="Override attribute (default: read from regressor metadata)")
     p.add_argument("--ebt_checkpoint", default=None,
                    help="Override the EBT checkpoint (default: read from regressor metadata)")
@@ -158,6 +158,14 @@ def main():
                         "cacophony later in long generations")
     p.add_argument("--lambda_taper_hold_frac", type=float, default=0.4)
     p.add_argument("--lambda_taper_floor", type=float, default=0.2)
+    p.add_argument("--suppress_drum", action="store_true",
+                   help="Hard-mask the drum-kit Program token (Program_-1) for any "
+                        "prompt that itself contains no drums, at every generation "
+                        "step. Confirmed by listening: guided generation from a "
+                        "drum-free prompt routinely drifts into drums (unguided "
+                        "baselines from the same prompts don't), likely because "
+                        "density/rhythm/syncopation/polyphony's gate doesn't "
+                        "distinguish a melodic note from a drum hit.")
     args = p.parse_args()
     targets = [float(t) for t in args.targets.split(",")]
     lambdas = [float(x) for x in args.lambdas.split(",")]
@@ -199,6 +207,8 @@ def main():
     hparams.tokenizer_type = tokenizer_type
     hparams.attr_gate_by_token_type = not args.no_step_gating
     print(f"Step gating: {'off (legacy, fires every step)' if args.no_step_gating else 'on'}")
+    hparams.attr_suppress_drum_if_prompt_drum_free = args.suppress_drum
+    print(f"Drum suppression (drum-free prompts only): {'on' if args.suppress_drum else 'off'}")
     hparams.attribute_lambda_taper = args.lambda_taper
     hparams.attribute_lambda_taper_hold_frac = args.lambda_taper_hold_frac
     hparams.attribute_lambda_taper_floor = args.lambda_taper_floor
@@ -287,13 +297,21 @@ def main():
                 print(f"[prompt {pi}] ground truth: achieved={gt_achieved:.4f} (z={gt_z:+.2f})  "
                       f"music={gt_music}  "
                       f"early/late melodic_interval={gt_mi_e}/{gt_mi_l}")
+                # Logged both inside the Table (for scanning numbers) and as a
+                # plain standalone Audio panel — wandb's Table-embedded audio
+                # widget has been confirmed unreliable to render (numbers show,
+                # audio doesn't) even though the underlying files are valid;
+                # standalone panels are a more basic, reliably-supported
+                # wandb feature and are the one to actually listen from.
+                gt_audio = wandb.Audio(gt_wav, caption=f"p{pi} ground truth {attribute}={gt_achieved:.3f}")
+                wandb.log({f"audio/p{pi}_ground_truth": gt_audio})
                 table_rows.append([
                     pi, "ground truth (real song)", None, None, None, None, None,
                     gt_achieved, gt_z,
                     gt_music.get("ebt_energy"), gt_music.get("bigram_ll"),
                     gt_music.get("repetition_ratio"), gt_music.get("grammar_violation_rate"),
                     gt_bll_e, gt_bll_l, gt_gvr_e, gt_gvr_l, gt_mi_e, gt_mi_l,
-                    wandb.Audio(gt_wav, caption=f"p{pi} ground truth {attribute}={gt_achieved:.3f}"),
+                    gt_audio,
                 ])
 
             # ── Unguided baseline: the "outputs are good" reference point ──────
@@ -325,13 +343,15 @@ def main():
                   f"early/late bigram_ll={base_bll_e}/{base_bll_l}  "
                   f"early/late grammar_violation_rate={base_gvr_e}/{base_gvr_l}  "
                   f"early/late melodic_interval={base_mi_e}/{base_mi_l}")
+            baseline_audio = wandb.Audio(wav, caption=f"p{pi} baseline {attribute}={baseline_avg:.3f}")
+            wandb.log({f"audio/p{pi}_baseline": baseline_audio})
             table_rows.append([
                 pi, "baseline (no guidance)", 0.0, None, None, None,
                 baseline_avg, baseline_avg, baseline_z,
                 music.get("ebt_energy"), music.get("bigram_ll"), music.get("repetition_ratio"),
                 music.get("grammar_violation_rate"),
                 base_bll_e, base_bll_l, base_gvr_e, base_gvr_l, base_mi_e, base_mi_l,
-                wandb.Audio(wav, caption=f"p{pi} baseline {attribute}={baseline_avg:.3f}"),
+                baseline_audio,
             ])
 
             # Resolve this prompt's target list: either the shared --targets
@@ -367,14 +387,16 @@ def main():
                           f"early/late bigram_ll={bll_e}/{bll_l}  "
                           f"early/late grammar_violation_rate={gvr_e}/{gvr_l}  "
                           f"early/late melodic_interval={mi_e}/{mi_l}")
+                    guided_audio = wandb.Audio(wav, caption=f"p{pi} λ={lam} target={tgt:.3f}"
+                                                             f"{delta_str} achieved={achieved:.3f}")
+                    wandb.log({f"audio/{name}": guided_audio})
                     table_rows.append([
                         pi, f"λ={lam}", lam, tgt, delta, tgt_z,
                         baseline_avg, achieved, achieved_z,
                         music.get("ebt_energy"), music.get("bigram_ll"),
                         music.get("repetition_ratio"), music.get("grammar_violation_rate"),
                         bll_e, bll_l, gvr_e, gvr_l, mi_e, mi_l,
-                        wandb.Audio(wav, caption=f"p{pi} λ={lam} target={tgt:.3f}"
-                                                  f"{delta_str} achieved={achieved:.3f}"),
+                        guided_audio,
                     ])
 
             # Log incrementally after each prompt — long job, keep progress visible/safe.

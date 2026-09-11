@@ -306,7 +306,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--regressor_checkpoint", required=True)
     p.add_argument("--attribute", default=None,
-                   choices=[None, "density", "velocity", "duration", "pitch_register", "polyphony", "rhythm", "drum_density", "melodic_interval"],
+                   choices=[None, "density", "velocity", "duration", "pitch_register", "polyphony", "rhythm", "drum_density", "melodic_interval", "syncopation"],
                    help="Override attribute (default: read from regressor metadata)")
     p.add_argument("--ebt_checkpoint", default=None,
                    help="Override the EBT checkpoint (default: read from regressor metadata)")
