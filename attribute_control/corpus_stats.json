@@ -61,5 +61,14 @@
     "n_samples": 1821,
     "split": "train",
     "window": 256
+  },
+  "syncopation": {
+    "mean": 0.5253190602893429,
+    "stdev": 0.1825133050183847,
+    "min": 0.0,
+    "max": 1.0,
+    "n_samples": 1821,
+    "split": "train",
+    "window": 256
   }
 }

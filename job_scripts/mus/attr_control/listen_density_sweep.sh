@@ -80,6 +80,14 @@ if [[ "${STEP_GATING:-1}" == "0" ]]; then
     GATING_ARGS=(--no_step_gating)
 fi
 
+# SUPPRESS_DRUM=1 hard-masks the drum-kit Program token for prompts that are
+# themselves drum-free — confirmed by listening that guided generation
+# otherwise drifts into drums even when the unguided baseline doesn't.
+DRUM_ARGS=()
+if [[ "${SUPPRESS_DRUM:-0}" == "1" ]]; then
+    DRUM_ARGS=(--suppress_drum)
+fi
+
 # LAMBDA_TAPER=1 holds lambda at full strength for LAMBDA_TAPER_HOLD_FRAC of
 # generation, then decays it to LAMBDA_TAPER_FLOOR (a fraction of lambda) —
 # see --lambda_taper in listen_density_sweep.py for the motivation.
@@ -103,5 +111,6 @@ python "${PROJECT_ROOT}/attribute_control/listen_density_sweep.py" \
     "${PROMPT_ARGS[@]}" \
     "${GATING_ARGS[@]}" \
     "${TAPER_ARGS[@]}" \
+    "${DRUM_ARGS[@]}" \
     --wandb_project "${WANDB_PROJECT:-mus_symb_attr_control}" \
     --wandb_run_name "${WANDB_RUN_NAME:-}"

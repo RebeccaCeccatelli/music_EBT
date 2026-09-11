@@ -68,6 +68,8 @@ def _remi_step_is_relevant(last_token: int, attribute: str) -> bool:
         return is_program
     if attribute == 'melodic_interval':
         return is_program
+    if attribute == 'syncopation':
+        return is_duration or is_position
     return True  # unknown attribute: fail open, don't gate
 
 
@@ -148,8 +150,50 @@ def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz, attr
         )
         logits = outputs.logits  # (B, S, V)
     elif hparams.model_name == "baseline_llama_transformer":
-        # Baseline Llama transformer - does NOT use start_pos parameter
-        logits = model.forward(input_tokens, learning=False, return_raw_logits=True)
+        if attr_energy_fn is not None:
+            # PPLM-style single-step guidance. EBT already differentiates its
+            # own energy w.r.t. predicted_tokens as part of its native MCMC
+            # refinement loop, so adding the attribute term there is nearly
+            # free; Llama has no such loop to piggyback on, so this takes one
+            # extra gradient step directly on the raw next-token logits —
+            # the closest analogue to the position EBT's own gradient acts
+            # on (predicted_tokens[:, -1:, :]) — without inventing any
+            # EBT-specific machinery. attr_energy_fn already handles a raw
+            # (B, S, V) logits tensor identically to EBT's predicted_tokens
+            # (softmaxes internally when values fall outside [0, 1]), so no
+            # separate closure is needed here.
+            #
+            # Cost: this requires a full backward pass through the whole
+            # transformer every generation step (no cheaper hook exists,
+            # unlike EBT which is already backpropagating for its own
+            # refinement) — meaningfully more expensive per step than plain
+            # sampling, but tractable at listen-sweep scale on one GPU.
+            #
+            # There's no native model gradient to normalize against here
+            # (unlike ebt_symbolic.py's ebt_norm/attr_norm convention), so
+            # lambda_scale is applied directly as a perturbation magnitude in
+            # raw logit units — NOT on the same scale as EBT's lambda, and
+            # needs its own empirical calibration.
+            # A plain learning=False call earlier in this same run (baseline/
+            # unguided steps use it) permanently marks the transformer's
+            # shared freqs_cis buffer as an inference-mode tensor (that
+            # branch wraps it in torch.inference_mode()), which can then
+            # never participate in autograd again on this model instance —
+            # not even from inside torch.enable_grad(). Re-clone it once it's
+            # poisoned so this guided forward pass can actually backprop.
+            rotary = getattr(model.transformer, 'freqs_cis', None)
+            if rotary is not None and rotary.is_inference():
+                model.transformer.freqs_cis = rotary.clone()
+            with torch.enable_grad():
+                logits = model.forward(input_tokens, learning=True, return_raw_logits=True)
+                attr_energy = attr_energy_fn(logits)
+                attr_grad = torch.autograd.grad([attr_energy], [logits])[0]
+            lam = getattr(attr_energy_fn, 'lambda_scale', 0.0)
+            attr_norm = attr_grad.norm().clamp(min=1e-8)
+            logits = logits.detach() - lam * attr_grad / attr_norm
+        else:
+            # Baseline Llama transformer - does NOT use start_pos parameter
+            logits = model.forward(input_tokens, learning=False, return_raw_logits=True)
     else:
         # Default: assume standard transformer interface
         logits = model.forward(input_tokens, start_pos=0, learning=False, return_raw_logits=True)
@@ -236,18 +280,43 @@ def generate_remi(model, batch, hparams):
     # model's whole per-position prediction tensor (as an earlier version of
     # this code did) diluted the guidance across mostly-discarded positions.
     #
-    # Accepts either the generic hparam names (attribute_target/lambda_attribute/
-    # attribute_regressor_ckpt) or the legacy density-specific ones
-    # (density_target/lambda_density/density_regressor_ckpt, still set by
-    # demo/app.py) — both trigger the same mechanism below.
-    attr_target = getattr(hparams, 'attribute_target', None)
+    # Multi-attribute composition (R³'s "Reduce" step, Du et al. 2023): pass
+    # hparams.attribute_regressor_ckpts (list) + attribute_targets (list),
+    # optionally attribute_weights (list, default 1.0 each — a RELATIVE mix
+    # between attributes' contributions, applied before the existing
+    # gradient-normalize-then-scale step in ebt_symbolic.py). lambda_attribute
+    # stays a single overall scalar controlling the combined term's strength
+    # vs. EBT's own gradient, same interpretable convention as before. Each
+    # attribute keeps its OWN gate (_remi_step_is_relevant) and its own
+    # hard_window from its regressor's metadata — at a given step only the
+    # attributes whose gate is currently active contribute to the sum, so two
+    # attributes that never share a gate (e.g. velocity/duration) never
+    # actually need summing; two that do (e.g. density/polyphony, both gated
+    # on Duration/Position) genuinely combine at that step.
+    #
+    # Falls back to the legacy singular hparams (attribute_target/
+    # lambda_attribute/attribute_regressor_ckpt, or the density-specific
+    # density_target/lambda_density/density_regressor_ckpt still set by
+    # demo/app.py) when the plural ones aren't set — single-attribute
+    # behavior is unchanged, just implemented as a one-item list internally.
     attr_lambda = getattr(hparams, 'lambda_attribute', 0.0)
-    attr_ckpt   = getattr(hparams, 'attribute_regressor_ckpt', None)
-    if attr_ckpt is None:
-        attr_target = getattr(hparams, 'density_target', None)
-        attr_lambda = getattr(hparams, 'lambda_density', 0.0)
-        attr_ckpt   = getattr(hparams, 'density_regressor_ckpt', None)
-    attr_steering = (attr_target is not None and attr_lambda > 0 and attr_ckpt is not None)
+    attr_ckpts = getattr(hparams, 'attribute_regressor_ckpts', None)
+    attr_targets = getattr(hparams, 'attribute_targets', None)
+    attr_weights = getattr(hparams, 'attribute_weights', None)
+    if not attr_ckpts:
+        single_target = getattr(hparams, 'attribute_target', None)
+        single_ckpt = getattr(hparams, 'attribute_regressor_ckpt', None)
+        if single_ckpt is None:
+            single_target = getattr(hparams, 'density_target', None)
+            attr_lambda = getattr(hparams, 'lambda_density', 0.0)
+            single_ckpt = getattr(hparams, 'density_regressor_ckpt', None)
+        attr_ckpts = [single_ckpt] if single_ckpt is not None else []
+        attr_targets = [single_target] if single_target is not None else []
+    if not attr_weights:
+        attr_weights = [1.0] * len(attr_ckpts)
+    attr_steering = (attr_lambda > 0 and len(attr_ckpts) > 0
+                      and len(attr_ckpts) == len(attr_targets)
+                      and all(c is not None and t is not None for c, t in zip(attr_ckpts, attr_targets)))
 
     # Optional λ taper: hold at full strength for the first
     # `attr_lambda_taper_hold_frac` of generation, then linearly decay to
@@ -261,27 +330,32 @@ def generate_remi(model, batch, hparams):
     attr_lambda_taper_hold_frac = getattr(hparams, 'attribute_lambda_taper_hold_frac', 0.4)
     attr_lambda_taper_floor = getattr(hparams, 'attribute_lambda_taper_floor', 0.2)
 
-    attr_regressor = None
-    emb_weight = None
-    attr_hard_window = 48
-    attr_name = 'density'
+    # Each entry: {name, regressor, hard_window, target, weight}
+    attr_specs = []
     if attr_steering:
         from attribute_control.note_density import NoteDensityRegressor
-        reg_ckpt = torch.load(attr_ckpt, map_location='cpu', weights_only=False)
-        emb_dim  = reg_ckpt['emb_dim']
-        hidden   = reg_ckpt.get('hidden_dim', 256)
-        attr_hard_window = reg_ckpt.get('density_hard_window', 48)
-        attr_name = reg_ckpt.get('attribute', 'density')
-        attr_regressor = NoteDensityRegressor(emb_dim=emb_dim, hidden_dim=hidden)
-        attr_regressor.load_state_dict(reg_ckpt['model_state'])
-        attr_regressor.eval()
         reg_device = next(model.parameters()).device
-        attr_regressor = attr_regressor.to(reg_device)
         emb_weight = model.embeddings.weight.detach().to(reg_device)
+        for ckpt_path, tgt, w in zip(attr_ckpts, attr_targets, attr_weights):
+            reg_ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
+            emb_dim = reg_ckpt['emb_dim']
+            hidden = reg_ckpt.get('hidden_dim', 256)
+            regressor = NoteDensityRegressor(emb_dim=emb_dim, hidden_dim=hidden)
+            regressor.load_state_dict(reg_ckpt['model_state'])
+            regressor.eval().to(reg_device)
+            attr_specs.append({
+                'name': reg_ckpt.get('attribute', 'density'),
+                'regressor': regressor,
+                'hard_window': reg_ckpt.get('density_hard_window', 48),
+                'target': tgt,
+                'weight': w,
+            })
         taper_str = (f"  taper=hold{attr_lambda_taper_hold_frac:.0%}->floor{attr_lambda_taper_floor:.0%}"
                      if attr_lambda_taper else "")
-        print(f"  Attribute control (R³): attribute={attr_name}  target={attr_target:.3f}  "
-              f"λ={attr_lambda}  hard_window={attr_hard_window}{taper_str}")
+        specs_str = "  ".join(f"{s['name']}(target={s['target']:.3f} w={s['weight']} "
+                               f"hard_window={s['hard_window']})" for s in attr_specs)
+        print(f"  Attribute control (R³{'+compose' if len(attr_specs) > 1 else ''}): "
+              f"{specs_str}  λ={attr_lambda}{taper_str}")
     # ─────────────────────────────────────────────────────────────────────────
 
     # Extract prompt tokens, stripping padding
@@ -300,8 +374,28 @@ def generate_remi(model, batch, hparams):
     out_tokens = []
     out_logprobs = []
 
+    # Confirmed by direct listening (not just metrics): attribute-guided
+    # generation from a drum-free prompt routinely drifts into drums partway
+    # through, even though unguided baselines from the same prompts don't.
+    # density/polyphony/rhythm/syncopation's gate (is_duration or is_position)
+    # doesn't distinguish a melodic note from a drum hit, so pushing for
+    # "more/faster onsets" can be satisfied cheaply by switching to a drum
+    # program, which is unconstrained by melody/harmony. Since Program_-1
+    # (REMI_PROGRAM_MAX_ID, the drum-kit marker) is a single fixed vocab id,
+    # a hard logit mask reliably prevents it rather than hoping a soft energy
+    # term outweighs whatever's driving the drift.
+    suppress_drum = getattr(hparams, 'attr_suppress_drum_if_prompt_drum_free', False)
+    if suppress_drum:
+        from attribute_control.note_density import REMI_PITCHDRUM_MIN, REMI_PITCHDRUM_MAX
+        from attribute_control.attributes import REMI_PROGRAM_MAX_ID as _DRUM_PROGRAM_ID
+
     for batch_idx in range(bsz):
         prompt = prompt_tokens[batch_idx]
+
+        prompt_has_drums = suppress_drum and any(
+            REMI_PITCHDRUM_MIN <= t <= REMI_PITCHDRUM_MAX for t in prompt
+        )
+        mask_drum_program = suppress_drum and not prompt_has_drums
 
         # Seed the sliding window with the last context_length tokens of the prompt.
         # If the prompt is shorter, use it as-is; if longer, this keeps the most
@@ -317,39 +411,47 @@ def generate_remi(model, batch, hparams):
                 window, dtype=torch.long, device=device
             ).unsqueeze(0)
 
-            # ── R³ attribute energy closure (Du et al. 2023, Eq. 6) ─────────────────
+            # ── R³ attribute energy closure (Du et al. 2023, Eq. 6, generalized to a sum
+            # over multiple active attributes — the "Reduce" composition step) ─────────
             # x = predicted_tokens (B, S, V): the full MCMC state. Only the LAST
             # position (predicted_tokens[:, -1:, :]) is ever sampled into the
             # output — the rest are refined for training purposes but discarded
-            # every decode step — so the energy (and its gradient) is computed
-            # from a bounded local window: the last `attr_hard_window`
-            # committed tokens plus that one soft next-token distribution.
-            # Gate to steps where the attribute actually has a lever (REMI only —
-            # see _remi_step_is_relevant); other tokenizers fail open (ungated).
-            # hparams.attr_gate_by_token_type=False reproduces the old (ungated,
-            # fires-every-step) behavior for A/B comparison against this fix.
-            if attr_steering and (
-                not getattr(hparams, 'attr_gate_by_token_type', True)
-                or hparams.tokenizer_type != "REMI"
-                or _remi_step_is_relevant(context[-1], attr_name)
-            ):
+            # every decode step — so each attribute's energy (and its gradient) is
+            # computed from a bounded local window: the last `hard_window` committed
+            # tokens (that attribute's OWN hard_window) plus that one soft
+            # next-token distribution.
+            # Each spec is gated independently (REMI only — see
+            # _remi_step_is_relevant); only specs whose gate is active this step
+            # contribute to the sum, so e.g. velocity/duration (different gates)
+            # never actually combine at one step, while density/polyphony (same
+            # gate) genuinely do. hparams.attr_gate_by_token_type=False reproduces
+            # the old (ungated, fires-every-step) behavior for A/B comparison.
+            gate_disabled = (not getattr(hparams, 'attr_gate_by_token_type', True)
+                              or hparams.tokenizer_type != "REMI")
+            active_specs = [
+                s for s in attr_specs
+                if gate_disabled or _remi_step_is_relevant(context[-1], s['name'])
+            ] if attr_steering else []
+
+            if active_specs:
                 with torch.no_grad():
-                    local_hard = context[-attr_hard_window:]
-                    hard_tokens = torch.tensor(local_hard, dtype=torch.long,
-                                               device=emb_weight.device)
-                    hard_emb_sum = emb_weight[hard_tokens].sum(0)  # (D,)
-                    n_hard = len(local_hard)
+                    active_prepped = []
+                    for s in active_specs:
+                        local_hard = context[-s['hard_window']:]
+                        hard_tokens = torch.tensor(local_hard, dtype=torch.long,
+                                                   device=emb_weight.device)
+                        active_prepped.append({
+                            **s,
+                            'hard_emb_sum': emb_weight[hard_tokens].sum(0),  # (D,)
+                            'n_hard': len(local_hard),
+                        })
 
                 _dbg_called = [False]
 
                 def _attribute_energy_fn(
                     predicted_tokens,
-                    _h=hard_emb_sum,
-                    _n=n_hard,
-                    _reg=attr_regressor,
+                    _specs=active_prepped,
                     _W=emb_weight,
-                    _tgt=attr_target,
-                    _name=attr_name,
                     _dbg=_dbg_called,
                 ):
                     # Only the last position affects the sampled output; slicing
@@ -365,21 +467,25 @@ def generate_remi(model, batch, hparams):
                         probs = last.float()  # already probabilities
                     soft_emb_sum = (probs @ _W).sum(dim=1)          # (B, D)
                     n_soft = 1
-                    total = _n + n_soft
-                    mean_emb = (_h.unsqueeze(0) + soft_emb_sum) / total
-                    pred_attr = _reg(mean_emb)                      # (B,)
-                    # Return unscaled energy; λ is applied in ebt_symbolic.py after
-                    # gradient normalisation so that λ=1 means "same magnitude as
-                    # EBT gradient" — interpretable and effective regardless of
-                    # regressor weight scale.
-                    energy = (total * (pred_attr - _tgt) ** 2).sum()
+                    dbg_parts = []
+                    energy = 0.0
+                    for s in _specs:
+                        total = s['n_hard'] + n_soft
+                        mean_emb = (s['hard_emb_sum'].unsqueeze(0) + soft_emb_sum) / total
+                        pred_attr = s['regressor'](mean_emb)        # (B,)
+                        # Unscaled per-attribute energy; the OUTER lambda_attribute is
+                        # applied in ebt_symbolic.py after gradient normalisation so
+                        # that λ=1 means "same magnitude as EBT gradient" regardless
+                        # of regressor weight scale — the per-attribute `weight` here
+                        # only controls the RELATIVE mix when composing >1 attribute.
+                        term = s['weight'] * (total * (pred_attr - s['target']) ** 2).sum()
+                        energy = energy + term
+                        dbg_parts.append(f"{s['name']}: pred={pred_attr.item():.4f} "
+                                          f"target={s['target']:.4f} term={term.item():.4f}")
                     if not _dbg[0]:
                         _dbg[0] = True
-                        print(
-                            f"  [{_name}_fn] pred={pred_attr.item():.4f}  "
-                            f"target={_tgt:.4f}  energy={energy.item():.4f}  "
-                            f"n_hard={_n}  n_soft={n_soft}"
-                        )
+                        print(f"  [attr_fn] " + "  ".join(dbg_parts) +
+                              f"  combined_energy={energy.item():.4f}")
                     return energy
 
                 # λ is read by ebt_symbolic.py via getattr(attr_energy_fn, 'lambda_scale')
@@ -409,6 +515,10 @@ def generate_remi(model, batch, hparams):
                     last_logits = logits[0, -1, :]
                 else:
                     last_logits = logits[0]
+
+                if mask_drum_program:
+                    last_logits = last_logits.clone()
+                    last_logits[_DRUM_PROGRAM_ID] = -float('inf')
 
             if temperature > 0:
                 probs = torch.softmax(last_logits / temperature, dim=-1)
