@@ -9,7 +9,7 @@ import random
 from datetime import datetime
 from pytorch_lightning import seed_everything
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, ModelSummary
+from pytorch_lightning.callbacks import Callback, ModelCheckpoint, ModelSummary
 import sys
 import wandb
 import ast
@@ -33,6 +33,41 @@ def get_scratch_logs_dir():
     return scratch_logs
 
 _WANDB_RUN_ID_FILENAME = "wandb_run_id.txt"
+
+
+class SkipFirstPostResumeCheckpoint(Callback):
+    """
+    Blocks ModelCheckpoint from saving using the first post-resume validation
+    pass's loss, which is unreliable (often anomalously low — confirmed
+    concretely on the Anticipation baseline runs, where every single restart
+    produced a spurious valid_loss~0.2 checkpoint that never recurred).
+
+    base_model_trainer.py's LightningModule.on_load_checkpoint() sets
+    pl_module._skip_first_val_checkpoint = True on every resume. A PREVIOUS
+    attempt at this fix lived in on_validation_epoch_end and tried to
+    directly overwrite trainer.callback_metrics[monitor] there — but PL's
+    EvaluationLoop calls trainer._logger_connector.update_eval_epoch_metrics()
+    immediately after on_validation_epoch_end, which recomputes
+    callback_metrics from the raw logged values and silently clobbers that
+    override before ModelCheckpoint ever sees it (confirmed by reading
+    pytorch_lightning/loops/evaluation_loop.py directly). ModelCheckpoint's
+    own save decision happens in ITS on_validation_end, and for that same
+    hook name PL calls ALL registered callbacks' on_validation_end BEFORE
+    the LightningModule's — so there's no LightningModule-hook place left to
+    intercept. The only remaining option is a Callback whose on_validation_end
+    is registered before ModelCheckpoint in the callbacks list (train_model.py
+    does this), since callbacks fire in registration order.
+    """
+
+    def on_validation_end(self, trainer, pl_module):
+        if not getattr(pl_module, '_skip_first_val_checkpoint', False):
+            return
+        pl_module._skip_first_val_checkpoint = False
+        monitor = getattr(pl_module.hparams, 'checkpoint_monitor_string', 'valid_loss')
+        if monitor in trainer.callback_metrics:
+            trainer.callback_metrics[monitor] = torch.tensor(float('inf'))
+        print("[Resume] First post-resume validation blocked from checkpointing "
+              "(unreliable loss due to fresh random/dataloader state).")
 
 
 def _find_wandb_run_id(resume_ckpt_path: str) -> str | None:
@@ -322,6 +357,15 @@ def set_trainer(args, wandb_logger, checkpoint_callback, stage = "train"):
     limit_val_batches = 0 if args.overfit_batches > 0 else args.limit_val_batches
     val_check_interval = args.val_check_interval if args.val_check_interval == 1.0 else args.val_check_interval * args.accumulate_grad_batches  #NOTE the reason we mult by args.accumulate_grad_batches is because of this bug https://github.com/Lightning-AI/pytorch-lightning/issues/12205
     limit_test_batches = args.limit_test_batches if args.limit_test_batches == 1 else args.limit_test_batches * args.accumulate_grad_batches
+    # PL's own SLURM auto-requeue mechanism scans trainer.default_root_dir for
+    # hpc_ckpt_*.ckpt files and silently resumes from the highest-numbered one
+    # on startup, regardless of run_name/architecture/tokenizer. Left at its
+    # default (cwd == the shared project root), this collides across ANY
+    # concurrently-running jobs launched from this repo: a brand-new run can
+    # pick up and crash-load another run's in-progress checkpoint. Scoping it
+    # under a run_name-specific directory isolates each run's auto-requeue
+    # state the same way checkpoint_callback's dirpath already is above.
+    default_root_dir = os.path.join(get_scratch_logs_dir(), "hpc_autoresume", args.run_name)
     trainer = L.Trainer(
         accelerator="auto",
         devices = args.gpus,
@@ -329,9 +373,10 @@ def set_trainer(args, wandb_logger, checkpoint_callback, stage = "train"):
         precision=args.float_precision,
         max_steps=args.max_steps,
         logger=wandb_logger,
+        default_root_dir=default_root_dir,
         enable_model_summary=args.log_model_archi,
-        callbacks = [checkpoint_callback, ModelSummary(max_depth=-1)],
-        strategy = args.distributed_strategy, 
+        callbacks = [SkipFirstPostResumeCheckpoint(), checkpoint_callback, ModelSummary(max_depth=-1)],
+        strategy = args.distributed_strategy,
         enable_checkpointing=True,
         fast_dev_run = args.fast_dev_run,
         num_sanity_val_steps = args.val_sanity,

@@ -242,7 +242,12 @@ class ModelTrainer(L.LightningModule):
         # PL runs a full validation pass before training starts on resume. For EBT this
         # produces an unreliable (often way too low) loss because the fresh torch.randn
         # MCMC initial noise and fresh dataloader state are unrepresentative of normal
-        # training. Flag it so on_validation_epoch_end blocks ModelCheckpoint from saving.
+        # training — confirmed to also affect baseline models on the Anticipation
+        # dataloader (every single restart produced a spurious valid_loss~0.2
+        # checkpoint that never recurred). Flag it; train_model.py's
+        # SkipFirstPostResumeCheckpoint callback (registered before ModelCheckpoint
+        # in the callbacks list) is what actually blocks the save — see its
+        # docstring for why this can't be done from a LightningModule hook.
         self._skip_first_val_checkpoint = True
 
     def create_hook(self, name): #this is only used for debugging with `debug_unused_parameters`
@@ -332,12 +337,17 @@ class ModelTrainer(L.LightningModule):
         # Free fragmented GPU cache after validation so the first training step
         # doesn't OOM on resume (PL runs a full val pass before training begins).
         torch.cuda.empty_cache()
-        if getattr(self, '_skip_first_val_checkpoint', False):
-            self._skip_first_val_checkpoint = False
-            monitor = getattr(self.hparams, 'checkpoint_monitor_string', 'valid_loss')
-            if monitor in self.trainer.callback_metrics:
-                self.trainer.callback_metrics[monitor] = torch.tensor(float('inf'))
-            print("[Resume] First post-resume validation skipped for checkpointing (unreliable loss due to fresh random state).")
+        # NOTE: do NOT touch self._skip_first_val_checkpoint or
+        # trainer.callback_metrics here. This hook fires before PL's
+        # update_eval_epoch_metrics() recomputes callback_metrics from the
+        # raw logged values, so any override made here gets silently
+        # clobbered before ModelCheckpoint reads it — confirmed by reading
+        # pytorch_lightning/loops/evaluation_loop.py directly. The actual fix
+        # lives in train_model.py's SkipFirstPostResumeCheckpoint callback,
+        # which intercepts at the one point that's actually early enough:
+        # its on_validation_end, registered before ModelCheckpoint in the
+        # callbacks list. Resetting the flag here would make that callback
+        # never see it still set to True.
 
     def validation_step(self, batch, batch_idx):
         eval_step_dict = self.eval_step(batch, "valid")
