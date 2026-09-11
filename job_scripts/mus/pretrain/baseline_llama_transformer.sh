@@ -238,8 +238,17 @@ _do_resubmit() {
 if [[ ${TRAIN_EXIT_CODE} -eq 0 ]]; then
     LAST_STEP=$(ls "${SCRATCH_LOGS_DIR}/checkpoints/${BASE_RUN_NAME}"*/epoch=*.ckpt 2>/dev/null \
         | grep -oE "step=step=[0-9]+" | grep -oE "[0-9]+$" | sort -n | tail -1)
-    if [[ -n "${LAST_STEP}" && "${LAST_STEP}" -ge "${MAX_STEPS}" ]]; then
-        echo "Training complete at step ${LAST_STEP}. Not resubmitting."
+    # Checkpoints only save on periodic validation-interval boundaries, so
+    # max_steps often doesn't land exactly on one — the highest SAVED
+    # checkpoint can sit permanently just below MAX_STEPS even after training
+    # genuinely finished, causing an infinite "incomplete, resubmit" loop that
+    # just redoes the same final stretch forever (confirmed happening: PL's
+    # own "Trainer.fit stopped: max_steps=... reached." message was printing
+    # every cycle while this check kept concluding "incomplete"). Treat that
+    # message in this job's own log as authoritative completion too.
+    if [[ -n "${LAST_STEP}" && "${LAST_STEP}" -ge "${MAX_STEPS}" ]] \
+        || grep -qE "max_steps=${MAX_STEPS}.*reached" "./logs/slurm_${SLURM_JOB_ID}.out" 2>/dev/null; then
+        echo "Training complete (last checkpoint step: ${LAST_STEP:-n/a}, target: ${MAX_STEPS}). Not resubmitting."
     else
         echo "Clean exit but training incomplete (last step: ${LAST_STEP:-none}). Resubmitting..."
         _do_resubmit
