@@ -46,10 +46,59 @@ REMI_PROGRAM_MAX_ID = 426
 REMI_BAR_ID = 4
 
 
+def _ensure_anticipation_on_path():
+    import os
+    import sys
+    anticipation_root = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', 'data/mus/symbolic/tokenization/anticipation'))
+    if anticipation_root not in sys.path:
+        sys.path.insert(0, anticipation_root)
+
+
+def _anticipation_triplets(tokens: List[int]) -> List[int]:
+    """Shared preprocessing for reading real event triplets out of a raw
+    Anticipation token sequence. Raw sequences (as seen during training) can
+    start with a mode marker token (AUTOREGRESS/ANTICIPATE) and have real
+    events interleaved with anticipated-control triplets — this mirrors
+    AnticipationTokenizerWrapper.decode()'s own preprocessing so callers read
+    the same real events decode() would actually render, not a naive
+    "triplets start at index 0" assumption. That assumption silently
+    misaligns on any such prefix (every token read one slot off from where
+    it should be) and was confirmed to read a flat 0.0 for every real
+    training sample as a result, for compute_duration_bias — not because
+    durations are ever actually zero."""
+    _ensure_anticipation_on_path()
+    from anticipation import ops
+    from anticipation.vocab_selector import AUTOREGRESS, ANTICIPATE
+
+    tokens = list(tokens)
+    if tokens and tokens[0] in (AUTOREGRESS, ANTICIPATE):
+        tokens = tokens[1:]
+    remainder = len(tokens) % 3
+    if remainder:
+        tokens = tokens[:-remainder]
+    if tokens:
+        tokens, _ = ops.split(tokens)
+    return tokens
+
+
 def compute_velocity(tokens: List[int], tokenizer_type: str) -> float:
-    """Mean MIDI velocity (0-1, normalized by 127) of Velocity tokens in the sequence."""
+    """Mean MIDI velocity (0-1, normalized by 127) of Velocity tokens in the sequence.
+
+    REMI only — permanently, not just "not implemented yet". Anticipation's
+    own vocabulary strips velocity out before the model ever sees it:
+    events_to_compound (anticipation/convert.py) hardcodes every note to a
+    fixed default velocity when reconstructing MIDI for playback, so an
+    Anticipation-trained model has never seen or predicted a real velocity
+    value at all. There's no signal here to compute, guide toward, or
+    measure under that tokenizer, regardless of what code exists."""
     if tokenizer_type != 'REMI':
-        raise NotImplementedError("compute_velocity only supports REMI for now")
+        raise NotImplementedError(
+            f"compute_velocity has no meaning for {tokenizer_type}: its vocabulary has "
+            "no velocity field at all (every note is synthesized with the same fixed "
+            "default velocity), so this isn't a missing implementation — the "
+            "information genuinely isn't there to compute."
+        )
     vals = [
         (REMI_VELOCITY_MIN_VAL + REMI_VELOCITY_STEP * (t - REMI_VELOCITY_MIN_ID)) / 127.0
         for t in tokens if REMI_VELOCITY_MIN_ID <= t <= REMI_VELOCITY_MAX_ID
@@ -59,36 +108,83 @@ def compute_velocity(tokens: List[int], tokenizer_type: str) -> float:
 
 def compute_duration_bias(tokens: List[int], tokenizer_type: str) -> float:
     """
-    Mean normalized note length (0=shortest, 1=longest bin) of Duration tokens
-    in the sequence — a staccato (near 0) vs legato/sustained (near 1) proxy.
-    Uses each duration bin's rank in the vocab (bins are already ordered
-    short -> long by construction) rather than parsing the
-    beat.subdivision.resolution token name.
+    Mean normalized note length (0=shortest, 1=longest) of the sequence — a
+    staccato (near 0) vs legato/sustained (near 1) proxy.
+
+    REMI has no absolute duration value in its vocabulary, only 64 ordered
+    bins (short -> long by construction), so this uses each token's rank in
+    that range.
+
+    Anticipation is the opposite: every event triplet's own duration field
+    already encodes a real, absolute note length directly, in
+    TIME_RESOLUTION bins (see anticipation/config.py), capped at
+    MAX_DURATION_IN_SECONDS — normalized by that cap instead of a bin rank,
+    to land on the same [0,1] "staccato vs sustained" scale despite the
+    completely different underlying representation.
     """
-    if tokenizer_type != 'REMI':
-        raise NotImplementedError("compute_duration_bias only supports REMI for now")
-    span = REMI_DURATION_MAX_ID - REMI_DURATION_MIN_ID
-    vals = [
-        (t - REMI_DURATION_MIN_ID) / span
-        for t in tokens if REMI_DURATION_MIN_ID <= t <= REMI_DURATION_MAX_ID
-    ]
+    if tokenizer_type == 'REMI':
+        span = REMI_DURATION_MAX_ID - REMI_DURATION_MIN_ID
+        vals = [
+            (t - REMI_DURATION_MIN_ID) / span
+            for t in tokens if REMI_DURATION_MIN_ID <= t <= REMI_DURATION_MAX_ID
+        ]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    if not tokenizer_type.startswith('Anticipation'):
+        raise NotImplementedError(f"compute_duration_bias does not support {tokenizer_type}")
+
+    tokens = _anticipation_triplets(tokens)
+    _ensure_anticipation_on_path()
+    from anticipation.vocab_ant import DUR_OFFSET, NOTE_OFFSET
+    from anticipation.config import TIME_RESOLUTION, MAX_DURATION_IN_SECONDS
+
+    vals = []
+    for i in range(0, len(tokens) - 2, 3):
+        d = tokens[i + 1]
+        if DUR_OFFSET <= d < NOTE_OFFSET:
+            seconds = (d - DUR_OFFSET) / TIME_RESOLUTION
+            vals.append(min(seconds / MAX_DURATION_IN_SECONDS, 1.0))
     return sum(vals) / len(vals) if vals else 0.0
 
 
 def compute_pitch_register(tokens: List[int], tokenizer_type: str) -> float:
     """
-    Mean MIDI pitch (0-1, normalized by 127) of Pitch tokens in the sequence —
-    a low/bass-register (near 0) vs high/treble-register (near 1) proxy.
-    PitchDrum tokens are deliberately excluded: they identify a drum-kit
-    piece, not a tonal height, so including them would mix two unrelated
-    scales into one meaningless average.
+    Mean MIDI pitch (0-1, normalized by 127) — a low/bass-register (near 0)
+    vs high/treble-register (near 1) proxy.
+
+    REMI: Pitch tokens directly. PitchDrum tokens are deliberately excluded:
+    they identify a drum-kit piece, not a tonal height, so including them
+    would mix two unrelated scales into one meaningless average.
+
+    Anticipation: each event triplet's own note field packs instrument and
+    pitch together as note = instrument*128 + pitch (see anticipation/
+    ops.py's own note//128, note%128 unpacking, and MAX_INSTR=129 in
+    anticipation/config.py, where instrument value 128 is the drum kit) —
+    pitch is recovered the same way, and drum-channel notes are excluded for
+    the same reason PitchDrum is excluded under REMI.
     """
-    if tokenizer_type != 'REMI':
-        raise NotImplementedError("compute_pitch_register only supports REMI for now")
-    vals = [
-        (t + REMI_PITCH_MIDI_OFFSET) / 127.0
-        for t in tokens if REMI_PITCH_REGISTER_MIN_ID <= t <= REMI_PITCH_REGISTER_MAX_ID
-    ]
+    if tokenizer_type == 'REMI':
+        vals = [
+            (t + REMI_PITCH_MIDI_OFFSET) / 127.0
+            for t in tokens if REMI_PITCH_REGISTER_MIN_ID <= t <= REMI_PITCH_REGISTER_MAX_ID
+        ]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    if not tokenizer_type.startswith('Anticipation'):
+        raise NotImplementedError(f"compute_pitch_register does not support {tokenizer_type}")
+
+    tokens = _anticipation_triplets(tokens)
+    _ensure_anticipation_on_path()
+    from anticipation.vocab_ant import NOTE_OFFSET, REST
+
+    vals = []
+    for i in range(0, len(tokens) - 2, 3):
+        n = tokens[i + 2]
+        if NOTE_OFFSET <= n < REST:
+            instr, pitch = divmod(n - NOTE_OFFSET, 128)
+            if instr == 128:  # drum channel — not a tonal pitch
+                continue
+            vals.append(pitch / 127.0)
     return sum(vals) / len(vals) if vals else 0.0
 
 

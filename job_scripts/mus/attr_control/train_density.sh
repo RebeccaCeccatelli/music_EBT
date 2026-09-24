@@ -61,6 +61,14 @@ LR="${LR:-0.001}"
 HIDDEN_DIM="${HIDDEN_DIM:-256}"
 MAX_TRAIN_SAMPLES="${MAX_TRAIN_SAMPLES:-500000}"
 HARD_WINDOW="${HARD_WINDOW:-48}"
+# Anticipation only — see DensityDataset's own docstring in
+# train_density_regressor.py. Set NOTE_ONLY_WINDOW=1 for attributes only
+# encoded in the note token (e.g. pitch_register); leave unset/0 for anything
+# already working with the raw-window default (e.g. duration).
+NOTE_ONLY_WINDOW_ARGS=()
+if [[ "${NOTE_ONLY_WINDOW:-0}" == "1" ]]; then
+    NOTE_ONLY_WINDOW_ARGS=(--note_only_window)
+fi
 CHECKPOINT="${CHECKPOINT:-}"
 WANDB_PROJECT="${WANDB_PROJECT:-mus_symb_attr_control}"
 
@@ -128,6 +136,7 @@ python "${PROJECT_ROOT}/attribute_control/train_density_regressor.py" \
     --hidden_dim "${HIDDEN_DIM}" \
     --max_train_samples "${MAX_TRAIN_SAMPLES}" \
     --density_hard_window "${HARD_WINDOW}" \
+    "${NOTE_ONLY_WINDOW_ARGS[@]}" \
     --num_workers 8 \
     --device cuda \
     --wandb_project "${WANDB_PROJECT}" \
