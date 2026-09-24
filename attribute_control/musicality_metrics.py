@@ -78,8 +78,14 @@ def build_bigram_logprob_table(
     return logprobs
 
 
-def bigram_log_likelihood(tokens: List[int], logprob_table: np.ndarray) -> float:
-    """Mean log P(next | current) over the sequence under the real-data table."""
+def bigram_log_likelihood(tokens: List[int], logprob_table: np.ndarray | None) -> float | None:
+    """Mean log P(next | current) over the sequence under the real-data table.
+    None when no table was built (e.g. a vocabulary too large for the dense
+    table this approach uses — see listen_density_sweep.py's size guard) so
+    the OTHER metrics in score_sample() can still be computed instead of the
+    whole result being dropped."""
+    if logprob_table is None:
+        return None
     if len(tokens) < 2:
         return 0.0
     vocab_size = logprob_table.shape[0]
@@ -181,12 +187,22 @@ def segment_scores(tokens: List[int], bigram_table: np.ndarray, n_segments: int 
     return segments
 
 
-def score_sample(model, tokens: List[int], device, bigram_table: np.ndarray) -> dict:
-    """Convenience wrapper: all three metrics for one generated sample."""
+def score_sample(model, tokens: List[int], device, bigram_table: np.ndarray | None,
+                  tokenizer_type: str = 'REMI') -> dict:
+    """Convenience wrapper: all metrics for one generated sample.
+
+    grammar_violation_rate and melodic_interval both read REMI's own token ID
+    ranges directly, so calling them on a different tokenizer's raw token ids
+    doesn't raise — it silently reads garbage. Confirmed on Anticipation:
+    its much larger vocabulary coincidentally straddles REMI's narrow
+    pitch/velocity ID ranges, producing a bogus ~100% "grammar violation
+    rate" even on the real, valid ground-truth song (not a real finding —
+    just noise from checking the wrong grammar). Both are None outside REMI."""
+    is_remi = tokenizer_type == 'REMI'
     return {
         "ebt_energy": ebt_self_energy(model, tokens, device),
         "bigram_ll": bigram_log_likelihood(tokens, bigram_table),
         "repetition_ratio": repetition_ratio(tokens),
-        "grammar_violation_rate": grammar_violation_rate(tokens),
-        "melodic_interval": compute_melodic_interval(tokens, 'REMI'),
+        "grammar_violation_rate": grammar_violation_rate(tokens) if is_remi else None,
+        "melodic_interval": compute_melodic_interval(tokens, 'REMI') if is_remi else None,
     }

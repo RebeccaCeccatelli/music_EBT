@@ -177,7 +177,7 @@ def main():
             out = generate_music(model, batch, hparams)
         base_gen = out["generation_tokens"][0]
         base_vals = [fn(base_gen, tokenizer_type) for fn in compute_fns]
-        base_music = score_sample(model, base_gen, device, bigram_table)
+        base_music = score_sample(model, base_gen, device, bigram_table, tokenizer_type)
         base_wav = render_wav(base_gen, tokenizer, out_dir, f"p{pi}_baseline")
         print(f"[prompt {pi}] baseline: " +
               "  ".join(f"{n}={v:.4f}" for n, v in zip(attr_names, base_vals)) +
@@ -208,7 +208,7 @@ def main():
                     out = generate_music(model, batch, hparams)
                 gen = out["generation_tokens"][0]
                 vals = [fn(gen, tokenizer_type) for fn in compute_fns]
-                music = score_sample(model, gen, device, bigram_table)
+                music = score_sample(model, gen, device, bigram_table, tokenizer_type)
                 name = f"p{pi}_{combo_label.replace('/', '_')}_lam{lam}".replace(".", "_")
                 wav = render_wav(gen, tokenizer, out_dir, name)
                 print(f"[prompt {pi}] composed [{combo_label}] (λ={lam}): " +

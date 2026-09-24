@@ -234,14 +234,28 @@ def main():
         sample_indices = rng.sample(range(len(dataset)), min(args.n_prompts, len(dataset)))
     print(f"Prompts ({len(sample_indices)}): {sample_indices}")
 
+    # A dense (vocab_size, vocab_size) float64 table is fine for REMI's 427
+    # tokens (~1.5MB) but not for a much larger vocabulary — Anticipation's
+    # 55,028 tokens would need ~24GB for the table alone, plus another ~24GB
+    # for the log-probability array computed from it, which OOM-killed this
+    # exact job on its first run. 10,000 leaves REMI comfortably clear while
+    # catching any vocab this approach genuinely can't scale to; a sparse
+    # table would be the real fix if bigram_ll is ever needed for one.
+    _BIGRAM_TABLE_MAX_VOCAB = 10_000
+    vocab_size_for_table = model.embeddings.weight.shape[0]
     bigram_table = None
     if not args.no_musicality:
-        cache_path = str(Path(args.regressor_checkpoint).parent.parent
-                          / f"_bigram_table_{tokenizer_type}.npy")
-        bigram_table = build_bigram_logprob_table(
-            dataset, model.embeddings.weight.shape[0], n_songs=3000, seed=0,
-            cache_path=cache_path,
-        )
+        if vocab_size_for_table > _BIGRAM_TABLE_MAX_VOCAB:
+            print(f"⚠️ Skipping bigram_ll: vocab_size={vocab_size_for_table} is too large for a "
+                  f"dense ({vocab_size_for_table}x{vocab_size_for_table}) table (>{_BIGRAM_TABLE_MAX_VOCAB} "
+                  "cap) — would need tens of GB. ebt_energy and repetition_ratio are unaffected.")
+        else:
+            cache_path = str(Path(args.regressor_checkpoint).parent.parent
+                              / f"_bigram_table_{tokenizer_type}.npy")
+            bigram_table = build_bigram_logprob_table(
+                dataset, vocab_size_for_table, n_songs=3000, seed=0,
+                cache_path=cache_path,
+            )
 
     out_dir = Path(tempfile.mkdtemp(prefix="listen_density_sweep_"))
     print(f"Rendering scratch dir: {out_dir}")
@@ -273,6 +287,15 @@ def main():
                "grammar_violation_rate_early", "grammar_violation_rate_late",
                "melodic_interval_early", "melodic_interval_late", "audio"]
     table_rows = []
+    # wandb's media panel grid sorts audio keys alphabetically, and prompt
+    # indices are arbitrary (large, unsorted) dataset row numbers — sorting
+    # "audio/p1770880_..." against "audio/p807917_..." as strings interleaves
+    # every prompt's ground_truth/baseline/guided samples unpredictably,
+    # which is what made it necessary to scroll around to find the reference
+    # audio. A global, zero-padded log-order counter as the key prefix makes
+    # the panel order exactly match log order instead: ground truth, then
+    # baseline, then the guided grid, prompt by prompt.
+    audio_order = 0
 
     try:
         for pi in sample_indices:
@@ -290,8 +313,7 @@ def main():
             if gt_continuation:
                 gt_achieved = compute_fn(gt_continuation, tokenizer_type)
                 gt_z = zscore(gt_achieved, corpus_mean, corpus_stdev)
-                gt_music = (score_sample(model, gt_continuation, device, bigram_table)
-                            if bigram_table is not None else {})
+                gt_music = score_sample(model, gt_continuation, device, bigram_table, tokenizer_type)
                 gt_bll_e, gt_bll_l, gt_gvr_e, gt_gvr_l, gt_mi_e, gt_mi_l = early_late_scores(gt_continuation, bigram_table)
                 gt_wav = render_wav(gt_continuation, tokenizer, out_dir, f"p{pi}_ground_truth")
                 print(f"[prompt {pi}] ground truth: achieved={gt_achieved:.4f} (z={gt_z:+.2f})  "
@@ -304,7 +326,8 @@ def main():
                 # standalone panels are a more basic, reliably-supported
                 # wandb feature and are the one to actually listen from.
                 gt_audio = wandb.Audio(gt_wav, caption=f"p{pi} ground truth {attribute}={gt_achieved:.3f}")
-                wandb.log({f"audio/p{pi}_ground_truth": gt_audio})
+                wandb.log({f"audio/{audio_order:03d}_p{pi}_ground_truth": gt_audio})
+                audio_order += 1
                 table_rows.append([
                     pi, "ground truth (real song)", None, None, None, None, None,
                     gt_achieved, gt_z,
@@ -334,8 +357,7 @@ def main():
                     baseline_gen = gen  # log audio for the first draw only
             baseline_avg = statistics.mean(baseline_vals)
             baseline_z = zscore(baseline_avg, corpus_mean, corpus_stdev)
-            music = (score_sample(model, baseline_gen, device, bigram_table)
-                     if bigram_table is not None else {})
+            music = score_sample(model, baseline_gen, device, bigram_table, tokenizer_type)
             base_bll_e, base_bll_l, base_gvr_e, base_gvr_l, base_mi_e, base_mi_l = early_late_scores(baseline_gen, bigram_table)
             wav = render_wav(baseline_gen, tokenizer, out_dir, f"p{pi}_baseline")
             print(f"[prompt {pi}] baseline: achieved={baseline_avg:.4f} (z={baseline_z:+.2f})  "
@@ -344,7 +366,8 @@ def main():
                   f"early/late grammar_violation_rate={base_gvr_e}/{base_gvr_l}  "
                   f"early/late melodic_interval={base_mi_e}/{base_mi_l}")
             baseline_audio = wandb.Audio(wav, caption=f"p{pi} baseline {attribute}={baseline_avg:.3f}")
-            wandb.log({f"audio/p{pi}_baseline": baseline_audio})
+            wandb.log({f"audio/{audio_order:03d}_p{pi}_baseline": baseline_audio})
+            audio_order += 1
             table_rows.append([
                 pi, "baseline (no guidance)", 0.0, None, None, None,
                 baseline_avg, baseline_avg, baseline_z,
@@ -376,8 +399,7 @@ def main():
                     achieved = compute_fn(gen, tokenizer_type)
                     tgt_z = zscore(tgt, corpus_mean, corpus_stdev)
                     achieved_z = zscore(achieved, corpus_mean, corpus_stdev)
-                    music = (score_sample(model, gen, device, bigram_table)
-                             if bigram_table is not None else {})
+                    music = score_sample(model, gen, device, bigram_table, tokenizer_type)
                     bll_e, bll_l, gvr_e, gvr_l, mi_e, mi_l = early_late_scores(gen, bigram_table)
                     name = f"p{pi}_lam{lam}_tgt{tgt:.4f}".replace(".", "_")
                     wav = render_wav(gen, tokenizer, out_dir, name)
@@ -389,7 +411,8 @@ def main():
                           f"early/late melodic_interval={mi_e}/{mi_l}")
                     guided_audio = wandb.Audio(wav, caption=f"p{pi} λ={lam} target={tgt:.3f}"
                                                              f"{delta_str} achieved={achieved:.3f}")
-                    wandb.log({f"audio/{name}": guided_audio})
+                    wandb.log({f"audio/{audio_order:03d}_{name}": guided_audio})
+                    audio_order += 1
                     table_rows.append([
                         pi, f"λ={lam}", lam, tgt, delta, tgt_z,
                         baseline_avg, achieved, achieved_z,
