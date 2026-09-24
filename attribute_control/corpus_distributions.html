@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Corpus attribute distributions</title>
+<meta name="description" content="Real training-corpus distributions for velocity, duration, and pitch register, with the in-distribution range marked." />
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #f3f2ef;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #8a887f;
+    --border:         #e4e2dc;
+    --series-1:       #2a78d6;
+    --series-1-wash:  rgba(42, 120, 214, 0.14);
+    --ood-wash:       rgba(138, 136, 127, 0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --surface-2:      #232320;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #8a887f;
+      --border:         #34332e;
+      --series-1:       #3987e5;
+      --series-1-wash:  rgba(57, 135, 229, 0.18);
+      --ood-wash:       rgba(138, 136, 127, 0.14);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --surface-2:      #232320;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #8a887f;
+    --border:         #34332e;
+    --series-1:       #3987e5;
+    --series-1-wash:  rgba(57, 135, 229, 0.18);
+    --ood-wash:       rgba(138, 136, 127, 0.14);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    font-family: -apple-system, "Inter", "Segoe UI", sans-serif;
+    padding: 20px 16px 40px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 1.4em; font-weight: 700; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 0.92em; margin: 0 0 28px; line-height: 1.5; max-width: 640px; }
+
+  .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  .panel {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 18px 14px;
+  }
+  .panel-title { font-size: 1.02em; font-weight: 700; margin: 0 0 2px; }
+  .panel-sub { color: var(--text-secondary); font-size: 0.82em; margin: 0 0 10px; }
+
+  .stat-row { display: flex; gap: 14px; margin-top: 10px; flex-wrap: wrap; }
+  .stat { font-size: 0.78em; color: var(--text-secondary); }
+  .stat b { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .bar { fill: var(--series-1); }
+  .bar.ood { fill: var(--series-1); opacity: 0.35; }
+  .axis-line { stroke: var(--border); stroke-width: 1; }
+  .tick-label { fill: var(--text-muted); font-size: 9.5px; }
+  .mean-line { stroke: var(--text-primary); stroke-width: 2; }
+  .mean-label { fill: var(--text-primary); font-size: 10px; font-weight: 600; }
+  .ood-band { fill: var(--ood-wash); }
+  .ood-label { fill: var(--text-muted); font-size: 8.5px; font-style: italic; }
+
+  .legend { display: flex; align-items: center; gap: 16px; margin: 4px 0 18px; font-size: 0.8em; color: var(--text-secondary); flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .swatch.in { background: var(--series-1); }
+  .swatch.out { background: var(--series-1); opacity: 0.35; }
+  .swatch.line { width: 14px; height: 2px; border-radius: 0; background: var(--text-primary); }
+
+  .tooltip {
+    position: fixed; pointer-events: none; z-index: 10;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px; font-size: 0.78em; color: var(--text-primary);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18); display: none; white-space: nowrap;
+  }
+  .tooltip b { font-variant-numeric: tabular-nums; }
+
+  footer { margin-top: 26px; color: var(--text-muted); font-size: 0.78em; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Corpus attribute distributions</h1>
+  <p class="subtitle">
+    Real values measured over 2,000 random 256-token windows from the REMI training
+    split (giga-midi, 137,177 songs). The shaded band marks roughly mean ± 2σ — targets
+    inside it are well-covered by training data; targets outside it ask the model to
+    extrapolate, which is where guided generation tends to degrade.
+  </p>
+
+  <div class="legend">
+    <span class="legend-item"><span class="swatch in"></span> In distribution</span>
+    <span class="legend-item"><span class="swatch out"></span> Outside ~2σ</span>
+    <span class="legend-item"><span class="swatch line"></span> Mean</span>
+  </div>
+
+  <div class="panels" id="panels"></div>
+
+  <footer>
+    Source: <code>attribute_control/compute_corpus_histograms.py</code>, sampled 2026-09-24
+    (seed 0). Duration and pitch register are both left-skewed — the ±2σ band is a
+    convenient rule of thumb, not a hard boundary; pitch register in particular has a
+    much shorter real tail above the mean than below it.
+  </footer>
+</div>
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const DATA = {"velocity": {"mean": 0.7009, "stdev": 0.1262, "min": 0.1323, "max": 1.0, "bin_lo": 0.0, "bin_hi": 1.0, "bin_width": 0.04, "counts": [0, 0, 0, 1, 0, 0, 0, 4, 3, 8, 17, 35, 87, 111, 160, 224, 205, 257, 236, 239, 155, 93, 73, 40, 52], "n": 2000}, "duration": {"mean": 0.0513, "stdev": 0.0386, "min": 0.0, "max": 0.2948, "bin_lo": 0.0, "bin_hi": 0.4, "bin_width": 0.016, "counts": [315, 391, 399, 301, 223, 148, 90, 54, 22, 24, 11, 4, 7, 1, 5, 1, 1, 2, 1, 0, 0, 0, 0, 0, 0], "n": 2000}, "pitch_register": {"mean": 0.4014, "stdev": 0.1487, "min": 0.0, "max": 0.6768, "bin_lo": 0.0, "bin_hi": 0.8, "bin_width": 0.032, "counts": [210, 0, 0, 0, 0, 1, 1, 3, 17, 53, 65, 90, 174, 406, 490, 293, 127, 41, 19, 6, 3, 1, 0, 0, 0], "n": 2000}};
+
+const ATTR_META = {
+  velocity:        { title: "Velocity",        note: "Note loudness, normalized 0–1" },
+  duration:        { title: "Duration",        note: "Note-length bias, normalized 0–1" },
+  pitch_register:  { title: "Pitch register",  note: "Average pitch height, normalized 0–1" },
+};
+
+function fmt(v) { return v.toFixed(3).replace(/0+$/, "").replace(/\.$/, ".0"); }
+
+function buildPanel(key) {
+  const d = DATA[key];
+  const meta = ATTR_META[key];
+  const W = 460, H = 220;
+  const padL = 34, padR = 14, padT = 10, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const counts = d.counts;
+  const maxCount = Math.max(...counts);
+  const n = counts.length;
+  const barGap = 2;
+  const barW = Math.max(1, plotW / n - barGap);
+
+  const xScale = (i) => padL + (i / n) * plotW;
+  const yScale = (c) => padT + plotH - (c / maxCount) * plotH;
+
+  const loOOD = d.mean - 2 * d.stdev;
+  const hiOOD = d.mean + 2 * d.stdev;
+
+  const valueToX = (v) => padL + ((v - d.bin_lo) / (d.bin_hi - d.bin_lo)) * plotW;
+
+  let bars = "";
+  for (let i = 0; i < n; i++) {
+    const binLo = d.bin_lo + i * d.bin_width;
+    const binHi = binLo + d.bin_width;
+    const binMid = (binLo + binHi) / 2;
+    const isOOD = binMid < loOOD || binMid > hiOOD;
+    const x = xScale(i);
+    const y = yScale(counts[i]);
+    const h = padT + plotH - y;
+    if (counts[i] === 0) continue;
+    bars += `<rect class="bar${isOOD ? " ood" : ""}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" ` +
+            `width="${barW.toFixed(2)}" height="${Math.max(h, 1).toFixed(2)}" rx="2" ry="2" ` +
+            `data-lo="${binLo.toFixed(4)}" data-hi="${binHi.toFixed(4)}" data-count="${counts[i]}"></rect>`;
+  }
+
+  // OOD background bands (behind bars)
+  let ood = "";
+  const loX = Math.max(padL, valueToX(loOOD));
+  const hiX = Math.min(padL + plotW, valueToX(hiOOD));
+  if (loX > padL) {
+    ood += `<rect class="ood-band" x="${padL}" y="${padT}" width="${(loX - padL).toFixed(2)}" height="${plotH}"></rect>`;
+  }
+  if (hiX < padL + plotW) {
+    ood += `<rect class="ood-band" x="${hiX.toFixed(2)}" y="${padT}" width="${(padL + plotW - hiX).toFixed(2)}" height="${plotH}"></rect>`;
+  }
+
+  const meanX = valueToX(d.mean);
+
+  // x-axis ticks: bin_lo, mean, bin_hi
+  const ticks = [d.bin_lo, d.bin_hi];
+  let tickMarks = ticks.map(v =>
+    `<text class="tick-label" x="${valueToX(v).toFixed(2)}" y="${padT + plotH + 14}" text-anchor="middle">${fmt(v)}</text>`
+  ).join("");
+
+  const svg = `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${meta.title} distribution histogram">
+      ${ood}
+      <line class="axis-line" x1="${padL}" y1="${padT + plotH}" x2="${padL + plotW}" y2="${padT + plotH}"></line>
+      ${bars}
+      <line class="mean-line" x1="${meanX.toFixed(2)}" y1="${padT}" x2="${meanX.toFixed(2)}" y2="${padT + plotH}"></line>
+      <text class="mean-label" x="${meanX.toFixed(2)}" y="${padT - 1}" text-anchor="middle">mean ${fmt(d.mean)}</text>
+      ${tickMarks}
+    </svg>`;
+
+  const panel = document.createElement("div");
+  panel.className = "panel";
+  panel.innerHTML = `
+    <div class="panel-title">${meta.title}</div>
+    <div class="panel-sub">${meta.note}</div>
+    ${svg}
+    <div class="stat-row">
+      <span class="stat">mean <b>${fmt(d.mean)}</b></span>
+      <span class="stat">σ <b>${fmt(d.stdev)}</b></span>
+      <span class="stat">observed range <b>${fmt(d.min)}–${fmt(d.max)}</b></span>
+    </div>
+  `;
+
+  const tooltip = document.getElementById("tooltip");
+  panel.querySelectorAll(".bar").forEach(rect => {
+    rect.addEventListener("mousemove", (e) => {
+      const lo = parseFloat(rect.dataset.lo), hi = parseFloat(rect.dataset.hi), c = rect.dataset.count;
+      tooltip.innerHTML = `${fmt(lo)}–${fmt(hi)}: <b>${c}</b> windows`;
+      tooltip.style.display = "block";
+      tooltip.style.left = (e.clientX + 14) + "px";
+      tooltip.style.top = (e.clientY - 10) + "px";
+    });
+    rect.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+  });
+
+  return panel;
+}
+
+const container = document.getElementById("panels");
+["velocity", "duration", "pitch_register"].forEach(key => container.appendChild(buildPanel(key)));
+</script>
+</body>
+</html>
