@@ -173,7 +173,7 @@ def run_sweep(model, hparams, dataset, sample_indices, tokenizer_type, args, lam
             gen = out["generation_tokens"][0]
             baseline_vals.append(compute_fn(gen, tokenizer_type))
             if bigram_table is not None:
-                baseline_music.append(score_sample(model, gen, device, bigram_table))
+                baseline_music.append(score_sample(model, gen, device, bigram_table, tokenizer_type))
         baseline = statistics.mean(baseline_vals)
         raw.append({"prompt": pi, "target": None, "lambda": lam, "achieved_mean": baseline,
                      "achieved_all": baseline_vals, "music_all": baseline_music})
@@ -192,7 +192,7 @@ def run_sweep(model, hparams, dataset, sample_indices, tokenizer_type, args, lam
                 gen = out["generation_tokens"][0]
                 vals.append(compute_fn(gen, tokenizer_type))
                 if bigram_table is not None:
-                    music.append(score_sample(model, gen, device, bigram_table))
+                    music.append(score_sample(model, gen, device, bigram_table, tokenizer_type))
             mean_val = statistics.mean(vals)
             raw.append({"prompt": pi, "target": tgt, "lambda": lam, "achieved_mean": mean_val,
                          "achieved_all": vals, "baseline": baseline, "music_all": music})
