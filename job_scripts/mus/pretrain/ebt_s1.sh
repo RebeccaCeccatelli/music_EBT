@@ -89,10 +89,28 @@ RANDOMIZE_STEP_SCALE=""
 RANDOMIZE_NUM_STEPS=""
 REPLAY_BUFFER=""
 REPLAY_BUFFER_SIZE=""
+# Empty by default (zero behavior change for existing runs) — set this to
+# keep a new run's base name distinct from an existing lineage sharing the
+# same model/tokenizer/size, so this script's own duplicate-active-job check
+# in _do_resubmit() can't mistake the two for each other and skip resubmitting
+# one of them after a preemption.
+RUN_NAME_SUFFIX=""
+# Defaults to 1 (zero behavior change for existing single-GPU runs). Set via
+# --sbatch_gpus N to train DDP data-parallel across N GPUs on one node —
+# train_model.py already supports this natively (--distributed_strategy ddp),
+# only this launch script hardcoded --gpus 1. Threaded through both the
+# initial submission AND every self-resubmit below (as an explicit `sbatch
+# --gpus=/--ntasks-per-node=` override, since #SBATCH directives in this file
+# are this job's PERMANENT default and are shared by every lineage that
+# launches from it — REMI's and the non-stabilized Anticipation run's own
+# resubmits must keep defaulting to 1 GPU unless THEY are also explicitly
+# given --sbatch_gpus).
+SBATCH_GPUS="1"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --dataset_name)           DATASET_NAME="$2";       shift 2 ;;
+        --run_name_suffix)        RUN_NAME_SUFFIX="$2";    shift 2 ;;
         --tokenizer_type)         TOKENIZER_TYPE="$2";     shift 2 ;;
         --model_size)             MODEL_SIZE="$2";         shift 2 ;;
         --resume_training_ckpt)   RESUME_CKPT="$2";        shift 2 ;;
@@ -109,6 +127,7 @@ while [[ $# -gt 0 ]]; do
         --randomize_mcmc_num_steps) RANDOMIZE_NUM_STEPS="$2"; shift 2 ;;
         --mcmc_replay_buffer)     REPLAY_BUFFER="1";       shift ;;
         --mcmc_replay_buffer_size) REPLAY_BUFFER_SIZE="$2"; shift 2 ;;
+        --sbatch_gpus)            SBATCH_GPUS="$2";        shift 2 ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
@@ -155,7 +174,7 @@ esac
 if [[ -z "${PEAK_LR}" ]]; then
     PEAK_LR="${lr[${SLURM_ARRAY_TASK_ID}]}"
 fi
-BASE_RUN_NAME="ebt-symb-${MODEL_SIZE}-${TOK_SLUG}-s1"
+BASE_RUN_NAME="ebt-symb-${MODEL_SIZE}-${TOK_SLUG}-s1${RUN_NAME_SUFFIX}"
 FULL_RUN_NAME="${BASE_RUN_NAME}-job${SLURM_JOB_ID:-local}"
 scontrol update JobId="${SLURM_JOB_ID}" Name="${FULL_RUN_NAME}" 2>/dev/null || true
 MAX_STEPS=100000
@@ -223,7 +242,7 @@ python train_model.py \
 --clamp_futures_grad \
 \
 --context_length 512 \
---gpus "1" \
+--gpus "${SBATCH_GPUS}" \
 \
 --peak_learning_rate "${PEAK_LR}" \
 --batch_size_per_device "${BATCH_SIZE}" \
@@ -288,8 +307,9 @@ _do_resubmit() {
         echo "Skipping resubmit: ${n_active} other instance(s) of ${BASE_RUN_NAME} already in queue/running."
         return 0
     fi
-    sbatch "${BASH_SOURCE[0]}" \
+    sbatch --gpus="${SBATCH_GPUS}" --ntasks-per-node="${SBATCH_GPUS}" "${BASH_SOURCE[0]}" \
         --tokenizer_type "${TOKENIZER_TYPE}" \
+        --sbatch_gpus "${SBATCH_GPUS}" \
         --dataset_name "${DATASET_NAME}" \
         --model_size "${MODEL_SIZE}" \
         --peak_learning_rate "${PEAK_LR}" \
@@ -303,7 +323,8 @@ _do_resubmit() {
         ${RANDOMIZE_STEP_SCALE:+--randomize_mcmc_step_size_scale "${RANDOMIZE_STEP_SCALE}"} \
         ${RANDOMIZE_NUM_STEPS:+--randomize_mcmc_num_steps "${RANDOMIZE_NUM_STEPS}"} \
         ${REPLAY_BUFFER:+--mcmc_replay_buffer} \
-        ${REPLAY_BUFFER_SIZE:+--mcmc_replay_buffer_size "${REPLAY_BUFFER_SIZE}"}
+        ${REPLAY_BUFFER_SIZE:+--mcmc_replay_buffer_size "${REPLAY_BUFFER_SIZE}"} \
+        ${RUN_NAME_SUFFIX:+--run_name_suffix "${RUN_NAME_SUFFIX}"}
 }
 
 # Exit 0:   clean exit — either training finished or PL saved a checkpoint on SIGTERM.
