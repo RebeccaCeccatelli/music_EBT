@@ -73,6 +73,21 @@ def _remi_step_is_relevant(last_token: int, attribute: str) -> bool:
     return True  # unknown attribute: fail open, don't gate
 
 
+def _anticipation_step_is_relevant(triplet_idx: int, attribute: str) -> bool:
+    """Anticipation's equivalent of _remi_step_is_relevant — but simpler to
+    get right, since Anticipation's grammar is already a strict, fixed
+    (time, duration, note) triplet cycle (see mask_invalid_anticipation_tokens's
+    own triplet_idx convention: 0=time, 1=duration, 2=note, note=instr*128+pitch
+    — see attribute_control/attributes.py's compute_pitch_register). No
+    last-committed-token vocab-range decoding needed: which triplet slot is
+    about to be generated is already known exactly from the loop position."""
+    if attribute == 'duration':
+        return triplet_idx == 1
+    if attribute == 'pitch_register':
+        return triplet_idx == 2
+    return True  # unknown attribute: fail open, don't gate
+
+
 def sample_top_p(probs, p):
     """
     Perform top-p (nucleus) sampling on a probability distribution.
@@ -98,7 +113,8 @@ def sample_top_p(probs, p):
     return next_token
 
 
-def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz, attr_energy_fn=None):
+def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz, attr_energy_fn=None,
+                               energy_sink=None):
     """
     Forward pass for music token generation.
 
@@ -110,6 +126,10 @@ def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz, attr
         input_tokens: Input token sequences, shape (bsz, seq_len)
         start_pos: Starting position for KV caching (currently unused, set to 0)
         bsz: Batch size
+        energy_sink: Optional dict — if given, EBT's own per-MCMC-step energy
+            (otherwise discarded here, kept only as ebt_outputs[1]) is written
+            to energy_sink['energies'] so a caller can build an energy-vs-step
+            trajectory for the demo's generation-diagnostics plot.
 
     Returns:
         logits: Raw logits for next token prediction, shape (bsz, seq_len, vocab_size) or (bsz, vocab_size)
@@ -139,6 +159,8 @@ def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz, attr
             ebt_outputs = model.forward(input_tokens, start_pos=0, learning=False, return_raw_logits=True,
                                         attr_energy_fn=attr_energy_fn)
             logits = ebt_outputs[0][-1]  # Use final MCMC step logits
+            if energy_sink is not None:
+                energy_sink['energies'] = ebt_outputs[1]  # predicted_energies, one per MCMC step
     elif hparams.model_name == "baseline_hf_gpt2_transformer":
         # HuggingFace GPT2 model
         attention_mask = (input_tokens != model.pad_token_id).long()
@@ -356,6 +378,18 @@ def generate_remi(model, batch, hparams):
                                f"hard_window={s['hard_window']})" for s in attr_specs)
         print(f"  Attribute control (R³{'+compose' if len(attr_specs) > 1 else ''}): "
               f"{specs_str}  λ={attr_lambda}{taper_str}")
+    # attr_name/attr_target are only meaningful for a single-attribute run (the
+    # compose/multi-attribute case has no one name or target to report) — used
+    # below both for the diagnostics achieved-value trace and the wandb logging
+    # block, which previously referenced these same names without ever
+    # defining them (a silent NameError, swallowed by that block's bare
+    # `except Exception: pass`, so it had never actually logged anything).
+    attr_name = attr_specs[0]['name'] if len(attr_specs) == 1 else None
+    attr_target = attr_specs[0]['target'] if len(attr_specs) == 1 else None
+    compute_attr_fn = None
+    if attr_name is not None:
+        from attribute_control.attributes import ATTRIBUTES
+        compute_attr_fn = ATTRIBUTES.get(attr_name)
     # ─────────────────────────────────────────────────────────────────────────
 
     # Extract prompt tokens, stripping padding
@@ -389,8 +423,13 @@ def generate_remi(model, batch, hparams):
         from attribute_control.note_density import REMI_PITCHDRUM_MIN, REMI_PITCHDRUM_MAX
         from attribute_control.attributes import REMI_PROGRAM_MAX_ID as _DRUM_PROGRAM_ID
 
+    diagnostics_per_batch = []
+
     for batch_idx in range(bsz):
         prompt = prompt_tokens[batch_idx]
+        model_energy_trace = []       # [(step_idx, energy)] — EBT's own MCMC energy, every step
+        attr_energy_trace = []        # [(step_idx, energy)] — only steps where guidance was active
+        achieved_trace = []           # [(step_idx, value)] — sampled periodically, guided runs only
 
         prompt_has_drums = suppress_drum and any(
             REMI_PITCHDRUM_MIN <= t <= REMI_PITCHDRUM_MAX for t in prompt
@@ -486,6 +525,12 @@ def generate_remi(model, batch, hparams):
                         _dbg[0] = True
                         print(f"  [attr_fn] " + "  ".join(dbg_parts) +
                               f"  combined_energy={energy.item():.4f}")
+                    # Stashed on the function object (same convention as
+                    # lambda_scale below) so the per-step loop can read this
+                    # step's attribute energy from the outside — it's computed
+                    # here, inside the model's own forward pass, with no other
+                    # way back out to the caller.
+                    _attribute_energy_fn.last_energy = float(energy.item())
                     return energy
 
                 # λ is read by ebt_symbolic.py via getattr(attr_energy_fn, 'lambda_scale')
@@ -508,8 +553,9 @@ def generate_remi(model, batch, hparams):
             # ──────────────────────────────────────────────────────────────────────
 
             with torch.no_grad():
+                energy_sink = {}
                 logits = call_model_forward_decode(hparams, model, input_tensor, 0, 1,
-                                                   attr_energy_fn=attr_energy_fn)
+                                                   attr_energy_fn=attr_energy_fn, energy_sink=energy_sink)
 
                 if logits.dim() == 3:
                     last_logits = logits[0, -1, :]
@@ -519,6 +565,28 @@ def generate_remi(model, batch, hparams):
                 if mask_drum_program:
                     last_logits = last_logits.clone()
                     last_logits[_DRUM_PROGRAM_ID] = -float('inf')
+
+            # ── Generation-diagnostics collection (demo trajectory plot) ────────
+            # Model energy is recorded every step regardless of guidance — it's
+            # what EBT is minimizing even in plain, unguided generation. Attribute
+            # energy and the achieved-value trace only exist when guidance is
+            # active this step (attr_energy_fn is None otherwise).
+            energies = energy_sink.get('energies')
+            if energies:
+                model_energy_trace.append((step_idx, float(energies[-1].mean().item())))
+            if attr_energy_fn is not None and hasattr(attr_energy_fn, 'last_energy'):
+                attr_energy_trace.append((step_idx, attr_energy_fn.last_energy))
+            # Achieved value is a token-counting/statistics function, not a model
+            # call — cheap, but still only sampled every 8 steps (not every
+            # step) since it needs no finer resolution to show a convergence
+            # trend, and skipped on very short prefixes where these functions'
+            # own statistics aren't meaningful yet.
+            if compute_attr_fn is not None and len(generated) >= 8 and step_idx % 8 == 0:
+                try:
+                    achieved_trace.append((step_idx, compute_attr_fn(generated, hparams.tokenizer_type)))
+                except Exception:
+                    pass
+            # ──────────────────────────────────────────────────────────────────────
 
             if temperature > 0:
                 probs = torch.softmax(last_logits / temperature, dim=-1)
@@ -539,10 +607,29 @@ def generate_remi(model, batch, hparams):
         out_tokens.append(generated)
         out_logprobs.append(gen_logprobs)
 
+        # Final sample so the achieved-value trace always ends on the actual
+        # finished generation's value, not whatever the last step%8==0 landed on.
+        if compute_attr_fn is not None and generated and (not achieved_trace or achieved_trace[-1][0] != max_gen_len - 1):
+            try:
+                achieved_trace.append((max_gen_len - 1, compute_attr_fn(generated, hparams.tokenizer_type)))
+            except Exception:
+                pass
+
+        diagnostics_per_batch.append({
+            'model_energy': model_energy_trace,
+            'attribute_energy': attr_energy_trace if attr_steering else None,
+            'achieved_trace': ({'name': attr_name, 'target': attr_target, 'points': achieved_trace}
+                                if attr_name is not None else None),
+        })
+
     result = {
         'prompt_tokens': prompt_tokens,
         'generation_tokens': out_tokens,
         'full_sequences': [p + g for p, g in zip(prompt_tokens, out_tokens)] if echo else out_tokens,
+        # bsz is always 1 for every current caller (demo, sweeps) — indexing
+        # [0] here rather than keeping a per-batch-item list keeps callers
+        # simple; documented rather than silently assuming it.
+        'diagnostics': diagnostics_per_batch[0] if len(diagnostics_per_batch) == 1 else diagnostics_per_batch,
     }
 
     if logprobs:
@@ -638,6 +725,64 @@ def generate_anticipation(model, batch, hparams) -> Dict:
 
     pad_token_id = model.pad_token_id if hasattr(model, 'pad_token_id') else CONTROL_OFFSET - 1
 
+    # ── Attribute control (R³) setup — mirrors generate_remi's (see its own
+    # comment block for the full derivation of the mechanism itself). This
+    # was previously MISSING entirely from generate_anticipation: hparams.
+    # attribute_target/lambda_attribute/attribute_regressor_ckpt were being
+    # set by callers (listen_density_sweep.py, the demo) but never read here,
+    # so every "guided" Anticipation generation was silently identical to an
+    # unguided one. Only duration and pitch_register are meaningful for
+    # Anticipation — velocity isn't encoded in this vocabulary at all (see
+    # compute_velocity's docstring).
+    attr_lambda = getattr(hparams, 'lambda_attribute', 0.0)
+    attr_ckpts = getattr(hparams, 'attribute_regressor_ckpts', None)
+    attr_targets = getattr(hparams, 'attribute_targets', None)
+    attr_weights = getattr(hparams, 'attribute_weights', None)
+    if not attr_ckpts:
+        single_target = getattr(hparams, 'attribute_target', None)
+        single_ckpt = getattr(hparams, 'attribute_regressor_ckpt', None)
+        attr_ckpts = [single_ckpt] if single_ckpt is not None else []
+        attr_targets = [single_target] if single_target is not None else []
+    if not attr_weights:
+        attr_weights = [1.0] * len(attr_ckpts)
+    attr_steering = (attr_lambda > 0 and len(attr_ckpts) > 0
+                      and len(attr_ckpts) == len(attr_targets)
+                      and all(c is not None and t is not None for c, t in zip(attr_ckpts, attr_targets)))
+    gate_disabled = not getattr(hparams, 'attr_gate_by_token_type', True)
+
+    attr_specs = []
+    if attr_steering:
+        from attribute_control.note_density import NoteDensityRegressor
+        reg_device = next(model.parameters()).device
+        emb_weight = model.embeddings.weight.detach().to(reg_device)
+        for ckpt_path, tgt, w in zip(attr_ckpts, attr_targets, attr_weights):
+            reg_ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
+            emb_dim = reg_ckpt['emb_dim']
+            hidden = reg_ckpt.get('hidden_dim', 256)
+            regressor = NoteDensityRegressor(emb_dim=emb_dim, hidden_dim=hidden)
+            regressor.load_state_dict(reg_ckpt['model_state'])
+            regressor.eval().to(reg_device)
+            attr_specs.append({
+                'name': reg_ckpt.get('attribute', 'density'),
+                'regressor': regressor,
+                'hard_window': reg_ckpt.get('density_hard_window', 48),
+                'note_only_window': reg_ckpt.get('note_only_window', False),
+                'target': tgt,
+                'weight': w,
+            })
+        specs_str = "  ".join(f"{s['name']}(target={s['target']:.3f} w={s['weight']} "
+                               f"hard_window={s['hard_window']}"
+                               f"{' note_only' if s['note_only_window'] else ''})" for s in attr_specs)
+        print(f"  Attribute control (R³{'+compose' if len(attr_specs) > 1 else ''}, Anticipation): "
+              f"{specs_str}  λ={attr_lambda}")
+
+    attr_name = attr_specs[0]['name'] if len(attr_specs) == 1 else None
+    attr_target = attr_specs[0]['target'] if len(attr_specs) == 1 else None
+    compute_attr_fn = None
+    if attr_name is not None:
+        from attribute_control.attributes import ATTRIBUTES
+        compute_attr_fn = ATTRIBUTES.get(attr_name)
+
     # Extract prompt tokens, stripping padding
     prompt_tokens = []
     for row_ids in ids:
@@ -652,8 +797,13 @@ def generate_anticipation(model, batch, hparams) -> Dict:
     full_event_sequences = []
     generated_logprobs_all = []
 
+    diagnostics_per_batch = []
+
     for batch_idx in range(bsz):
         prompt = prompt_tokens[batch_idx]
+        model_energy_trace = []       # [(step_idx, energy)] — EBT's own MCMC energy, every step
+        attr_energy_trace = []        # [(step_idx, energy)] — only steps where guidance was active
+        achieved_trace = []           # [(step_idx, value)] — sampled periodically, guided runs only
 
         # Strip mode token (first token) if present
         if len(prompt) > 0 and prompt[0] in (AUTOREGRESS, ANTICIPATE):
@@ -705,7 +855,66 @@ def generate_anticipation(model, batch, hparams) -> Dict:
                         input_seq, dtype=torch.long, device=device
                     ).unsqueeze(0)
 
-                    logits = call_model_forward_decode(hparams, model, input_tensor, 0, 1)
+                    # ── R³ attribute energy closure — see generate_remi's own
+                    # copy of this for the full derivation; identical mechanism,
+                    # gated by _anticipation_step_is_relevant (triplet position)
+                    # instead of REMI's last-token vocab-range decoding. ───────
+                    active_specs = [
+                        s for s in attr_specs
+                        if gate_disabled or _anticipation_step_is_relevant(triplet_idx, s['name'])
+                    ] if attr_steering else []
+
+                    if active_specs:
+                        committed = history + new_token_triplet
+                        with torch.no_grad():
+                            active_prepped = []
+                            for s in active_specs:
+                                # Must mirror train_density_regressor.py's
+                                # DensityDataset exactly — a train/inference
+                                # windowing mismatch silently produces a
+                                # regressor that scores fine on its own
+                                # training distribution but gives near-useless
+                                # gradients here (confirmed the hard way on an
+                                # earlier pitch_register regressor).
+                                if s.get('note_only_window'):
+                                    local_hard = committed[2::3][-s['hard_window']:]
+                                else:
+                                    local_hard = committed[-s['hard_window']:]
+                                hard_tokens = torch.tensor(local_hard, dtype=torch.long,
+                                                           device=emb_weight.device)
+                                active_prepped.append({
+                                    **s,
+                                    'hard_emb_sum': emb_weight[hard_tokens].sum(0),
+                                    'n_hard': len(local_hard),
+                                })
+
+                        def _attribute_energy_fn(predicted_tokens, _specs=active_prepped, _W=emb_weight):
+                            last = predicted_tokens[:, -1:, :]
+                            if last.min() < 0 or last.max() > 1:
+                                probs = torch.softmax(last.float(), dim=-1)
+                            else:
+                                probs = last.float()
+                            soft_emb_sum = (probs @ _W).sum(dim=1)
+                            n_soft = 1
+                            energy = 0.0
+                            for s in _specs:
+                                total = s['n_hard'] + n_soft
+                                mean_emb = (s['hard_emb_sum'].unsqueeze(0) + soft_emb_sum) / total
+                                pred_attr = s['regressor'](mean_emb)
+                                term = s['weight'] * (total * (pred_attr - s['target']) ** 2).sum()
+                                energy = energy + term
+                            _attribute_energy_fn.last_energy = float(energy.item())
+                            return energy
+
+                        _attribute_energy_fn.lambda_scale = attr_lambda
+                        attr_energy_fn = _attribute_energy_fn
+                    else:
+                        attr_energy_fn = None
+                    # ──────────────────────────────────────────────────────────
+
+                    energy_sink = {}
+                    logits = call_model_forward_decode(hparams, model, input_tensor, 0, 1,
+                                                        attr_energy_fn=attr_energy_fn, energy_sink=energy_sink)
 
                     if logits.dim() == 3:
                         last_logits = logits[0, -1, :]
@@ -717,6 +926,21 @@ def generate_anticipation(model, batch, hparams) -> Dict:
                     last_logits = mask_invalid_anticipation_tokens(
                         last_logits.clone(), triplet_idx, rel_current, tokens_list
                     )
+
+                    # ── Generation-diagnostics collection (demo trajectory plot) ──
+                    flat_step_idx = _step * 3 + triplet_idx
+                    energies = energy_sink.get('energies')
+                    if energies:
+                        model_energy_trace.append((flat_step_idx, float(energies[-1].mean().item())))
+                    if attr_energy_fn is not None and hasattr(attr_energy_fn, 'last_energy'):
+                        attr_energy_trace.append((flat_step_idx, attr_energy_fn.last_energy))
+                    if (compute_attr_fn is not None and len(generated) >= 24
+                            and flat_step_idx % 24 == 0):
+                        try:
+                            achieved_trace.append((flat_step_idx, compute_attr_fn(generated, hparams.tokenizer_type)))
+                        except Exception:
+                            pass
+                    # ────────────────────────────────────────────────────────────
 
                     if temperature > 0:
                         probs = torch.softmax(last_logits / temperature, dim=-1)
@@ -742,9 +966,23 @@ def generate_anticipation(model, batch, hparams) -> Dict:
         full_event_sequences.append(list(tokens_list))
         generated_logprobs_all.append(gen_logprobs)
 
+        if compute_attr_fn is not None and generated and (not achieved_trace or achieved_trace[-1][0] != len(generated) - 1):
+            try:
+                achieved_trace.append((len(generated) - 1, compute_attr_fn(generated, hparams.tokenizer_type)))
+            except Exception:
+                pass
+
+        diagnostics_per_batch.append({
+            'model_energy': model_energy_trace,
+            'attribute_energy': attr_energy_trace if attr_steering else None,
+            'achieved_trace': ({'name': attr_name, 'target': attr_target, 'points': achieved_trace}
+                                if attr_name is not None else None),
+        })
+
     result = {
         'prompt_tokens': prompt_tokens,
         'generation_tokens': generated_all,
+        'diagnostics': diagnostics_per_batch[0] if len(diagnostics_per_batch) == 1 else diagnostics_per_batch,
         # events_only extracted from prompt + newly generated events, all triplet-aligned.
         # Use this instead of prompt + generated when decoding Anticipation sequences to
         # avoid the triplet-boundary mismatch that occurs when the raw prompt length is

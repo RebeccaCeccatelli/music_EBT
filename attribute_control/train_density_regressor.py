@@ -35,7 +35,7 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from attribute_control.note_density import NoteDensityRegressor
-from attribute_control.attributes import ATTRIBUTES
+from attribute_control.attributes import ATTRIBUTES, _anticipation_triplets
 
 
 # ── Dataset wrapper ─────────────────────────────────────────────────────────
@@ -63,29 +63,74 @@ class DensityDataset(Dataset):
 
     def __init__(self, music_dataset, emb_weight: torch.Tensor,
                  tokenizer_type: str, vocab_size: int, compute_fn,
-                 hard_window: int = 48):
+                 hard_window: int = 48, note_only_window: bool = False):
         self.ds             = music_dataset
         self.emb_weight     = emb_weight          # (vocab_size, emb_dim) on CPU
         self.tokenizer_type = tokenizer_type
         self.vocab_size     = vocab_size
         self.compute_fn     = compute_fn
         self.hard_window    = hard_window
+        # Anticipation triplets are (time, duration, note) — a raw last-N-tokens
+        # window is only 1-in-3 note tokens, diluting attributes (like
+        # pitch_register) that are ONLY ever encoded in the note token, and
+        # further muddied since note = instrument*128 + pitch. When True,
+        # samples hard_window+1 NOTE tokens specifically (pulling enough raw
+        # triplets to cover them) instead of hard_window+1 raw tokens — same
+        # window SIZE convention, just undiluted. Must match generate_music.py's
+        # Anticipation energy closure at inference (this flag is saved into the
+        # checkpoint so inference can read it back rather than needing to be
+        # told separately). duration's regressor does NOT use this — duration
+        # information is redundantly present across token types, so the
+        # dilution that breaks pitch_register barely affects it.
+        self.note_only_window = note_only_window
 
     def __len__(self):
         return len(self.ds)
 
     def __getitem__(self, idx):
         tokens = self.ds.get_full_tokens(idx)   # full unclipped sequence
+        if self.tokenizer_type.startswith('Anticipation'):
+            # get_full_tokens() is the raw stored sequence: a leading
+            # AUTOREGRESS/ANTICIPATE mode marker, and (for ANTICIPATE-mode
+            # sequences, ~90% of training data) real event triplets
+            # interleaved with anticipated-control triplets. Every stride-3
+            # index below (hard/future tokens, note_only_window's [2::3])
+            # assumes position 0 IS a real triplet boundary — true only
+            # after this same cleanup generate_anticipation() already does
+            # at inference (mode token stripped, ops.split() applied) before
+            # it ever windows. Skipping it here meant training windows were
+            # off-phase almost everywhere a raw slice didn't happen to start
+            # right after a mode token, silently training on wrong-field
+            # "note" embeddings and wrong attribute labels alike — confirmed
+            # via a before/after eval showing both label and prediction
+            # ranges had collapsed toward 0 for a pitch_register regressor
+            # trained this way (see docs/diary/2026-09-24.md).
+            tokens = _anticipation_triplets(tokens)
         N = len(tokens)
-        window_size = self.hard_window + 1      # hard tokens + 1 soft token
+        n_needed = self.hard_window + 1         # hard tokens + 1 soft token
 
-        if N < window_size:
+        if self.note_only_window:
+            raw_window_size = n_needed * 3      # n_needed triplets
+            if N < raw_window_size:
+                # Too short for a full window — use whatever whole triplets exist.
+                raw_start = 0
+                raw_window_size = N - (N % 3)
+            else:
+                max_start = N - raw_window_size
+                raw_start = random.randint(0, max_start - (max_start % 3)) if max_start > 0 else 0
+                raw_start -= raw_start % 3
+            window = tokens[raw_start:raw_start + raw_window_size]
+            note_tokens = window[2::3]
+            if len(note_tokens) < 2:
+                note_tokens = (note_tokens * 2)[:2]  # degenerate ultra-short song fallback
+            hard_tokens, future_tokens = note_tokens[:-1], note_tokens[-1:]
+        elif N < n_needed:
             # Song too short for a full window — use the whole thing, hard only.
             window = tokens
             hard_tokens, future_tokens = window[:-1] or window, window[-1:]
         else:
-            start = random.randint(0, N - window_size)
-            window = tokens[start:start + window_size]
+            start = random.randint(0, N - n_needed)
+            window = tokens[start:start + n_needed]
             hard_tokens, future_tokens = window[:-1], window[-1:]
 
         label = self.compute_fn(window, self.tokenizer_type)
@@ -106,7 +151,11 @@ class DensityDataset(Dataset):
             probs   = torch.softmax(logits, dim=-1)             # (1, V)
             fut_soft_sum = (probs @ self.emb_weight).sum(0)     # (D,)
 
-            e_mean = (hard_emb_sum + fut_soft_sum) / len(window)
+            # Normalize by the actual number of embedding "slots" summed
+            # (hard + 1 soft) — NOT len(window), which in note_only_window
+            # mode is the raw triplet span, not the note-token count (matches
+            # generate_music.py's inference-time convention: total = n_hard + n_soft).
+            e_mean = (hard_emb_sum + fut_soft_sum) / (len(hard_tokens) + len(future_tokens))
 
         return e_mean, torch.tensor(label, dtype=torch.float32)
 
@@ -173,13 +222,22 @@ def train(args):
         # Patch get_full_tokens through the Subset
         train_music.get_full_tokens = lambda i: train_music.dataset.get_full_tokens(train_music.indices[i])
 
+    # Sub-sample large Anticipation validation split the same way
+    if args.max_val_samples and len(val_music) > args.max_val_samples:
+        indices = random.sample(range(len(val_music)), args.max_val_samples)
+        from torch.utils.data import Subset
+        val_music = Subset(val_music, indices)
+        val_music.get_full_tokens = lambda i: val_music.dataset.get_full_tokens(val_music.indices[i])
+
     compute_fn = ATTRIBUTES[args.attribute]
 
     vocab_size = emb_weight.shape[0]
     train_ds = DensityDataset(train_music, emb_weight, args.tokenizer_type, vocab_size=vocab_size,
-                               compute_fn=compute_fn, hard_window=args.density_hard_window)
+                               compute_fn=compute_fn, hard_window=args.density_hard_window,
+                               note_only_window=args.note_only_window)
     val_ds   = DensityDataset(val_music,   emb_weight, args.tokenizer_type, vocab_size=vocab_size,
-                               compute_fn=compute_fn, hard_window=args.density_hard_window)
+                               compute_fn=compute_fn, hard_window=args.density_hard_window,
+                               note_only_window=args.note_only_window)
 
     train_loader = DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True,
@@ -274,6 +332,7 @@ def train(args):
                 'tokenizer_type': args.tokenizer_type,
                 'ebt_checkpoint': args.checkpoint,
                 'density_hard_window': args.density_hard_window,
+                'note_only_window': args.note_only_window,
                 'model_state':    model.state_dict(),
             }
             save_path = output_dir / 'best.pt'
@@ -303,7 +362,13 @@ def parse_args():
     p.add_argument('--density_hard_window', type=int, default=48,
                    help='Local hard-token window size (tokens) fed alongside the single '
                         'soft next-token; must match generate_music.py at inference')
+    p.add_argument('--note_only_window', action='store_true',
+                   help='Anticipation only: build the hard window from NOTE tokens only '
+                        '(undiluted by time/duration tokens) instead of raw last-N tokens. '
+                        'Use for attributes only encoded in the note token, e.g. pitch_register.')
     p.add_argument('--num_workers',      type=int,   default=8)
+    p.add_argument('--max_val_samples',   type=int,  default=50_000,
+                    help='Cap validation set size (Anticipation val splits can be 100x larger than REMI\'s)')
     p.add_argument('--max_train_samples', type=int,  default=500_000,
                    help='Cap on training sequences (use None for full dataset)')
     p.add_argument('--device',           default='cuda' if torch.cuda.is_available() else 'cpu')
