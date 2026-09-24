@@ -244,10 +244,9 @@ class ModelTrainer(L.LightningModule):
         # MCMC initial noise and fresh dataloader state are unrepresentative of normal
         # training — confirmed to also affect baseline models on the Anticipation
         # dataloader (every single restart produced a spurious valid_loss~0.2
-        # checkpoint that never recurred). Flag it; train_model.py's
-        # SkipFirstPostResumeCheckpoint callback (registered before ModelCheckpoint
-        # in the callbacks list) is what actually blocks the save — see its
-        # docstring for why this can't be done from a LightningModule hook.
+        # checkpoint that never recurred). Flag it; validation_step() checks this and
+        # neutralizes just the monitored value for that one cycle — see its comment
+        # for why (and why skipping logging outright, tried first, is unsafe).
         self._skip_first_val_checkpoint = True
 
     def create_hook(self, name): #this is only used for debugging with `debug_unused_parameters`
@@ -337,20 +336,37 @@ class ModelTrainer(L.LightningModule):
         # Free fragmented GPU cache after validation so the first training step
         # doesn't OOM on resume (PL runs a full val pass before training begins).
         torch.cuda.empty_cache()
-        # NOTE: do NOT touch self._skip_first_val_checkpoint or
-        # trainer.callback_metrics here. This hook fires before PL's
-        # update_eval_epoch_metrics() recomputes callback_metrics from the
-        # raw logged values, so any override made here gets silently
-        # clobbered before ModelCheckpoint reads it — confirmed by reading
-        # pytorch_lightning/loops/evaluation_loop.py directly. The actual fix
-        # lives in train_model.py's SkipFirstPostResumeCheckpoint callback,
-        # which intercepts at the one point that's actually early enough:
-        # its on_validation_end, registered before ModelCheckpoint in the
-        # callbacks list. Resetting the flag here would make that callback
-        # never see it still set to True.
+        # Safe to clear now: validation_step() already neutralized the monitored
+        # value for every step in the cycle that just finished. Clearing here
+        # means the NEXT validation cycle logs normally.
+        if getattr(self, '_skip_first_val_checkpoint', False):
+            self._skip_first_val_checkpoint = False
 
     def validation_step(self, batch, batch_idx):
         eval_step_dict = self.eval_step(batch, "valid")
+        # First validation cycle after a resume: the computed loss is unreliable
+        # (see on_load_checkpoint). Two earlier attempts tried to catch and
+        # override/skip the resulting bad metric — both confirmed broken:
+        # (1) overriding trainer.callback_metrics after the fact in
+        # on_validation_epoch_end was clobbered by PL's own
+        # update_eval_epoch_metrics() recomputing it right after; (2) a
+        # dedicated Callback trying the same override in on_validation_end
+        # ran too late relative to ModelCheckpoint's own save logic; (3)
+        # skipping self.log_metrics(...) entirely for this cycle (tried right
+        # before this version) was reproduced via a standalone PL harness to
+        # crash the run outright — ModelCheckpoint unconditionally requires
+        # its monitored key to exist in every validation cycle's logged
+        # metrics and raises MisconfigurationException otherwise.
+        # So: log everything normally, but substitute the monitored value
+        # with the worst-possible sentinel for its mode. The key still
+        # exists (no crash), and it can never be chosen as a new "best"
+        # checkpoint, which is the actual thing we need to prevent.
+        if getattr(self, '_skip_first_val_checkpoint', False):
+            monitor_string = self.hparams.checkpoint_monitor_string  # e.g. "valid_loss"
+            local_key = monitor_string[len("valid_"):] if monitor_string.startswith("valid_") else monitor_string
+            if local_key in eval_step_dict:
+                sentinel = float('inf') if self.hparams.checkpoint_monitor_mode == "min" else float('-inf')
+                eval_step_dict[local_key] = sentinel
         self.log_metrics(eval_step_dict, "valid")
 
     def test_step(self, batch, batch_idx):
