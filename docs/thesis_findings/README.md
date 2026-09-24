@@ -1,0 +1,17 @@
+# Thesis findings
+
+Standing record of results worth citing or building on — the kind of thing
+that's easy to re-derive once but costly to re-derive twice. Each entry is
+one self-contained file: the question, the method (enough to reproduce it),
+the result, and open threads it leaves behind.
+
+Ephemeral status updates (job running, sweep queued) don't belong here —
+only findings with a real conclusion.
+
+## Index
+
+- [2026-09-22 — Anticipation's attribute-guided generation was never actually implemented](2026-09-22_anticipation_attribute_guidance_was_missing.md) — `generate_anticipation()` never threaded the R³ energy guidance into the model at all; every "guided" Anticipation sample this project ever generated was functionally an unguided baseline. Fixed and verified (unguided 0.34 → guided 0.58 toward a 0.95 target). **Invalidates every prior Anticipation attribute-control accuracy number** — re-run needed before citing anything.
+- [2026-09-22 — Anticipation's pretraining loss gap is mostly a vocabulary-size artifact](2026-09-22_anticipation_loss_vocab_normalization.md) — raw valid_loss (REMI 0.76 vs Anticipation 1.09) looked like a real training deficiency; normalized against each tokenizer's own unigram entropy, both models eliminate a near-identical (Anticipation actually slightly higher) fraction of their available uncertainty. Reframes "Anticipation trains worse" — separate from (and unaffected by) the attribute-guidance bug above.
+- [2026-09-24 — Corpus attribute distributions: what's actually in-range for guided generation](2026-09-24_corpus_attribute_distributions.md) — real histograms (2,000 sampled training windows) for velocity, duration, and pitch register. Duration is sharply right-skewed (a target like 0.69 has ~zero real density); pitch register's asymmetry explains the earlier up-vs-down quality finding; velocity is the best-behaved of the three. Also: none of the three are actually normalized to [0,1] — each has its own theoretical range, and pitch_register's 0.0 values are a confirmed fallback artifact, not real notes.
+- [2026-09-24 — REMI attribute-guidance strength sweeps: accuracy, error, and musicality vs. λ](2026-09-24_remi_guidance_strength_sweeps.md) — static figures rebuilt from the comprehensive velocity/duration/pitch_register sweeps. Velocity plateaus at 99% accuracy by λ=0.03-0.04; duration's accuracy and error curves disagree; pitch register loses musicality ~4x faster per unit λ than velocity. Splitting by push direction reveals a crossover for duration/pitch_register (push-up accuracy → 100%, push-down accuracy collapses) that's the mirror image of the musicality asymmetry — neither direction is simply "better."
+- [2026-09-24 — Anticipation corpus attribute distributions](2026-09-24_anticipation_corpus_attribute_distributions.md) — same method as the REMI version, with the triplet-cleaning fix applied. Duration is even more concentrated near zero than REMI's; pitch register shows the same likely-fallback zero-cluster pattern as REMI, slightly less certain here. No comprehensive Anticipation guidance sweep exists yet to pair with this.
