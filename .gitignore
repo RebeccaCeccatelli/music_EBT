@@ -137,7 +137,9 @@ wandb
 
 *.png
 !assets/*.png
+!docs/**/*.png
 *.svg
+!docs/**/*.svg
 
 lightning_logs/
 runs/
