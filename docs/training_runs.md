@@ -80,6 +80,30 @@ Anticipation lineages) was the other half of that same investigation — raising
 Anticipation's multiplier to 20 to match REMI showed no improvement in a
 direct probe, so it was left at 2 for both Anticipation lineages.
 
+**What `randomize_mcmc_step_size_scale` actually does**, confirmed directly
+in `model/mus/ebt_symbolic.py`: the MCMC step size is a learnable parameter,
+`self.alpha` (an `nn.Parameter`, clamped to `[0.0001, mcmc_step_size_max]`).
+Without randomization, every refinement step for every training example uses
+that exact same single learned value. With `randomize_mcmc_step_size_scale`
+set (2.0 for both REMI and the stabilized Anticipation lineage):
+
+```python
+alpha = torch.clamp(self.alpha, min=0.0001, max=alpha_max)
+low = alpha / scale
+high = alpha * scale
+alpha = low + torch.rand_like(expanded_alpha) * (high - low)
+```
+
+— each step instead resamples alpha uniformly from `[alpha/2, alpha*2]`
+around the learned value, rather than always using it exactly. The point:
+a single fixed step size is brittle to how much the energy landscape's local
+curvature actually varies across different examples and steps — a value
+well-tuned for one case can overshoot or undershoot badly for another.
+Randomizing it forces the refinement process to work across a *spread* of
+step sizes instead of overfitting to one specific value, the same idea
+behind stochastic learning-rate schedules elsewhere, applied here to the
+inner MCMC loop rather than the outer training loop.
+
 ## Effective batch size note
 
 "Effective batch" = `batch_size_per_device × accumulate_grad_batches` (single
@@ -118,18 +142,36 @@ actually completed a full epoch either (87%, not 100%) — but they got
 almost twice as far through the same dataset in the same step budget purely
 from the larger batch.
 
-The batch-size gap itself is architectural: EBT's MCMC refinement
-(`mcmc_num_steps=2`, with `mcmc_step_size_learnable=True` making the
-refinement trajectory itself differentiable) has to retain intermediate
-activations across multiple internal optimization steps for the outer
-training backward pass, not just one forward+backward pass like a standard
-transformer. That's a materially larger memory footprint per training
-example, which is almost certainly why a smaller `batch_size_per_device`
-was chosen for EBT to begin with — to fit the same L40S GPU memory budget
-that comfortably holds Llama/GPT-2's simpler single-pass architecture at
-2x the batch size. (The "stabilized" Anticipation lineage's replay buffer
-pushes this further — its batch/device drops to 2, doubling the memory
-overhead again for the buffer itself.)
+The batch-size gap itself is architectural, and confirmed directly in
+`model/mus/ebt_symbolic.py` rather than inferred from the hyperparameter
+names — it's a genuine second-order-gradient ("double backward")
+computation:
+
+```python
+torch.autograd.grad(..., create_graph=create_graph, retain_graph=True, ...)
+```
+
+Inside a single forward pass, EBT runs its `mcmc_num_steps` (2) refinement
+loop. At each step it computes an energy value and calls
+`torch.autograd.grad(...)` to get a gradient, which is what actually updates
+the prediction toward lower energy. During training, `create_graph=True`
+(`create_graph = learning`) — meaning PyTorch keeps that gradient's own
+computation graph alive, not just its numeric value. This is required
+because `mcmc_step_size` is itself a learnable parameter
+(`mcmc_step_size_learnable=True`): for the outer training loss to produce a
+correct gradient *for the step size*, the outer backward pass has to
+differentiate through the act of "taking a gradient and using it to step" —
+the same class of computation as MAML-style meta-learning or
+backprop-through-optimization. That needs the graph of the inner gradient's
+own construction retained, not just its value, which is substantially more
+memory per training example than a standard transformer's single
+forward-then-backward pass — and the cost multiplies with `mcmc_num_steps`
+(here, 2 separate `create_graph=True` steps per example). That's the
+concrete reason a smaller `batch_size_per_device` was needed to fit the same
+L40S GPU memory budget that comfortably holds Llama/GPT-2's simpler
+single-pass architecture at 2x the batch size. (The "stabilized" Anticipation
+lineage's replay buffer pushes this further — its batch/device drops to 2,
+doubling the memory overhead again for the buffer itself.)
 
 In short: **EBT isn't fundamentally slower per example — it's fundamentally
 more memory-hungry per example**, and under this project's fixed-step-count
