@@ -1,11 +1,15 @@
 # Validation loss progression: EBT vs. baselines, and Anticipation's two lineages
 
 **Date:** 2026-09-25
-**Reproduce with:** pull `run.history(keys=["valid_loss", "_step"])` for each
-wandb run ID below (`rceccatelli-eth-z-rich/mus_symb_ebt_pretrain` and
-`.../mus_symb_baseline_pretrain`), concatenate by step, and see
+**Reproduce with:** for Llama/GPT-2 and the Anticipation lineages, pull
+`run.history(keys=["valid_loss", "_step"])` per wandb run ID below
+(`rceccatelli-eth-z-rich/mus_symb_ebt_pretrain` and
+`.../mus_symb_baseline_pretrain`) — see
 `attribute_control/sweep_tables/val_loss_histories.json` for the already-pulled
-data these figures were built from.
+data. **For REMI specifically, use the checkpoint filenames directly**
+instead (`ls .../checkpoints/ebt-symb-small-remi-s1-job22827004_*/epoch=*.ckpt`
+and its successor job directories) — see "Why this needed extra care" below
+for why the wandb version is wrong for this one lineage.
 
 ## Why this needed extra care
 
@@ -22,11 +26,43 @@ reliability fix, 2026-09-24). Confirmed via each checkpoint directory's own
 | EBT Anticipation, stabilized | 8 |
 | Llama / GPT-2 (REMI baselines) | 1 each |
 
-Every EBT chart below stitches all of a lineage's run IDs together by step
-number to get the real, complete history — pulling just the most recent run
-ID (as `docs/training_runs.md`'s hyperparameter table does, deliberately,
-since that table only needs current values) would silently drop most of the
-actual training history for these lineages.
+**A first version of this chart stitched all of a lineage's wandb run IDs
+together by step number — this was wrong for REMI, not just noisy.** Two of
+REMI's four run IDs (`yy0269tr`, `8wffvj5k`) turned out to report
+*overlapping* step ranges (both have data for steps 0–13,048), so merging
+them by step number interleaved two different runs' readings at the same
+step numbers.
+
+Checked the actual checkpoint *files* directly instead — the real saved
+weights, independent of any wandb logging — and this uncovered something
+real, not just a logging artifact: **REMI's training genuinely forked into
+multiple divergent branches** during 2026-08-22 to 2026-08-28 (roughly steps
+7,000–12,728). At step 10,584 alone, six different job IDs each saved a
+checkpoint labeled "step 10584" with six *different* loss values (0.7726,
+0.6038 x3, 0.6574, 0.6650) — meaning several separate resubmissions grabbed
+the same ancestor checkpoint and continued training independently, each
+producing real but different weights that all inherited the same step
+number. This is exactly the failure mode the checkpoint-resume-reliability
+fix's commit message referred to ("cross-job collisions, incompatible
+lineages") — confirmed here to have actually happened, not just a
+theoretical risk.
+
+The currently-active lineage (`job22827004` onward, leading to today's
+`job23666767`) picked up one specific branch and, from step ~11,020 onward,
+shows a smooth, single, self-consistent trajectory through 18 further
+resubmissions all the way to the current step (~21,000) — so the *current
+model* is not compromised. But the checkpoint history strictly between
+steps ~7,000–12,728 doesn't represent one coherent story and shouldn't be
+cited as if it does. **The REMI curve below uses only the currently-active
+lineage's own checkpoint files** (step ≥ 11,020; the single step-10,584
+starting point is also excluded — its value, 0.6650, shows the same
+isolated-dip-followed-by-jump-back-up signature as the already-documented
+spurious post-resume artifact), not the wandb merge.
+
+Llama, GPT-2, and both Anticipation lineages have not been re-verified this
+same way yet — their wandb run IDs didn't show the same overlapping-range
+red flag REMI's did, but that's a weaker check than actually walking their
+checkpoint files, which is what actually caught this for REMI.
 
 ## Result
 
@@ -47,11 +83,10 @@ becomes visible.
 
 ## Interpretation
 
-- **REMI**: EBT, Llama, and GPT-2 all follow a similar early shape, but
-  EBT's own logged history only extends to ~step 20,000 (the most recent
-  segment available), while Llama/GPT-2 both ran to ~99,000+. Over the range
-  where they overlap, EBT's validation loss sits **visibly higher** than
-  Llama/GPT-2's (~0.7–0.8 vs. ~0.55–0.6 around step 10,000–20,000) — though
+- **REMI**: EBT's clean (single-lineage) history runs from step ~11,020 to
+  ~21,000, while Llama/GPT-2 both ran to ~99,000+. Over the range where they
+  overlap, EBT's validation loss sits **visibly higher** than Llama/GPT-2's
+  (~0.73–0.79 vs. ~0.6–0.65 around step 11,000–20,000) — though
   this comparison should be read cautiously: EBT's `valid_loss` comes from a
   different training objective (energy-based, via MCMC refinement) than
   Llama/GPT-2's plain next-token cross-entropy, so the two numbers aren't
@@ -77,12 +112,17 @@ becomes visible.
 
 ## Caveats
 
-- EBT REMI's history stops at ~20,000 in this data pull — training has
-  continued since (see `docs/diary/`); this chart reflects wandb history at
-  the time of pulling, not the current step count.
-- The remaining visible spikes/dips are the known spurious post-resume
-  artifact, not filtered out here (log scale only compresses their visual
-  weight) — don't read them as real momentary quality changes.
+- EBT REMI's clean history stops at ~21,000 in this data pull — training has
+  continued since (see `docs/diary/`); this chart reflects the checkpoint
+  files present at the time of pulling, not the current step count.
+- The REMI curve deliberately excludes steps < 11,020 (the divergent-branch
+  period) — this is not the same thing as "REMI training started at step
+  11,020." Real training happened before that point too; it just isn't
+  possible to cite a single trustworthy loss value from that specific window
+  given the branching.
+- The Anticipation curves (original vs. stabilized) still use the earlier
+  wandb-merge methodology, not the checkpoint-file method that caught the
+  REMI issue — see "Open threads."
 - EBT's loss is not necessarily numerically comparable to Llama/GPT-2's on
   an absolute basis (different training objectives) — the comparison here is
   about *trajectory shape and step coverage*, not a claim that one model is
@@ -92,7 +132,12 @@ becomes visible.
 
 - Re-pull once EBT REMI's currently-running training job (job 23666767, on
   `mit_normal_gpu` as of 2026-09-24) has logged enough new history to extend
-  this chart meaningfully past step 20,000.
+  this chart meaningfully past step 21,000.
+- Re-verify Llama, GPT-2, and both Anticipation lineages' validation-loss
+  curves using the same direct-checkpoint-file method that caught the REMI
+  branching issue, rather than trusting their wandb run IDs just because
+  they didn't show an overlapping-step-range red flag — that check is weaker
+  than actually walking the checkpoint files.
 - Confirm whether EBT's own valid_loss is truly incomparable to the
   baselines' — check whether it's actually cross-entropy of the final MCMC
   step's prediction only, or something else, before ever claiming
