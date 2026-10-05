@@ -106,6 +106,13 @@ class DensityDataset(Dataset):
             # ranges had collapsed toward 0 for a pitch_register regressor
             # trained this way (see docs/diary/2026-09-24.md).
             tokens = _anticipation_triplets(tokens)
+        if len(tokens) < 3:
+            # Nothing usable left (e.g. an Anticipation sequence made only of
+            # anticipated controls): every branch below would then sum zero
+            # embeddings and divide by zero, making e_mean NaN — and a single
+            # NaN sample turns the whole batch's loss NaN (job 23658023 logged
+            # train_loss=nan from epoch 1). Draw a different sequence instead.
+            return self[random.randrange(len(self))]
         N = len(tokens)
         n_needed = self.hard_window + 1         # hard tokens + 1 soft token
 
@@ -176,6 +183,9 @@ def extract_embedding_weight(ckpt_path: str) -> torch.Tensor:
         )
     w = state[key].float()
     print(f"  Embedding shape: {tuple(w.shape)}  (vocab_size={w.shape[0]}, emb_dim={w.shape[1]})")
+    if not torch.isfinite(w).all():
+        raise ValueError(f"Embedding weight in {ckpt_path} contains NaN/Inf "
+                         f"({(~torch.isfinite(w)).any(1).sum().item()} bad rows)")
     return w
 
 
@@ -294,6 +304,12 @@ def train(args):
 
             pred = model(e_mean)
             loss = criterion(pred, density)
+            if not torch.isfinite(loss):
+                raise RuntimeError(
+                    f"Non-finite train loss in epoch {epoch}: "
+                    f"non-finite e_mean rows={(~torch.isfinite(e_mean)).any(1).sum().item()}, "
+                    f"labels={(~torch.isfinite(density)).sum().item()}, "
+                    f"preds={(~torch.isfinite(pred)).sum().item()}")
 
             optimizer.zero_grad()
             loss.backward()
