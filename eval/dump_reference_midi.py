@@ -41,8 +41,12 @@ def main():
     hp = Namespace(context_length=512, dataset_name='giga-midi', data_dir=None,
                    tokenizer_type=args.tokenizer_type)
     ds = load_music_dataset(args.tokenizer_type, args.split, hp)
-    tokenizer = load_tokenizer(args.tokenizer_type)[0]
     is_ant = args.tokenizer_type.startswith('Anticipation')
+    # REMI must use the dataset's own tokenizer.json (vocab 427). Without it,
+    # load_tokenizer() silently builds a default REMI (vocab 284) and every
+    # decode fails with KeyError. The model checkpoints store this same path.
+    config = None if is_ant else ds.TOKENIZER_CONFIG_PATH
+    tokenizer = load_tokenizer(args.tokenizer_type, tokenizer_config_path=config)[0]
 
     written = tries = 0
     while written < args.n and tries < 5 * args.n:
