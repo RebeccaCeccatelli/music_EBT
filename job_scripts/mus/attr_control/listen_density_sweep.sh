@@ -98,6 +98,15 @@ if [[ "${LAMBDA_TAPER:-0}" == "1" ]]; then
                 --lambda_taper_floor "${LAMBDA_TAPER_FLOOR:-0.2}")
 fi
 
+# Every sample is also saved as MIDI for eval/music_quality.py (SAVE_MIDI_DIR=""
+# to skip).
+SAVE_MIDI_DIR="${SAVE_MIDI_DIR-${HOME}/orcd/scratch/rebcecca/music_EBT_logs/attr_control/listen_midi/${SLURM_JOB_ID:-local}}"
+MIDI_ARGS=()
+if [[ -n "${SAVE_MIDI_DIR}" ]]; then
+    MIDI_ARGS=(--save_midi_dir "${SAVE_MIDI_DIR}")
+    echo "Saving sample MIDI to: ${SAVE_MIDI_DIR}"
+fi
+
 python "${PROJECT_ROOT}/attribute_control/listen_density_sweep.py" \
     --regressor_checkpoint "${REGRESSOR_CKPT}" \
     --n_prompts "${N_PROMPTS:-5}" \
@@ -112,5 +121,6 @@ python "${PROJECT_ROOT}/attribute_control/listen_density_sweep.py" \
     "${GATING_ARGS[@]}" \
     "${TAPER_ARGS[@]}" \
     "${DRUM_ARGS[@]}" \
+    "${MIDI_ARGS[@]}" \
     --wandb_project "${WANDB_PROJECT:-mus_symb_attr_control}" \
     --wandb_run_name "${WANDB_RUN_NAME:-}"

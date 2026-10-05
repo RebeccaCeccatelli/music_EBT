@@ -29,6 +29,12 @@ generated once.
 Output (--out_dir): one <model>_<method>_<attribute>.table.json per attribute
 in the same {"columns", "data"} layout as attribute_control/sweep_tables/
 (wandb Table JSON), plus the run config. wandb logging is optional.
+Every sample is also saved as MIDI under <out_dir>/midi/ (see
+attribute_control/sample_midi.py; --no_save_midi to skip) so it can be scored
+with eval/music_quality.py later:
+    midi/ground_truth/   real continuation per prompt
+    midi/baseline/       every unguided baseline draw
+    midi/<attribute>/    guided samples; sample_id = table column
 
 Usage:
     python attribute_control/ar_guidance_sweep.py \
@@ -55,6 +61,8 @@ from inference.mus.infer_ebt import load_checkpoint, load_dataset
 from inference.mus.generate_music import generate_music
 from attribute_control.attributes import ATTRIBUTES
 from attribute_control.ar_guidance import ExpectationTilt
+from attribute_control.sample_midi import save_sample_midi
+from data.mus.symbolic.tokenization.tokenizer_utils import load_tokenizer
 from attribute_control.musicality_metrics import build_bigram_logprob_table, score_sample
 from attribute_control.listen_density_sweep import load_corpus_stats, zscore
 
@@ -70,7 +78,8 @@ DEFAULT_STRENGTHS = {
 COLUMNS = ["prompt_id", "condition", "method", "model", "attribute", "lambda",
            "target", "target_delta", "target_zscore",
            "baseline_value", "achieved_value", "achieved_zscore",
-           "bigram_ll", "repetition_ratio", "grammar_violation_rate", "n_tilted_steps"]
+           "bigram_ll", "repetition_ratio", "grammar_violation_rate", "n_tilted_steps",
+           "sample_id"]
 
 
 def generate(model, batch, hparams, logit_processor=None):
@@ -118,6 +127,8 @@ def main():
     p.add_argument("--bigram_table", default=None,
                    help="Cached bigram log-prob table (.npy); built from the dataset if missing")
     p.add_argument("--no_musicality", action="store_true")
+    p.add_argument("--no_save_midi", action="store_true",
+                   help="Don't write each sample as MIDI under <out_dir>/midi/")
     p.add_argument("--out_dir", required=True)
     p.add_argument("--wandb_project", default=None, help="Omit to disable wandb logging")
     p.add_argument("--wandb_run_name", default=None)
@@ -205,6 +216,20 @@ def main():
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    midi_root = out_dir / "midi"
+    tokenizer = None
+    if not args.no_save_midi:
+        # The checkpoint's own tokenizer config: with no config path,
+        # load_tokenizer() silently builds a default REMI with the wrong vocab.
+        tokenizer, _, _ = load_tokenizer(
+            tokenizer_type=tokenizer_type,
+            tokenizer_config_path=getattr(hparams, "tokenizer_config_path", None),
+            dataset_name=getattr(hparams, "dataset_name", "giga_midi"),
+        )
+
+    def save_midi(subdir, sample_id, prompt, gen, kind="generated"):
+        if tokenizer is not None:
+            save_sample_midi(midi_root / subdir, sample_id, prompt, gen, tokenizer, kind)
     (out_dir / f"{model_slug}_{args.method}.config.json").write_text(json.dumps(
         {**vars(args), "model_name": model_name, "tokenizer_type": tokenizer_type,
          "prompt_ids": prompt_ids, "strengths": strengths}, indent=2))
@@ -216,14 +241,14 @@ def main():
                    name=args.wandb_run_name or f"ar-{model_slug}-{args.method}",
                    config={**vars(args), "model_name": model_name, "prompt_ids": prompt_ids})
 
-    def row(a, pi, condition, strength, tgt, delta, base, gen, n_tilted=None):
+    def row(a, pi, condition, strength, tgt, delta, base, gen, n_tilted=None, sample_id=None):
         achieved = ATTRIBUTES[a](gen, tokenizer_type)
         m = music(gen)
         mean, sd = corpus[a]["mean"], corpus[a]["stdev"]
         return [pi, condition, args.method, model_slug, a, strength,
                 tgt, delta, zscore(tgt, mean, sd), base, achieved, zscore(achieved, mean, sd),
                 m.get("bigram_ll"), m.get("repetition_ratio"), m.get("grammar_violation_rate"),
-                n_tilted]
+                n_tilted, sample_id]
 
     def save():
         for a in attributes:
@@ -240,17 +265,22 @@ def main():
 
         gt = full_tokens[len(prompt): len(prompt) + args.gen_len]
         if gt:
+            gt_id = f"p{pi}"
+            save_midi("ground_truth", gt_id, prompt, gt, kind="ground_truth")
             for a in attributes:
-                rows[a].append(row(a, pi, "ground truth (real song)", None, None, None, None, gt))
+                rows[a].append(row(a, pi, "ground truth (real song)", None, None, None, None, gt,
+                                   sample_id=gt_id))
 
         # ── Per-prompt unguided baseline (anchors every target) ──────────────
         set_guidance_off(hparams)
         base_gens = [generate(model, batch, hparams) for _ in range(args.baseline_repeats)]
         baselines = {a: statistics.mean(ATTRIBUTES[a](g, tokenizer_type) for g in base_gens)
                      for a in attributes}
+        for k, g in enumerate(base_gens):
+            save_midi("baseline", f"p{pi}_r{k}", prompt, g)
         for a in attributes:
             rows[a].append(row(a, pi, "baseline (no guidance)", 0.0, None, None,
-                               baselines[a], base_gens[0]))
+                               baselines[a], base_gens[0], sample_id=f"p{pi}_r0"))
         print(f"[prompt {pi}] baseline: " +
               "  ".join(f"{a}={baselines[a]:.4f}" for a in attributes))
 
@@ -282,8 +312,10 @@ def main():
                         hparams.attribute_regressor_ckpt = regressors[a]
                         gen = generate(model, batch, hparams)
                         set_guidance_off(hparams)
+                    sample_id = f"p{pi}_{a}_{args.method}{strength:g}_d{d_std:+g}"
+                    save_midi(a, sample_id, prompt, gen)
                     r = row(a, pi, f"{args.method}={strength}", strength, tgt, delta,
-                            baselines[a], gen, n_tilted)
+                            baselines[a], gen, n_tilted, sample_id)
                     rows[a].append(r)
                     print(f"[prompt {pi}] {a} {args.method}={strength} delta={d_std:+g}sd "
                           f"target={tgt:.4f} achieved={r[10]:.4f} bigram_ll={r[12]}")

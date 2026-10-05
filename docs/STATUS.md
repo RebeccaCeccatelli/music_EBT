@@ -36,8 +36,10 @@ Scratch: ~39 GB used by checkpoints after the 2026-10-05 cleanup.
 | 24934694 | Ant pitch_register regressor (note-only, 5 ep, 300k) | Ant s1 88,800 |
 | 24940374 / 24940376 | AR sweep Llama: tilt / best_of_n | Llama REMI 99,660 |
 | 24940378 / 24940380 | AR sweep GPT-2: tilt / best_of_n | GPT-2 REMI 99,660 |
-| 24940382 / 84 / 86 | Llama-space regressors velocity / duration / pitch_register (for PPLM) | Llama REMI 99,660 |
+| 24940382 / 84 / 86 | Llama-space regressors velocity / duration / pitch_register (for PPLM), moved to `mit_preemptable` | Llama REMI 99,660 |
 
+| 24944752 | Context-matched loss: EBT vs baselines on identical windows at 512 (+1024) | final ckpts |
+| 24938101/2 | Music-quality generation smoke tests (3 samples) | REMI 33,732 / Llama Ant |
 | 24936920 | Music-quality reference sets (500 real REMI + Ant windows → MIDI → scores.csv) | — |
 
 Outputs: `~/orcd/scratch/rebcecca/music_EBT_logs/attr_control/<attr>_regressor_<tok>_<timestamp>/best.pt`;
@@ -66,6 +68,10 @@ REMI density + velocity regressors (24934689/90) COMPLETED cleanly (no NaN).
          as `sweep_tables/`.
    - [ ] Anticipation: EBT sweeps for duration/pitch_register (only
          best_of_n applies on the AR side; tilt is REMI-only).
+   - [ ] Score every sweep's saved MIDI (`<out_dir>/midi/`, EBT:
+         `attr_control/listen_midi/<jobid>/`) with `eval/music_quality.py
+         score` + `compare` against the real reference sets; join on
+         `sample_id` to get musicality vs. strength per method.
    - [ ] Score everything with `aggregate_guidance_sweeps.py` (strict
          accuracy) and make an accuracy/MAE vs. bigram_ll comparison figure
          per attribute → new `thesis_findings/` entry.
@@ -84,6 +90,9 @@ REMI density + velocity regressors (24934689/90) COMPLETED cleanly (no NaN).
    against real windows by KDE overlap. Next: generate unguided + guided MIDI
    from each final model and score; calibrate against blind listening ratings;
    small A/B listening test. Treat `ebt_energy`/`repetition_ratio` as diagnostics only.
+   Also has prompt coherence + diversity. Smoke tests 24938101/2 pending
+   (CPU quota); then 6 × 100-sample runs. Tokens-matched loss done:
+   `thesis_findings/2026-10-05_tokens_matched_validation_loss.md` (branch).
 6. Repo tidy: project README (currently the upstream EBT one), final tag.
 
 ## Decisions
