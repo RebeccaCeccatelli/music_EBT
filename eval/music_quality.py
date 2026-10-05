@@ -115,7 +115,8 @@ def score_midi(path: Path) -> Dict[str, float] | None:
     pitched[:, :2] -= t0
     onsets = onsets - t0
     total = max(pitched[:, 1].max(), onsets.max())
-    n_steps = int(math.ceil(total * GRID))
+    # +1 so a zero-length note starting exactly at the end still gets a grid slot/bar.
+    n_steps = int(math.ceil(total * GRID)) + 1
     grid = _sounding_grid(pitched, n_steps)
 
     n_pairs = n_harsh = 0
