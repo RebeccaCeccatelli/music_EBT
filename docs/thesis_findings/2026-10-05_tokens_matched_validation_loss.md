@@ -23,17 +23,34 @@ mostly reflect that, so this compares the models at equal tokens seen.
 ![REMI](../figures/tokens_matched/val_loss_vs_tokens_remi.png)
 ![Anticipation](../figures/tokens_matched/val_loss_vs_tokens_anticipation_at.png)
 
+Loss (EBT: last MCMC step, `valid_final_loss`) and **perplexity = exp(loss)**:
+
 | REMI | 0.5B | 1.0B | 2.0B | 4.5B (EBT stop) | final |
 |---|---|---|---|---|---|
-| EBT | 0.911 | 0.824 | 0.767 | **0.718** | 0.716 (4.5B) |
-| GPT-2 | 0.783 | 0.726 | 0.672 | 0.597 | 0.542 (26B) |
-| Llama | 0.866 | 0.794 | 0.680 | 0.610 | 0.597 (26B) |
+| EBT | 0.911 / 2.49 | 0.814 / 2.26 | 0.764 / 2.15 | **0.716 / 2.05** | 0.714 / 2.04 (4.5B) |
+| GPT-2 | 0.783 / 2.19 | 0.726 / 2.07 | 0.672 / 1.96 | 0.597 / 1.82 | 0.542 / 1.72 (26B) |
+| Llama | 0.866 / 2.38 | 0.794 / 2.21 | 0.680 / 1.97 | 0.610 / 1.84 | 0.597 / 1.82 (26B) |
 
 | Anticipation-AT | 0.5B | 1.0B | 2.0B | 3.3B (EBT stop) | final |
 |---|---|---|---|---|---|
-| EBT | **1.171** | **1.057** | 1.005 | 1.021 | 1.022 (3.3B) |
-| GPT-2 | 1.336 | 1.101 | 0.933 | 0.864 | 0.758 (13.1B) |
-| Llama | 1.563 | 1.193 | 0.974 | 0.897 | 0.774 (13.1B) |
+| EBT | **1.163 / 3.20** | **1.051 / 2.86** | 1.001 / 2.72 | 1.021 / 2.78 | 1.022 / 2.78 (3.3B) |
+| GPT-2 | 1.336 / 3.80 | 1.101 / 3.01 | 0.933 / 2.54 | 0.864 / 2.37 | 0.758 / 2.13 (13.1B) |
+| Llama | 1.563 / 4.77 | 1.193 / 3.30 | 0.974 / 2.65 | 0.897 / 2.45 | 0.774 / 2.17 (13.1B) |
+
+**Which EBT loss / perplexity to use.** EBT's `valid_loss` is the CE
+averaged over all MCMC steps. The prediction actually sampled from is the
+last step's, `valid_final_loss`, which is the like-for-like counterpart of
+the baselines' `valid_loss`. EBT's logged `valid_perplexity` averages
+per-batch exp(loss), so it reads ~1.5% higher than exp(mean loss)
+(REMI step 34,267: logged 2.073 vs exp(0.7143) = 2.043). The baselines log
+exactly exp(mean loss). So report exp(`valid_final_loss`) for EBT, not the
+logged value.
+
+**MCMC refinement barely changes the prediction.** At REMI step 34,267:
+initial-step loss 0.7186 → final-step 0.7143 (−0.6%). With the 2 MCMC
+steps used in training, "thinking" adds very little to raw next-token
+quality. The quality-vs-MCMC-steps experiment should test whether more
+steps at inference help.
 
 - **Anticipation: EBT learns faster early, then plateaus.** It has lower loss
   than both baselines up to ~1.2B tokens (−12% / −25% vs GPT-2 / Llama at

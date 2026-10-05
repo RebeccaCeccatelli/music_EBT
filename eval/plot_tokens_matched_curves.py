@@ -13,6 +13,12 @@ continued). Isolated post-resume validation artifacts are dropped: dips >1.5%
 below the median of their ±6 neighbours (the filter used for the 2026-10-05
 checkpoint cleanup) and spikes >10% above it, as are the inf sentinels.
 
+For EBT the curve is valid_final_loss (the CE of the last MCMC step, i.e.
+the prediction actually sampled from), not valid_loss (the CE averaged over
+all MCMC steps). Perplexity is exp() of that loss for every model: EBT's
+logged valid_perplexity averages per-batch exp(loss), which reads ~1.5%
+higher than exp(mean loss), while the baselines log exp(mean loss).
+
 Caveats printed with the table: the baselines use context 1024 vs EBT's 512
 (longer context lowers loss on its own), and per-token loss is not comparable
 across tokenizers (vocab 427 vs 55,028), so only compare within a tokenizer.
@@ -57,8 +63,8 @@ def run_ids(prefix: str) -> list[str]:
     return sorted(ids)
 
 
-def fetch_curve(api, project: str, ids: list[str]) -> tuple[np.ndarray, np.ndarray]:
-    """valid_loss by trainer/global_step, merged over runs (latest run wins)."""
+def fetch_curve(api, project: str, ids: list[str], key: str) -> tuple[np.ndarray, np.ndarray]:
+    """`key` by trainer/global_step, merged over runs (latest run wins)."""
     runs = []
     for rid in ids:
         try:
@@ -68,8 +74,8 @@ def fetch_curve(api, project: str, ids: list[str]) -> tuple[np.ndarray, np.ndarr
     runs.sort(key=lambda r: r.created_at)
     by_step = {}
     for r in runs:  # later runs overwrite earlier ones at the same step
-        for row in r.scan_history(keys=['trainer/global_step', 'valid_loss'], page_size=2000):
-            v = row['valid_loss']
+        for row in r.scan_history(keys=['trainer/global_step', key], page_size=2000):
+            v = row[key]
             v = float(v) if not isinstance(v, str) else float('nan')
             if math.isfinite(v):
                 by_step[int(row['trainer/global_step'])] = v
@@ -113,7 +119,11 @@ def main():
         for name, (prefix, project, tps) in models.items():
             ids = run_ids(prefix)
             print(f"{tok} / {name}: {len(ids)} wandb runs from {prefix}*")
-            steps, vals = fetch_curve(api, project, ids)
+            # EBT's valid_loss averages the CE over all MCMC steps; the prediction
+            # actually used is the last step's (valid_final_loss), which is the
+            # like-for-like counterpart of the baselines' next-token valid_loss.
+            key = 'valid_final_loss' if name == 'EBT' else 'valid_loss'
+            steps, vals = fetch_curve(api, project, ids, key)
             curves[name] = (steps * tps, vals, steps)
 
         fig, ax = plt.subplots(figsize=(7, 4.2))
@@ -124,7 +134,7 @@ def main():
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.set_xlabel('tokens seen (billions, log)')
-        ax.set_ylabel('validation loss (log)')
+        ax.set_ylabel('validation loss (log; EBT: final MCMC step)')
         ax.set_title(f'{tok}: validation loss vs tokens seen')
         ax.legend()
         ax.grid(True, which='both', alpha=0.25)
@@ -136,10 +146,12 @@ def main():
         budgets = sorted({0.5e9, 1e9, 2e9, round(ebt_end, -8)})
         print(f"\n{tok} — validation loss at matched token budgets "
               f"(EBT stopped at {ebt_end / 1e9:.2f}B tokens)")
-        print(f"{'model':8s}" + ''.join(f"{b / 1e9:>9.1f}B" for b in budgets) + f"{'final':>10s}")
-        for name, (tokens, vals, steps) in curves.items():
-            print(f"{name:8s}" + ''.join(f"{loss_at(tokens, vals, b):10.4f}" for b in budgets)
-                  + f"{vals[-1]:10.4f}  (step {steps[-1]:,}, {tokens[-1] / 1e9:.1f}B)")
+        for label, f in (('loss', lambda x: x), ('perplexity = exp(loss)', math.exp)):
+            print(f"  {label}")
+            print(f"{'model':8s}" + ''.join(f"{b / 1e9:>9.1f}B" for b in budgets) + f"{'final':>10s}")
+            for name, (tokens, vals, steps) in curves.items():
+                print(f"{name:8s}" + ''.join(f"{f(loss_at(tokens, vals, b)):10.4f}" for b in budgets)
+                      + f"{f(vals[-1]):10.4f}  (step {steps[-1]:,}, {tokens[-1] / 1e9:.1f}B)")
         print(f"→ {path}")
     print("\nCaveats: baselines use context 1024 vs EBT 512 (longer context lowers loss by itself);"
           "\nper-token loss is not comparable across tokenizers — compare within a table only.")
