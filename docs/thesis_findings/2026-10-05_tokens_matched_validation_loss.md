@@ -45,6 +45,11 @@ mostly reflect that, so this compares the models at equal tokens seen.
   (~185 epochs), so its best checkpoint is earlier than its final one.
 
 ## Caveats
+- Objective differs: EBT's `valid_loss` is the cross-entropy of its
+  MCMC-refined prediction, not a plain next-token softmax as in the
+  baselines (same caveat as `2026-09-25_validation_loss_curves.md`). Treat
+  cross-model gaps as indicative. The music-quality and controllability
+  evaluations are the model-agnostic comparisons.
 - Context differs: the baselines train and validate at 1024 tokens, EBT at
   512. Longer context lowers per-token loss on its own, so these tables
   favour the baselines somewhat.
