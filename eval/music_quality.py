@@ -22,6 +22,14 @@ Usage:
 
     # 2. compare one or more generated sets against the reference set
     python eval/music_quality.py compare --ref ref.csv --gen ebt.csv llama.csv
+
+    # 3. diversity across a set, and between repeats of the same prompts
+    #    (several dirs generated with the same seed)
+    python eval/music_quality.py diversity --midi_dirs run1/midi run2/midi --glob "*_generated.mid"
+
+When a file has a matching <sample>_prompt.mid next to it (as infer_ebt.py and
+infer_baselines_interactive.py write), only the continuation after the prompt
+is scored, plus how coherent it is with the prompt (key, density, register).
 """
 
 import argparse
@@ -53,6 +61,17 @@ METRICS = [
     'groove_consistency',   # 1 - mean Hamming distance between consecutive bars' onset patterns
     'bar_self_similarity',  # mean best Jaccard match of each bar's (position, pitch class) set to an earlier bar
 ]
+
+# Continuation vs its own prompt — only when the matching *_prompt.mid exists.
+COHERENCE_METRICS = [
+    'key_continuity',       # cosine similarity of prompt vs continuation duration-weighted pitch-class histograms
+    'density_change',       # log2(continuation notes/beat ÷ prompt notes/beat); 0 = same density
+    'register_shift',       # mean continuation pitch − mean prompt pitch, in semitones
+]
+
+# Suffixes the inference scripts give the files of one sample; the prompt is
+# always <base>_prompt.mid (infer_ebt.py: sample_000_*, infer_baselines_interactive.py: sample_123_*).
+_SAMPLE_SUFFIXES = ('_prompt_with_generated_continuation', '_generated', '_ground_truth')
 
 
 def _load_notes(path: Path):
@@ -91,8 +110,52 @@ def _sounding_grid(pitched: np.ndarray, n_steps: int) -> List[np.ndarray]:
     return [np.unique(g) for g in grid]
 
 
-def score_midi(path: Path) -> Dict[str, float] | None:
+def _prompt_path(path: Path) -> Path | None:
+    stem = path.stem
+    for suf in _SAMPLE_SUFFIXES:
+        if stem.endswith(suf):
+            cand = path.with_name(stem[:-len(suf)] + '_prompt.mid')
+            return cand if cand.exists() else None
+    return None
+
+
+def _load_continuation(path: Path, prompt_path: Path | None):
+    """Notes of `path` that start after the prompt's last onset (the prompt is
+    the same tokens decoded on their own, so its notes line up with the start
+    of `path`). Returns (pitched, onsets, bar_length, prompt_pitched, cut)."""
     pitched, onsets, bar_length = _load_notes(path)
+    if prompt_path is None:
+        return pitched, onsets, bar_length, None, None
+    p_pitched, p_onsets, _ = _load_notes(prompt_path)
+    if len(p_onsets) == 0:
+        return pitched, onsets, bar_length, None, None
+    cut = p_onsets.max() + 1e-6
+    return (pitched[pitched[:, 0] > cut], onsets[onsets > cut], bar_length, p_pitched, cut)
+
+
+def _pc_hist(pitched: np.ndarray) -> np.ndarray:
+    """Duration-weighted pitch-class histogram, normalized."""
+    h = np.bincount(pitched[:, 2].astype(int) % 12,
+                    weights=np.maximum(pitched[:, 1] - pitched[:, 0], 1e-3), minlength=12)
+    return h / h.sum() if h.sum() else h
+
+
+def _coherence(prompt: np.ndarray, cont: np.ndarray, cut: float) -> Dict[str, float]:
+    if len(prompt) < 2 or len(cont) < 2:
+        return {m: float('nan') for m in COHERENCE_METRICS}
+    a, b = _pc_hist(prompt), _pc_hist(cont)
+    prompt_span = max(cut - prompt[:, 0].min(), 1.0)
+    cont_span = max(cont[:, 1].max() - cut, 1.0)
+    return {
+        'key_continuity': float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b))),
+        'density_change': float(np.log2((len(cont) / cont_span) / (len(prompt) / prompt_span))),
+        'register_shift': float(cont[:, 2].mean() - prompt[:, 2].mean()),
+    }
+
+
+def score_midi(path: Path, use_prompt: bool = True) -> Dict[str, float] | None:
+    prompt_path = _prompt_path(path) if use_prompt else None
+    pitched, onsets, bar_length, prompt, cut = _load_continuation(path, prompt_path)
     if len(pitched) < MIN_NOTES:
         return None
 
@@ -110,7 +173,11 @@ def score_midi(path: Path) -> Dict[str, float] | None:
     out['pitch_range'] = float(pitches.max() - pitches.min())
 
     # ── Harmony / texture (sampled on the 16th-note grid) ─────────────────
+    # Shift to start at the first note's bar (not the note itself), so the
+    # per-bar metrics below see the real bar lines.
     t0 = min(pitched[:, 0].min(), onsets.min())
+    t0 = math.floor(t0 / bar_length) * bar_length
+    unshifted = pitched
     pitched = pitched.copy()
     pitched[:, :2] -= t0
     onsets = onsets - t0
@@ -158,6 +225,8 @@ def score_midi(path: Path) -> Dict[str, float] | None:
         sims.append(max((len(bar_sets[i] & bar_sets[j]) / len(bar_sets[i] | bar_sets[j])
                          for j in range(i) if bar_sets[j]), default=0.0))
     out['bar_self_similarity'] = float(np.mean(sims)) if sims else float('nan')
+    if prompt is not None:
+        out.update(_coherence(prompt, unshifted, cut))
     return out
 
 
@@ -183,7 +252,9 @@ def overlapping_area(a: np.ndarray, b: np.ndarray) -> float:
 def _read_csv(path: Path) -> Dict[str, np.ndarray]:
     with open(path) as f:
         rows = list(csv.DictReader(f))
-    return {m: np.array([float(r[m]) for r in rows]) for m in METRICS}
+    cols = rows[0].keys() if rows else []
+    return {m: np.array([float(r[m]) if r[m] != '' else np.nan for r in rows])
+            for m in METRICS + COHERENCE_METRICS if m in cols}
 
 
 def cmd_score(args):
@@ -191,7 +262,7 @@ def cmd_score(args):
     rows, skipped = [], 0
     for p in paths:
         try:
-            r = score_midi(p)
+            r = score_midi(p, use_prompt=not args.no_prompt)
         except Exception as e:  # corrupt/undecodable file: report, don't abort the set
             print(f"  skip {p.name}: {type(e).__name__}: {e}")
             r = None
@@ -200,31 +271,103 @@ def cmd_score(args):
             continue
         rows.append({'file': p.name, **r})
     with open(args.out, 'w', newline='') as f:
-        w = csv.DictWriter(f, fieldnames=['file', 'n_notes'] + METRICS)
+        w = csv.DictWriter(f, fieldnames=['file', 'n_notes'] + METRICS + COHERENCE_METRICS,
+                           restval='')
         w.writeheader()
         w.writerows(rows)
+    n_cont = sum('key_continuity' in r for r in rows)
     print(f"Scored {len(rows)}/{len(paths)} files ({skipped} skipped: < {MIN_NOTES} "
-          f"pitched notes or unreadable) → {args.out}")
+          f"pitched notes or unreadable; {n_cont} scored as continuation-only "
+          f"after their *_prompt.mid) → {args.out}")
 
 
 def cmd_compare(args):
     ref = _read_csv(Path(args.ref))
-    gens = {Path(g).stem: _read_csv(Path(g)) for g in args.gen}
+    gens = {Path(g).parent.name + '/' + Path(g).stem if args.label_dirs else Path(g).stem: _read_csv(Path(g))
+            for g in args.gen}
     names = ['reference'] + list(gens)
-    print(f"{'metric':22s}" + ''.join(f"{n:>24s}" for n in names))
-    for m in METRICS:
+    print(f"{'metric':22s}" + ''.join(f"{n[-24:]:>26s}" for n in names))
+    for m in METRICS + COHERENCE_METRICS:
+        if m not in ref or not all(m in g for g in gens.values()):
+            continue
+        if m == COHERENCE_METRICS[0]:
+            print('-- coherence with own prompt --')
+        r = ref[m][np.isfinite(ref[m])]
         cells = []
         for n in names:
-            v = ref[m] if n == 'reference' else gens[n][m]
-            v = v[np.isfinite(v)]
-            cell = f"{v.mean():.3f}±{v.std():.3f}"
-            if n != 'reference':
-                cell += f" OA={overlapping_area(v, ref[m][np.isfinite(ref[m])]):.2f}"
+            v = r if n == 'reference' else gens[n][m][np.isfinite(gens[n][m])]
+            cell = f"{v.mean():.3f}±{v.std():.3f}" if len(v) else "n/a"
+            if n != 'reference' and len(v):
+                cell += f" OA={overlapping_area(v, r):.2f}"
             cells.append(cell)
-        print(f"{m:22s}" + ''.join(f"{c:>24s}" for c in cells))
-    print(f"{'mean OA':22s}{'':>24s}" + ''.join(
-        f"{np.nanmean([overlapping_area(gens[n][m], ref[m]) for m in METRICS]):>24.2f}"
+        print(f"{m:22s}" + ''.join(f"{c:>26s}" for c in cells))
+    print(f"{'mean OA (quality)':22s}{'':>26s}" + ''.join(
+        f"{np.nanmean([overlapping_area(gens[n][m], ref[m]) for m in METRICS]):>26.2f}"
         for n in gens))
+
+
+def _diversity_features(path: Path, use_prompt: bool):
+    """(pitch-class histogram, onset-position-in-bar histogram) of the continuation."""
+    pitched, onsets, bar_length, _, _ = _load_continuation(
+        path, _prompt_path(path) if use_prompt else None)
+    if len(pitched) < MIN_NOTES:
+        return None
+    steps_per_bar = int(round(bar_length * GRID))
+    pos = np.floor(onsets * GRID).astype(int) % steps_per_bar
+    rh = np.bincount(pos, minlength=steps_per_bar).astype(float)
+    return _pc_hist(pitched), rh / rh.sum()
+
+
+def _mean_pairwise(feats) -> tuple[float, float]:
+    from scipy.spatial.distance import jensenshannon
+    d_pitch, d_rhythm = [], []
+    for i in range(len(feats)):
+        for j in range(i + 1, len(feats)):
+            d_pitch.append(jensenshannon(feats[i][0], feats[j][0], base=2))
+            if len(feats[i][1]) == len(feats[j][1]):
+                d_rhythm.append(jensenshannon(feats[i][1], feats[j][1], base=2))
+    return (float(np.mean(d_pitch)) if d_pitch else float('nan'),
+            float(np.mean(d_rhythm)) if d_rhythm else float('nan'))
+
+
+def _sample_base(path: Path) -> str:
+    stem = path.stem
+    for suf in _SAMPLE_SUFFIXES:
+        if stem.endswith(suf):
+            return stem[:-len(suf)]
+    return stem
+
+
+def cmd_diversity(args):
+    """Jensen-Shannon distance (base 2, 0 = identical, 1 = disjoint) between
+    pieces' pitch-class and rhythm histograms. 'Across set' compares every pair
+    of pieces in one directory: much lower than the ground-truth set means the
+    model plays similar material whatever the prompt. 'Same prompt' needs
+    several directories generated with the same seed (same prompts, fresh
+    sampling noise) and compares the versions of each prompt: near 0 means the
+    model (or a guidance setting) has collapsed to one answer per prompt."""
+    per_dir = {}
+    for d in args.midi_dirs:
+        feats = {}
+        for p in sorted(Path(d).glob(args.glob)):
+            try:
+                f = _diversity_features(p, not args.no_prompt)
+            except Exception as e:
+                print(f"  skip {p.name}: {type(e).__name__}: {e}")
+                continue
+            if f is not None:
+                feats[_sample_base(p)] = f
+        per_dir[d] = feats
+    print(f"{'set':60s}{'n':>5s}{'pitch JSD':>11s}{'rhythm JSD':>12s}   (across set)")
+    for d, feats in per_dir.items():
+        dp, dr = _mean_pairwise(list(feats.values()))
+        print(f"{str(d)[-60:]:60s}{len(feats):5d}{dp:11.3f}{dr:12.3f}")
+    if len(per_dir) > 1:
+        common = set.intersection(*(set(f) for f in per_dir.values()))
+        groups = [[per_dir[d][b] for d in per_dir] for b in sorted(common)]
+        pairs = [_mean_pairwise(g) for g in groups]
+        print(f"{'same prompt, across ' + str(len(per_dir)) + ' dirs':60s}{len(common):5d}"
+              f"{np.nanmean([p[0] for p in pairs]):11.3f}{np.nanmean([p[1] for p in pairs]):12.3f}")
 
 
 def main():
@@ -234,11 +377,18 @@ def main():
     s.add_argument('--midi_dir', required=True)
     s.add_argument('--glob', default='*.mid')
     s.add_argument('--out', required=True)
+    s.add_argument('--no_prompt', action='store_true',
+                   help="score whole files even when a matching *_prompt.mid exists")
     c = sub.add_parser('compare')
     c.add_argument('--ref', required=True)
     c.add_argument('--gen', nargs='+', required=True)
+    c.add_argument('--label_dirs', action='store_true', help="label columns <dir>/<csv stem>")
+    d = sub.add_parser('diversity', help=cmd_diversity.__doc__)
+    d.add_argument('--midi_dirs', nargs='+', required=True)
+    d.add_argument('--glob', default='*.mid')
+    d.add_argument('--no_prompt', action='store_true')
     args = ap.parse_args()
-    {'score': cmd_score, 'compare': cmd_compare}[args.cmd](args)
+    {'score': cmd_score, 'compare': cmd_compare, 'diversity': cmd_diversity}[args.cmd](args)
 
 
 if __name__ == '__main__':
