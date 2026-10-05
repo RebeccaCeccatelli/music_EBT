@@ -624,7 +624,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--lr_scaling_rule", help="the LR will be scaled according to the rule LR = base_lr * effective_batch_size / 256. is useful for prototyping and is popular in vision SSL. effective_batch_size is based off bs * num_gpus * accumulate_grad_batches", action="store_true", default=False)
 
-    parser.add_argument("--min_lr_scale", help="the most the lr will be scaled down during cosine decay", type=int, default=10)
+    parser.add_argument("--min_lr_scale", help="the most the lr will be scaled down during cosine decay", type=int, default=3)
 
     parser.add_argument("--max_steps", help="max number of steps for training", type=int, default=1000000)
 
@@ -777,7 +777,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--checkpoint_monitor_mode", help="monitoring mode for checkpoint_monitor_string, either ['min', 'max']. if is loss do min, if is a metric like accuracy do max", type=str, default="min")
 
-    parser.add_argument("--save_top_k_ckpts", help="number of ckpts to save when doing val (saves the ones with best metrics using checkpoint monitor string and mode defined). -1 means save all", type=int, default=10)
+    parser.add_argument("--save_top_k_ckpts", help="number of ckpts to save when doing val (saves the ones with best metrics using checkpoint monitor string and mode defined). -1 means save all", type=int, default=3)
 
     #PRECISION#########################################################################
 
