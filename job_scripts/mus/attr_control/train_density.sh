@@ -109,6 +109,14 @@ fi
 
 scontrol update JobId="${SLURM_JOB_ID}" JobName="attr-${ATTRIBUTE}-${TOK_SLUG}" 2>/dev/null || true
 
+# Regressors trained on a baseline's embeddings (for its PPLM-style guidance,
+# see attribute_control/ar_guidance.py) get the model in their dir name, so
+# they can't be mistaken for EBT-space ones.
+case "${CHECKPOINT}" in
+    *baseline-llama*)    MODEL_SLUG="llama-${MODEL_SLUG}" ;;
+    *baseline-hf-gpt2*)  MODEL_SLUG="gpt2-${MODEL_SLUG}" ;;
+esac
+
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)_${SLURM_JOB_ID}
 OUTPUT_DIR="${SCRATCH_LOGS_DIR}/attr_control/${ATTRIBUTE}_regressor_${MODEL_SLUG}_${TIMESTAMP}"
 mkdir -p "${OUTPUT_DIR}"

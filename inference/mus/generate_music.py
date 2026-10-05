@@ -423,6 +423,8 @@ def generate_remi(model, batch, hparams):
         from attribute_control.note_density import REMI_PITCHDRUM_MIN, REMI_PITCHDRUM_MAX
         from attribute_control.attributes import REMI_PROGRAM_MAX_ID as _DRUM_PROGRAM_ID
 
+    logit_processor = getattr(hparams, 'logit_processor', None)
+
     diagnostics_per_batch = []
 
     for batch_idx in range(bsz):
@@ -565,6 +567,12 @@ def generate_remi(model, batch, hparams):
                 if mask_drum_program:
                     last_logits = last_logits.clone()
                     last_logits[_DRUM_PROGRAM_ID] = -float('inf')
+
+                # Optional per-step logit processor (raw, pre-temperature logits
+                # in, logits out) — used for the AR baselines' plug-and-play
+                # guidance, see attribute_control/ar_guidance.py.
+                if logit_processor is not None:
+                    last_logits = logit_processor(context, last_logits)
 
             # ── Generation-diagnostics collection (demo trajectory plot) ────────
             # Model energy is recorded every step regardless of guidance — it's
