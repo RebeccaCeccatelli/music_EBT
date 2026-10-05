@@ -134,8 +134,14 @@ def sample_and_prepare_prompt(
     Returns:
         (prompt_tokens, full_tokens, actual_prompt_len) tuple
     """
-    sample = dataset[sample_idx]
-    full_tokens = sample['input_ids']  # (context_length,)
+    # Use the song's start, like infer_ebt.py does. dataset[idx] is the
+    # training-time random window (data augmentation), so EBT and the
+    # baselines would otherwise continue different material from the same
+    # seed/sample index.
+    if hasattr(dataset, 'get_full_tokens'):
+        full_tokens = torch.tensor(dataset.get_full_tokens(sample_idx), dtype=torch.long)
+    else:
+        full_tokens = dataset[sample_idx]['input_ids']  # (context_length,)
 
     # Extract prompt (first prompt_length tokens)
     prompt_tokens = full_tokens[:prompt_length].unsqueeze(0).to(device)  # (1, prompt_length)
