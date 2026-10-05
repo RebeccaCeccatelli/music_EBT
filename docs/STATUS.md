@@ -34,22 +34,57 @@ Scratch: ~39 GB used by checkpoints after the 2026-10-05 cleanup.
 | 24934692 | REMI pitch_register regressor | REMI 33,732 |
 | 24934693 | Ant duration regressor (5 ep, 300k) | Ant s1 88,800 |
 | 24934694 | Ant pitch_register regressor (note-only, 5 ep, 300k) | Ant s1 88,800 |
+| 24940374 / 24940376 | AR sweep Llama: tilt / best_of_n | Llama REMI 99,660 |
+| 24940378 / 24940380 | AR sweep GPT-2: tilt / best_of_n | GPT-2 REMI 99,660 |
+| 24940382 / 84 / 86 | Llama-space regressors velocity / duration / pitch_register (for PPLM) | Llama REMI 99,660 |
 
-Outputs: `~/orcd/scratch/rebcecca/music_EBT_logs/attr_control/<attr>_regressor_<tok>_<timestamp>/best.pt`.
+| 24936920 | Music-quality reference sets (500 real REMI + Ant windows → MIDI → scores.csv) | — |
+
+Outputs: `~/orcd/scratch/rebcecca/music_EBT_logs/attr_control/<attr>_regressor_<tok>_<timestamp>/best.pt`;
+music-quality refs in `.../music_EBT_logs/music_quality/reference_<tok>_256tok/`.
+
+REMI density + velocity regressors (24934689/90) COMPLETED cleanly (no NaN).
 
 ## Open TODOs (in order)
 1. Check the regressor jobs: no NaN (the new guard would now fail fast),
    sensible val loss; for Ant pitch_register re-run
    `attribute_control/eval_pitch_register_regressor.py` to confirm the
    predicted range is no longer collapsed.
-2. Final experiments on the paired checkpoints only: λ sweeps + attribute
-   hit-rate for EBT (REMI, Ant) vs the GPT-2/Llama baselines.
+2. Final experiments: EBT vs plug-and-play GPT-2/Llama guidance (REMI),
+   paired checkpoints only. Code: `attribute_control/ar_guidance_sweep.py`,
+   `job_scripts/mus/attr_control/ar_guidance_sweep.sh`,
+   `attribute_control/aggregate_guidance_sweeps.py` (diary 2026-10-05).
+   - [ ] Check AR sweeps 24940374/76 (Llama tilt/best_of_n), 24940378/80
+         (GPT-2 tilt/best_of_n). Tilt does about 2k generations per model and
+         hasn't been timed on a GPU; if it hits the 6h limit, resubmit per
+         attribute (`ATTRIBUTES=velocity` etc.).
+   - [ ] Check Llama-space regressors 24940382/84/86 (no NaN, sensible val loss).
+   - [ ] Submit the Llama PPLM sweep with them: `METHOD=pplm MODEL=llama
+         ATTRIBUTES=velocity,duration,pitch_register REGRESSOR_CKPTS=<3 best.pt, same order>`.
+   - [ ] Re-run the EBT REMI sweeps on step 33,732 with the new regressors
+         (24934690-92), using the same 16 prompt ids and ±0.5/1/2 sd targets
+         as `sweep_tables/`.
+   - [ ] Anticipation: EBT sweeps for duration/pitch_register (only
+         best_of_n applies on the AR side; tilt is REMI-only).
+   - [ ] Score everything with `aggregate_guidance_sweeps.py` (strict
+         accuracy) and make an accuracy/MAE vs. bigram_ll comparison figure
+         per attribute → new `thesis_findings/` entry.
+   - [ ] Regenerate `thesis_findings/2026-09-24_remi_guidance_strength_sweeps.md`
+         and its figures with strict accuracy. The old `aggregated.json`
+         counted achieved==baseline ties as "down" hits, which inflates
+         low-λ accuracy and probably part of the up/down crossover.
 3. Demo freeze: point it at REMI 33,732 / Ant s1 88,800; consider making
    `_find_attribute_regressor()` check the regressor's `ebt_checkpoint`
    matches the selected EBT ckpt.
 4. Writing: thesis sections from `thesis_findings/` + diary, then paper.
    Don't cite post-resume val readings.
-5. Repo tidy: project README (currently the upstream EBT one), final tag.
+5. Music-quality evaluation (branch `music-quality-eval`, worktree
+   `.claude/worktrees/music-quality`): `eval/music_quality.py` scores decoded
+   MIDI (scale consistency, sharp dissonance, groove, bar self-similarity, …)
+   against real windows by KDE overlap. Next: generate unguided + guided MIDI
+   from each final model and score; calibrate against blind listening ratings;
+   small A/B listening test. Treat `ebt_energy`/`repetition_ratio` as diagnostics only.
+6. Repo tidy: project README (currently the upstream EBT one), final tag.
 
 ## Decisions
 - 2026-10-05: no further pretraining. Final EBT ckpts = REMI 33,732 and
