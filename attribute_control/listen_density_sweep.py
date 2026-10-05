@@ -45,6 +45,7 @@ from inference.mus.tokens_to_midi import tokens_to_midi
 from data.mus.symbolic.tokenization.tokenizer_utils import load_tokenizer
 from attribute_control.attributes import ATTRIBUTES
 from attribute_control.musicality_metrics import build_bigram_logprob_table, score_sample, segment_scores
+from attribute_control.sample_midi import save_sample_midi
 from convert_midi_simple import simple_synth
 
 import wandb
@@ -166,6 +167,10 @@ def main():
                         "baselines from the same prompts don't), likely because "
                         "density/rhythm/syncopation/polyphony's gate doesn't "
                         "distinguish a melodic note from a drum hit.")
+    p.add_argument("--save_midi_dir", default=None,
+                   help="Also write every sample as MIDI here (ground_truth/, baseline/, "
+                        "guided/; layout of attribute_control/sample_midi.py) for "
+                        "eval/music_quality.py. The table's sample_id column joins them back.")
     args = p.parse_args()
     targets = [float(t) for t in args.targets.split(",")]
     lambdas = [float(x) for x in args.lambdas.split(",")]
@@ -285,7 +290,7 @@ def main():
                "ebt_energy", "bigram_ll", "repetition_ratio", "grammar_violation_rate",
                "bigram_ll_early", "bigram_ll_late",
                "grammar_violation_rate_early", "grammar_violation_rate_late",
-               "melodic_interval_early", "melodic_interval_late", "audio"]
+               "melodic_interval_early", "melodic_interval_late", "audio", "sample_id"]
     table_rows = []
     # wandb's media panel grid sorts audio keys alphabetically, and prompt
     # indices are arbitrary (large, unsorted) dataset row numbers — sorting
@@ -296,6 +301,11 @@ def main():
     # the panel order exactly match log order instead: ground truth, then
     # baseline, then the guided grid, prompt by prompt.
     audio_order = 0
+
+    def save_midi(subdir, sample_id, prompt, gen, kind="generated"):
+        if args.save_midi_dir:
+            save_sample_midi(Path(args.save_midi_dir) / subdir, sample_id, prompt, gen,
+                             tokenizer, kind)
 
     try:
         for pi in sample_indices:
@@ -325,6 +335,7 @@ def main():
                 # audio doesn't) even though the underlying files are valid;
                 # standalone panels are a more basic, reliably-supported
                 # wandb feature and are the one to actually listen from.
+                save_midi("ground_truth", f"p{pi}", prompt, gt_continuation, kind="ground_truth")
                 gt_audio = wandb.Audio(gt_wav, caption=f"p{pi} ground truth {attribute}={gt_achieved:.3f}")
                 wandb.log({f"audio/{audio_order:03d}_p{pi}_ground_truth": gt_audio})
                 audio_order += 1
@@ -334,7 +345,7 @@ def main():
                     gt_music.get("ebt_energy"), gt_music.get("bigram_ll"),
                     gt_music.get("repetition_ratio"), gt_music.get("grammar_violation_rate"),
                     gt_bll_e, gt_bll_l, gt_gvr_e, gt_gvr_l, gt_mi_e, gt_mi_l,
-                    gt_audio,
+                    gt_audio, f"p{pi}",
                 ])
 
             # ── Unguided baseline: the "outputs are good" reference point ──────
@@ -348,10 +359,11 @@ def main():
             hparams.attribute_regressor_ckpt = None
             baseline_vals = []
             baseline_gen = None
-            for _ in range(args.baseline_repeats):
+            for k in range(args.baseline_repeats):
                 with torch.no_grad():
                     out = generate_music(model, batch, hparams)
                 gen = out["generation_tokens"][0]
+                save_midi("baseline", f"p{pi}_r{k}", prompt, gen)
                 baseline_vals.append(compute_fn(gen, tokenizer_type))
                 if baseline_gen is None:
                     baseline_gen = gen  # log audio for the first draw only
@@ -374,7 +386,7 @@ def main():
                 music.get("ebt_energy"), music.get("bigram_ll"), music.get("repetition_ratio"),
                 music.get("grammar_violation_rate"),
                 base_bll_e, base_bll_l, base_gvr_e, base_gvr_l, base_mi_e, base_mi_l,
-                baseline_audio,
+                baseline_audio, f"p{pi}_r0",
             ])
 
             # Resolve this prompt's target list: either the shared --targets
@@ -402,6 +414,9 @@ def main():
                     music = score_sample(model, gen, device, bigram_table, tokenizer_type)
                     bll_e, bll_l, gvr_e, gvr_l, mi_e, mi_l = early_late_scores(gen, bigram_table)
                     name = f"p{pi}_lam{lam}_tgt{tgt:.4f}".replace(".", "_")
+                    d_tag = f"_d{delta:+.4f}" if delta is not None else f"_t{tgt:.4f}"
+                    sample_id = f"p{pi}_{attribute}_r3{lam:g}{d_tag}"
+                    save_midi("guided", sample_id, prompt, gen)
                     wav = render_wav(gen, tokenizer, out_dir, name)
                     delta_str = f"  (delta={delta:+.3f})" if delta is not None else ""
                     print(f"[prompt {pi}] lambda={lam}  target={tgt:.4f} (z={tgt_z:+.2f}){delta_str}  "
@@ -419,7 +434,7 @@ def main():
                         music.get("ebt_energy"), music.get("bigram_ll"),
                         music.get("repetition_ratio"), music.get("grammar_violation_rate"),
                         bll_e, bll_l, gvr_e, gvr_l, mi_e, mi_l,
-                        guided_audio,
+                        guided_audio, sample_id,
                     ])
 
             # Log incrementally after each prompt — long job, keep progress visible/safe.
