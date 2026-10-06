@@ -70,7 +70,7 @@ steps at inference help.
 | Anticipation | 3.011 | 2.697 | 2.727 | 2.273 | 2.306 |
 
 At equal context the gap shrinks a lot. REMI EBT–Llama loss gap goes
-0.12 → 0.02 and EBT–GPT-2 0.18 → 0.06. Ant EBT–Llama 0.27 → 0.10 and
+0.14 → 0.02 and EBT–GPT-2 0.18 → 0.06. Ant EBT–Llama 0.27 → 0.10 and
 EBT–GPT-2 0.28 → 0.11. So the longer training/eval context explains
 ~60–85% of the baselines' logged advantage. The rest (with the baselines
 having seen 4–6× more tokens) is what remains. EBT's first→last MCMC step:
