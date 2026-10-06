@@ -61,6 +61,21 @@ steps at inference help.
 - **Llama REMI overfits.** Its loss rises again after ~15B tokens
   (~185 epochs), so its best checkpoint is earlier than its final one.
 
+## Context-matched check (final checkpoints, 1,000 identical validation windows)
+`eval/context_matched_loss.py`, jobs 24944752 / 24948185. EBT = last MCMC step.
+
+| perplexity | EBT @512 | GPT-2 @512 | Llama @512 | GPT-2 @1024 | Llama @1024 |
+|---|---|---|---|---|---|
+| REMI | 2.006 | 1.887 | 1.965 | 1.674 | 1.741 |
+| Anticipation | 3.011 | 2.697 | 2.727 | 2.273 | 2.306 |
+
+At equal context the gap shrinks a lot. REMI EBT–Llama loss gap goes
+0.12 → 0.02 and EBT–GPT-2 0.18 → 0.06. Ant EBT–Llama 0.27 → 0.10 and
+EBT–GPT-2 0.28 → 0.11. So the longer training/eval context explains
+~60–85% of the baselines' logged advantage. The rest (with the baselines
+having seen 4–6× more tokens) is what remains. EBT's first→last MCMC step:
+REMI 0.6993 → 0.6964, Ant 1.1098 → 1.1024 (≤ 0.7%).
+
 ## Caveats
 - Objective differs: EBT's `valid_loss` is the cross-entropy of its
   MCMC-refined prediction, not a plain next-token softmax as in the
