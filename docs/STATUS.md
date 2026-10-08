@@ -93,7 +93,12 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
    Smoke tests 24938101/2 pending
    (CPU quota); then 6 × 100-sample runs. Tokens-matched loss done:
    `thesis_findings/2026-10-05_tokens_matched_validation_loss.md` (branch).
-6. Repo tidy: project README (currently the upstream EBT one), final tag.
+6. Anticipation prompts/references contain anticipated controls (diary
+   2026-10-08): 15/16 Ant guidance prompts are ANTICIPATE windows and decoding
+   drops controls (~41% of tokens), so prompts and real-music reference windows
+   are thinned. Decide: redraw Ant prompts/reference windows from AUTOREGRESS
+   sequences only, or document as a limitation (thesis §4.3 has a TODO).
+7. Repo tidy: project README (currently the upstream EBT one), final tag.
 
 ## Decisions
 - 2026-10-05: no further pretraining. Final EBT ckpts = REMI 33,732 and
