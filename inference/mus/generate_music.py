@@ -185,11 +185,12 @@ def call_model_forward_decode(hparams, model, input_tokens, start_pos, bsz, attr
             # (softmaxes internally when values fall outside [0, 1]), so no
             # separate closure is needed here.
             #
-            # Cost: this requires a full backward pass through the whole
-            # transformer every generation step (no cheaper hook exists,
-            # unlike EBT which is already backpropagating for its own
-            # refinement) — meaningfully more expensive per step than plain
-            # sampling, but tractable at listen-sweep scale on one GPU.
+            # Cost: the gradient is taken w.r.t. the output logits, so it only
+            # flows through attr_energy_fn (regressor + embedding matmul), not
+            # back through the transformer. Per step this is one forward pass
+            # (with autograd recording) plus the small regressor backward —
+            # roughly the cost of plain sampling, unlike EBT's MCMC steps, each
+            # of which backpropagates through the model.
             #
             # There's no native model gradient to normalize against here
             # (unlike ebt_symbolic.py's ebt_norm/attr_norm convention), so
