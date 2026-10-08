@@ -171,7 +171,7 @@ CLAUDE.md
 # not the scratch checkpoints dir; large, regenerated automatically)
 hpc_ckpt_*.ckpt
 
-# Thesis (own local git repo) and reference papers (copyrighted PDFs): not part of this repo
-thesis/
+# Thesis (own private git repo) and reference papers (copyrighted PDFs): not part of this repo
+eth-mit-master-thesis/
 papers/
 listening/
