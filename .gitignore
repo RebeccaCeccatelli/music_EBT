@@ -170,3 +170,7 @@ CLAUDE.md
 # PyTorch Lightning SLURM auto-requeue checkpoints (written to project root,
 # not the scratch checkpoints dir; large, regenerated automatically)
 hpc_ckpt_*.ckpt
+
+# Thesis (own local git repo) and reference papers (copyrighted PDFs): not part of this repo
+thesis/
+papers/
