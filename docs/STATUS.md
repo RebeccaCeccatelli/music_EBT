@@ -1,6 +1,6 @@
 # Project status
 
-_Last updated: 2026-10-05._ Living snapshot of where music-EBT stands; the
+_Last updated: 2026-10-06._ Living snapshot of where music-EBT stands; the
 day-by-day history is in [diary/](diary/README.md), citable results in
 [thesis_findings/](thesis_findings/README.md).
 
@@ -28,24 +28,17 @@ Scratch: ~39 GB used by checkpoints after the 2026-10-05 cleanup.
 ## Running jobs
 | Job | What | Paired EBT ckpt |
 |---|---|---|
-| 24934689 | REMI density regressor | REMI 33,732 |
-| 24934690 | REMI velocity regressor | REMI 33,732 |
-| 24934691 | REMI duration regressor | REMI 33,732 |
-| 24934692 | REMI pitch_register regressor | REMI 33,732 |
-| 24934693 | Ant duration regressor (5 ep, 300k) | Ant s1 88,800 |
-| 24934694 | Ant pitch_register regressor (note-only, 5 ep, 300k) | Ant s1 88,800 |
 | 24940374 / 24940376 | AR sweep Llama: tilt / best_of_n | Llama REMI 99,660 |
 | 24940378 / 24940380 | AR sweep GPT-2: tilt / best_of_n | GPT-2 REMI 99,660 |
 | 24940382 / 84 / 86 | Llama-space regressors velocity / duration / pitch_register (for PPLM), moved to `mit_preemptable` | Llama REMI 99,660 |
 
-| 24944752 | Context-matched loss: EBT vs baselines on identical windows at 512 (+1024) | final ckpts |
-| 24938101/2 | Music-quality generation smoke tests (3 samples) | REMI 33,732 / Llama Ant |
-| 24936920 | Music-quality reference sets (500 real REMI + Ant windows → MIDI → scores.csv) | — |
 
 Outputs: `~/orcd/scratch/rebcecca/music_EBT_logs/attr_control/<attr>_regressor_<tok>_<timestamp>/best.pt`;
 music-quality refs in `.../music_EBT_logs/music_quality/reference_<tok>_256tok/`.
 
-REMI density + velocity regressors (24934689/90) COMPLETED cleanly (no NaN).
+**All 6 regressors retrained 2026-10-05, no NaN:** REMI density/velocity/duration/pitch_register
+(24934689–92, vs REMI 33,732) and Ant duration/pitch_register (24934693/4, vs Ant s1 88,800).
+Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.095).
 
 ## Open TODOs (in order)
 1. Check the regressor jobs: no NaN (the new guard would now fail fast),
@@ -90,7 +83,10 @@ REMI density + velocity regressors (24934689/90) COMPLETED cleanly (no NaN).
    against real windows by KDE overlap. Next: generate unguided + guided MIDI
    from each final model and score; calibrate against blind listening ratings;
    small A/B listening test. Treat `ebt_energy`/`repetition_ratio` as diagnostics only.
-   Also has prompt coherence + diversity. Smoke tests 24938101/2 pending
+   Also has prompt coherence + diversity. **Done 2026-10-06:** unguided
+   quality across models (`thesis_findings/2026-10-06_unguided_music_quality.md`)
+   and context-matched perplexity. Next: guided samples at several λ.
+   Smoke tests 24938101/2 pending
    (CPU quota); then 6 × 100-sample runs. Tokens-matched loss done:
    `thesis_findings/2026-10-05_tokens_matched_validation_loss.md` (branch).
 6. Repo tidy: project README (currently the upstream EBT one), final tag.
