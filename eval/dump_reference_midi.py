@@ -33,6 +33,13 @@ def main():
     ap.add_argument('--n_tokens', type=int, default=256)
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--out_dir', required=True)
+    ap.add_argument('--autoregress_only', action='store_true',
+                    help='Anticipation: only use windows without control tokens. ~90%% of '
+                         'stored sequences are 10x anticipation-augmented, and decoding '
+                         'drops their control tokens, which are real notes moved ahead, so '
+                         'those windows come out with notes missing. The mode token alone '
+                         'is not enough: a window that starts AUTOREGRESS can run into the '
+                         'next, augmented copy of a song.')
     args = ap.parse_args()
 
     random.seed(args.seed)
@@ -48,17 +55,28 @@ def main():
     config = None if is_ant else ds.TOKENIZER_CONFIG_PATH
     tokenizer = load_tokenizer(args.tokenizer_type, tokenizer_config_path=config)[0]
 
+    if is_ant:
+        from anticipation.vocab_selector import (AUTOREGRESS as ANT_AUTOREGRESS,
+                                                 CONTROL_OFFSET as ANT_CONTROL_OFFSET,
+                                                 SPECIAL_OFFSET as ANT_SPECIAL_OFFSET)
+    # ~10% of Anticipation sequences are AUTOREGRESS, so allow more draws.
+    max_tries = (20 if is_ant and args.autoregress_only else 5) * args.n
     written = tries = 0
-    while written < args.n and tries < 5 * args.n:
+    while written < args.n and tries < max_tries:
         tries += 1
         tokens = ds.get_full_tokens(random.randrange(len(ds)))
         if is_ant:
+            if args.autoregress_only and tokens[0] != ANT_AUTOREGRESS:
+                continue
             # Keep the mode token (decode() strips it) and start on a triplet boundary.
             body = tokens[1:]
             if len(body) < args.n_tokens:
                 continue
             start = random.randrange(0, len(body) - args.n_tokens + 1, 3)
             window = tokens[:1] + body[start:start + args.n_tokens]
+            if args.autoregress_only and any(ANT_CONTROL_OFFSET <= t < ANT_SPECIAL_OFFSET
+                                             for t in window[1:]):
+                continue
         else:
             if len(tokens) < args.n_tokens:
                 continue
