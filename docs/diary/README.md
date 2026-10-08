@@ -12,3 +12,4 @@ research *results* worth citing; this is the changelog of the work itself.
 - [2026-09-23](2026-09-23.md) — REMI "loss climbing" claim corrected, Anticipation "not improving" premise corrected, musicality-over-training tracking tool, pitch_register regressor windowing fix, literature research, multiple demo reliability bugs found and fixed (missing audio, blinking boxes, GPT-2 box, layout).
 - [2026-09-24](2026-09-24.md) — diary started.
 - [2026-10-05](2026-10-05.md) — decided to stop pretraining and wrap up; scratch cleanup (1,081 ckpts / ~932 GB deleted, real best per run kept); regressor NaN guard; 6 regressors resubmitted against final ckpts; STATUS.md started.
+- [2026-10-06](2026-10-06.md) — context-matched perplexity (most of the baselines' advantage was context); unguided music quality across models (all near ceiling on REMI, EBT slightly lowest, outputs repetitive rather than cacophonic).
