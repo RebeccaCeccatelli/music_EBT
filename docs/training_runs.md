@@ -7,8 +7,8 @@ exact CLI argv `train_model.py` was launched with), not from memory — see
 "How to reproduce" below to re-pull or verify.
 
 All runs share the same underlying architecture size (`model_size=small`),
-dataset (`giga_midi`, the crowd-sourced GigaMIDI corpus, 5% held out for
-validation), optimizer settings (AdamW-style: `peak_learning_rate=0.0008`,
+dataset (`giga_midi`, the crowd-sourced GigaMIDI corpus, GigaMIDI's own train/validation/test split, ≈80/10/10 — corrected
+2026-10-08, was "5% held out"), optimizer settings (AdamW-style: `peak_learning_rate=0.0008`,
 `weight_decay=0.05`, `gradient_clip_val=1.0`, `min_lr_scale=10`,
 `warm_up_steps=10000`, `max_steps`/`max_scheduling_steps=100000`), and
 hardware (1x NVIDIA L40S per job).
