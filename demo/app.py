@@ -85,6 +85,29 @@ def _ckpt_pattern(model_key: str, tokenizer_type: str) -> str:
     return _MODEL_INFO[model_key]["ckpt_pattern_tmpl"].format(slug=_TOK_SLUG[tokenizer_type])
 
 
+# Final checkpoints used for the thesis (docs/STATUS.md, "Final checkpoints"),
+# as globs under checkpoints/. Shown first in each dropdown and selected by
+# default. The EBT ones are also the checkpoints the current attribute
+# regressors were trained against; the most-recently-modified rule in
+# _find_checkpoints can't find them (REMI 33,732 shares its run dir with the
+# later 34,268 save, and the Anticipation s1* pattern also matches the newer
+# stab+ runs).
+_FINAL_CKPT_GLOBS = {
+    ("EBT", "REMI"): "ebt-symb-small-remi-s1-job*/*step=33732-*.ckpt",
+    ("EBT", "Anticipation-Arrival-Time"): "ebt-symb-small-ant-at-full-s1-job*/*step=88800-*.ckpt",
+    ("Llama", "REMI"): "baseline-llama-small-remi-*/*step=99660-valid_loss=valid_loss=0.5239.ckpt",
+    ("GPT-2", "REMI"): "baseline-hf-gpt2-small-remi-*/*step=99660-valid_loss=valid_loss=0.4756.ckpt",
+    ("Llama", "Anticipation-Arrival-Time"): "baseline-llama-small-ant-at-full-*/*step=100000-*.ckpt",
+    ("GPT-2", "Anticipation-Arrival-Time"): "baseline-hf-gpt2-small-ant-at-full-*/*step=98900-*.ckpt",
+}
+
+
+def _final_checkpoint(model_key: str, tokenizer_type: str) -> str | None:
+    pattern = _FINAL_CKPT_GLOBS.get((model_key, tokenizer_type))
+    matches = sorted((SCRATCH_DIR / "checkpoints").glob(pattern)) if pattern else []
+    return str(matches[-1]) if matches else None
+
+
 # ── Song list ─────────────────────────────────────────────────────────────────
 
 def _clean_song_title(raw: str) -> str:
@@ -338,8 +361,8 @@ def refresh_checkpoints(model_key: str, tokenizer_type: str, current_selection: 
 
     Re-scans disk for checkpoints (picking up new ones saved since the last
     look) and keeps whatever is currently selected if it's still a valid
-    choice — only falling back to the most recent checkpoint when there's no
-    prior selection to keep, or that selection no longer exists (e.g. after
+    choice — only falling back to the default (the pinned final checkpoint,
+    else the most recent one) when there's no prior selection to keep, or that selection no longer exists (e.g. after
     switching tokenizer, where the old label belongs to a different
     checkpoint set entirely). A genuine rescan should update the list
     without silently discarding a deliberate manual pick — always jumping
@@ -352,13 +375,20 @@ def refresh_checkpoints(model_key: str, tokenizer_type: str, current_selection: 
             "",
             f'<div class="reference-box">No {model_key} checkpoints found for {tokenizer_type} yet.</div>',
         )
+    final = _final_checkpoint(model_key, tokenizer_type)
+    if final:
+        step_m = re.search(r'step=(\d+)', final)
+        loss_m = re.search(r'valid_loss=(\d+\.\d+)', final)
+        step, loss = int(step_m.group(1)), float(loss_m.group(1)) if loss_m else float('nan')
+        pairs = ([("★ final · " + _ckpt_label(final, step, loss), final, step, loss)]
+                 + [p for p in pairs if p[1] != final])
     labels = [lbl for lbl, _, _, _ in pairs]
     paths  = {lbl: path for lbl, path, _, _ in pairs}
     by_label = {lbl: (step, loss) for lbl, _, step, loss in pairs}
     if current_selection in by_label:
         chosen = current_selection
     else:
-        chosen = labels[0]
+        chosen = labels[0]  # the pinned final checkpoint when it exists
     chosen_step, chosen_loss = by_label[chosen]
     return (
         gr.update(choices=labels, value=chosen,
@@ -494,7 +524,8 @@ def _sigma_annotation_html(attribute: str, target: float) -> str:
             f'≈ {sign}{az:.1f}σ from corpus mean — {note}</div>')
 
 
-def _find_attribute_regressor(attribute: str, tokenizer_type: str = "REMI") -> tuple[str | None, str]:
+def _find_attribute_regressor(attribute: str, tokenizer_type: str = "REMI",
+                              ebt_checkpoint: str | None = None) -> tuple[str | None, str]:
     """Return (ckpt_path, status) for the most recently trained EBT-specific
     regressor for this attribute AND tokenizer — a regressor is trained
     against one specific EBT checkpoint's embedding space (see
@@ -505,7 +536,13 @@ def _find_attribute_regressor(attribute: str, tokenizer_type: str = "REMI") -> t
     this session's PPLM pilot) by checking each candidate's own saved
     ebt_checkpoint metadata — a regressor trained on Llama's embedding space
     would produce meaningless guidance applied to EBT's, even though the
-    file naming pattern alone can't tell them apart."""
+    file naming pattern alone can't tell them apart.
+
+    Given the selected `ebt_checkpoint`, prefers the newest regressor trained
+    on exactly that checkpoint: embeddings drift during pretraining, so a
+    regressor paired with another step of the same run guides worse
+    (docs/training_runs.md). Without a match it falls back to the newest
+    EBT-trained regressor and says which step it was trained on."""
     if attribute == "velocity" and tokenizer_type != "REMI":
         # Not "hasn't been trained yet" — Anticipation's vocabulary strips
         # velocity out before the model ever sees it (every note gets a
@@ -523,6 +560,7 @@ def _find_attribute_regressor(attribute: str, tokenizer_type: str = "REMI") -> t
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
+    ebt_trained = []  # (candidate, its EBT checkpoint), newest first
     for cand in candidates:
         try:
             meta = torch.load(cand, map_location='cpu', weights_only=False)
@@ -530,7 +568,19 @@ def _find_attribute_regressor(attribute: str, tokenizer_type: str = "REMI") -> t
             continue
         src_ckpt = meta.get('ebt_checkpoint', '') or ''
         if 'ebt-symb' in src_ckpt:
-            return str(cand), f"Regressor: {cand.parent.name}"
+            ebt_trained.append((cand, src_ckpt))
+    if ebt_trained:
+        if ebt_checkpoint:
+            target = Path(ebt_checkpoint).resolve()
+            for cand, src in ebt_trained:
+                if Path(src).resolve() == target:
+                    return str(cand), f"Regressor: {cand.parent.name} (paired with the selected checkpoint)"
+        cand, src = ebt_trained[0]
+        step_m = re.search(r'step=(\d+)', src)
+        trained_on = f"step {int(step_m.group(1)):,}" if step_m else Path(src).name
+        warn = (f" ⚠️ trained on EBT {trained_on}, not the selected checkpoint — "
+                f"guidance may be weaker" if ebt_checkpoint else "")
+        return str(cand), f"Regressor: {cand.parent.name}{warn}"
     if candidates:
         return None, (f"Found {attribute} regressor(s) for {tokenizer_type} but none were "
                        f"trained on an EBT checkpoint (only baseline-model regressors "
@@ -1675,7 +1725,7 @@ def _make_solo_row_step(i: int):
         title = state["titles"][i]
         tokenizer_type = state["tokenizer_type"]
         try:
-            reg_path, reg_status = _find_attribute_regressor(attr, tokenizer_type)
+            reg_path, reg_status = _find_attribute_regressor(attr, tokenizer_type, ckpt_path)
             if not reg_path:
                 status_text = status_text + f"\nRow {i + 1} ({attr}): ❌ {reg_status}"
                 return (*done_slot(title, None, ""), status_text)
@@ -1757,7 +1807,7 @@ def _compose_generate(
 
         reg_paths, reg_statuses = [], []
         for attr, _, _ in rows:
-            reg_path, reg_status = _find_attribute_regressor(attr, tokenizer_type)
+            reg_path, reg_status = _find_attribute_regressor(attr, tokenizer_type, ckpt_path)
             reg_statuses.append(reg_status)
             if not reg_path:
                 return gr.update(visible=False, value=None), "❌ " + "\n".join(reg_statuses), ""
