@@ -8,6 +8,27 @@ invocations), wandb runs `thesis-velocity-remi-comprehensive` (c5gxbfcj),
 `thesis-pitch_register-remi-comprehensive` (97zhcwb5), project
 `mus_symb_attr_control`.
 
+> **Correction (2026-10-08): strict accuracy.** The original figures below
+> counted a guided sample whose value didn't move from its baseline
+> (`achieved == baseline`) as a correct *down* push. Recomputed so that ties
+> count as misses in both directions (`eval/plot_guidance_sweeps.py strength`;
+> figures in `figures/remi_strict/`):
+>
+> ![strict accuracy](figures/remi_strict/guidance_accuracy_vs_lambda.png)
+> ![strict accuracy by direction](figures/remi_strict/guidance_accuracy_by_direction.png)
+>
+> - Only low λ changes. Velocity λ=0.01 69.8% → 57.3%, λ=0.02 92.7% → 80.2%;
+>   duration λ=0.015 90.6% → 77.1%; pitch_register λ=0.01 64.6% → 53.1%.
+>   High-λ accuracy, all MAE values and all bigram_ll values are unchanged.
+> - **The up/down asymmetry is real, not the artifact.** Under strict
+>   accuracy, duration and pitch_register push-up still reach 100% from
+>   λ≈0.025 / 0.04, while push-down plateaus at 54–69% at every λ. Velocity
+>   shows the mirror image at high λ (down 100%, up falls to 77% at λ=0.09).
+>   The low-λ "crossover" points are where the artifact had inflated "down".
+> - These sweeps used the old EBT checkpoint (job21290401) and regressors.
+>   The final-checkpoint reruns (2026-10-08, jobs 25261488–90) supersede
+>   them for the thesis.
+
 ## The question
 
 For each REMI attribute (velocity, duration, pitch register), how does
