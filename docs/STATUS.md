@@ -79,8 +79,9 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
    ("★ final"), and regressors are paired with the selected EBT checkpoint
    (warns otherwise). Remaining: a final click-through of the running demo.
 4. Writing: thesis sections from `thesis_findings/` + diary, then paper.
-   Don't cite post-resume val readings. Thesis source: `~/thesis` (Overleaf
-   export, chapters scaffolded 2026-10-08; build with `~/thesis/build.sh`).
+   Don't cite post-resume val readings. Thesis source: `thesis/` (own local git repo,
+   ignored here; Overleaf export, ch. 2-4 drafted 2026-10-08; build with
+   `thesis/build.sh`). Reference PDFs: `papers/` (not tracked).
 5. Music-quality evaluation (branch `music-quality-eval`, worktree
    `.claude/worktrees/music-quality`): `eval/music_quality.py` scores decoded
    MIDI (scale consistency, sharp dissonance, groove, bar self-similarity, …)
