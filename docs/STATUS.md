@@ -75,11 +75,12 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
          and its figures with strict accuracy. The old `aggregated.json`
          counted achieved==baseline ties as "down" hits, which inflates
          low-λ accuracy and probably part of the up/down crossover.
-3. Demo freeze: point it at REMI 33,732 / Ant s1 88,800; consider making
-   `_find_attribute_regressor()` check the regressor's `ebt_checkpoint`
-   matches the selected EBT ckpt.
+3. Demo freeze: **done 2026-10-08.** Defaults to the final checkpoints
+   ("★ final"), and regressors are paired with the selected EBT checkpoint
+   (warns otherwise). Remaining: a final click-through of the running demo.
 4. Writing: thesis sections from `thesis_findings/` + diary, then paper.
-   Don't cite post-resume val readings.
+   Don't cite post-resume val readings. Thesis source: `~/thesis` (Overleaf
+   export, chapters scaffolded 2026-10-08; build with `~/thesis/build.sh`).
 5. Music-quality evaluation (branch `music-quality-eval`, worktree
    `.claude/worktrees/music-quality`): `eval/music_quality.py` scores decoded
    MIDI (scale consistency, sharp dissonance, groove, bar self-similarity, …)
