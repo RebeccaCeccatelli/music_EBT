@@ -28,10 +28,8 @@ Scratch: ~39 GB used by checkpoints after the 2026-10-05 cleanup.
 ## Running jobs
 | Job | What | Paired EBT ckpt |
 |---|---|---|
-| 25261488 / 89 / 90 | EBT REMI sweeps velocity / duration / pitch_register (mit_normal_gpu) | REMI 33,732 |
+| 25280946 / 47 / 48 | EBT REMI sweeps velocity / duration / pitch_register (mit_normal_gpu, 6 h; reruns of 25261488–90, which timed out at the script's 1:30 default) | REMI 33,732 |
 | 25261491 / 92 | EBT Ant sweeps duration / pitch_register, λ 0.005–0.64 (mit_preemptable) | Ant s1 88,800 |
-| 25261493 | Llama PPLM sweep, REMI ×3 attributes (mit_preemptable) | Llama REMI 99,660 |
-| 25261494 / 95 | best_of_n on Ant: GPT-2 / Llama (mit_preemptable) | final baselines |
 
 
 Outputs: `~/orcd/scratch/rebcecca/music_EBT_logs/attr_control/<attr>_regressor_<tok>_<timestamp>/best.pt`;
@@ -51,7 +49,8 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
    `job_scripts/mus/attr_control/ar_guidance_sweep.sh`,
    `attribute_control/aggregate_guidance_sweeps.py` (diary 2026-10-05).
    - [x] AR sweeps 24940374–80 done 2026-10-05 (tables in `attr_control/ar_guidance/`).
-   - [x] Llama-space regressors done; PPLM submitted 25261493.
+   - [x] Llama-space regressors done; PPLM 25261493 done 2026-10-08.
+   - [x] best_of_n on Ant 25261494/5 done 2026-10-08.
    - [x] EBT REMI reruns submitted 25261488–90; Ant EBT 25261491/2; Ant best_of_n 25261494/5.
    - (old notes:) Tilt does about 2k generations per model and
          hasn't been timed on a GPU; if it hits the 6h limit, resubmit per
