@@ -13,7 +13,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from inference.mus.infer_ebt import load_dataset
-from attribute_control.attributes import ATTRIBUTES
+from attribute_control.attributes import ATTRIBUTES, _anticipation_triplets
 from attribute_control.note_density import NoteDensityRegressor
 
 N_WINDOWS = 300
@@ -23,9 +23,9 @@ CHECKPOINTS = {
     "OLD (broken, no note_only_window)":
         "/home/rebcecca/orcd/scratch/rebcecca/music_EBT_logs/attr_control/"
         "pitch_register_regressor_ant-at-full_20260922_125323_23488200/best.pt",
-    "NEW (retrained, note_only_window)":
+    "NEW (2026-10-05, triplet-cleaned windows, EBT step 88,800)":
         "/home/rebcecca/orcd/scratch/rebcecca/music_EBT_logs/attr_control/"
-        "pitch_register_regressor_ant-at-full_20260924_061847_23640180/best.pt",
+        "pitch_register_regressor_ant-at-full_20261005_112459_24934694/best.pt",
 }
 
 
@@ -51,7 +51,12 @@ def sample_windows(tokenizer_type: str, n: int, hard_window: int, note_only_wind
 
     windows = []
     for idx in indices:
-        tokens = ds.get_full_tokens(idx)
+        # Same cleanup as DensityDataset at training time (mode token stripped,
+        # anticipated controls removed); without it the stride-3 slicing below
+        # reads misaligned fields — the bug fixed in training on 2026-09-24.
+        tokens = _anticipation_triplets(ds.get_full_tokens(idx))
+        if len(tokens) < 3:
+            continue
         N = len(tokens)
         if note_only_window:
             raw_window_size = n_needed * 3
@@ -115,5 +120,7 @@ def evaluate(name: str, ckpt_path: str):
 
 
 if __name__ == "__main__":
-    for name, path in CHECKPOINTS.items():
+    # Optional: pass regressor best.pt paths to evaluate instead of the defaults.
+    paths = {Path(p).parent.name: p for p in sys.argv[1:]} or CHECKPOINTS
+    for name, path in paths.items():
         evaluate(name, path)

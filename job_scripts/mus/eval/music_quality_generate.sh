@@ -32,7 +32,8 @@ find_project_root() {
 }
 PROJECT_ROOT="$(find_project_root "$(pwd)")"
 cd "${PROJECT_ROOT}"
-export PYTHONPATH="${PROJECT_ROOT}:${HOME}/music-EBT/data/mus/symbolic:${PYTHONPATH:-}"
+# demo/ holds convert_midi_simple, which infer_ebt.py imports for the WAV step.
+export PYTHONPATH="${PROJECT_ROOT}:${PROJECT_ROOT}/demo:${HOME}/music-EBT/data/mus/symbolic:${PYTHONPATH:-}"
 export PATH="${HOME}/.conda/envs/music_EBT/bin:${PATH}"
 export PYTHONUNBUFFERED=1
 
