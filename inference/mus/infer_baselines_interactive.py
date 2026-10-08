@@ -418,6 +418,12 @@ def main():
         help="Random seed for sample selection. If not set, a random seed is used each run."
     )
     parser.add_argument(
+        "--prompt_indices_file",
+        type=str,
+        default=None,
+        help="JSON list of dataset indices to sample from (default: whole split)"
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="auto",
@@ -461,7 +467,15 @@ def main():
     seed = args.seed if args.seed is not None else random.randint(0, 2**31 - 1)
     rng = random.Random(seed)
     num_samples = min(args.num_samples, len(dataset))
-    sample_indices = rng.sample(range(len(dataset)), num_samples)
+    if args.prompt_indices_file:
+        # Draw from a candidate pool instead of the whole split (e.g. AUTOREGRESS-only
+        # Anticipation windows, whose prompts and ground truth contain no controls).
+        import json
+        with open(args.prompt_indices_file) as f:
+            pool = json.load(f)
+        sample_indices = rng.sample(pool, min(num_samples, len(pool)))
+    else:
+        sample_indices = rng.sample(range(len(dataset)), num_samples)
     print(f"Random seed: {seed}")
     print(f"Sample indices: {sample_indices}")
 

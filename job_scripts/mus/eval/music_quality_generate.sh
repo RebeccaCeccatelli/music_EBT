@@ -44,6 +44,12 @@ GENERATION_LENGTH="${GENERATION_LENGTH:-256}"
 SEED="${SEED:-0}"
 
 SLUG=$([[ "${TOK}" == REMI ]] && echo remi || echo ant-at-full)
+# PROMPT_INDICES_FILE: JSON list of dataset indices to draw the songs from, e.g.
+# AUTOREGRESS-only Anticipation windows (OUT then defaults to a *-ar dir).
+POOL_ARGS=()
+if [[ -n "${PROMPT_INDICES_FILE:-}" ]]; then
+    POOL_ARGS=(--prompt_indices_file "${PROMPT_INDICES_FILE}"); SLUG="${SLUG}-ar"
+fi
 OUT="${OUT:-${HOME}/orcd/scratch/rebcecca/music_EBT_logs/music_quality/gen_${MODEL}_${SLUG}}"
 scontrol update JobId="${SLURM_JOB_ID}" JobName="mq-gen-${MODEL}-${SLUG}" 2>/dev/null || true
 echo "Model: ${MODEL}  Tokenizer: ${TOK}  N=${NUM_SAMPLES}  prompt=${PROMPT_LENGTH}  gen=${GENERATION_LENGTH}  seed=${SEED}"
@@ -54,14 +60,14 @@ if [[ "${MODEL}" == ebt ]]; then
     python inference/mus/infer_ebt.py --checkpoint "${CHECKPOINT}" \
         --num_samples "${NUM_SAMPLES}" --prompt_length "${PROMPT_LENGTH}" \
         --generation_length "${GENERATION_LENGTH}" --seed "${SEED}" \
-        --output_dir "${OUT}"
+        --output_dir "${OUT}" "${POOL_ARGS[@]}"
     MIDI_DIR="${OUT}/midi"; GEN_GLOB='*_generated.mid'
 else
     MODEL_NAME=$([[ "${MODEL}" == gpt2 ]] && echo baseline_hf_gpt2_transformer || echo baseline_llama_transformer)
     python inference/mus/infer_baselines_interactive.py --checkpoint "${CHECKPOINT}" \
         --model_name "${MODEL_NAME}" --num_samples "${NUM_SAMPLES}" \
         --prompt_length "${PROMPT_LENGTH}" --generation_length "${GENERATION_LENGTH}" \
-        --seed "${SEED}" --output_dir "${OUT}/midi" --device cuda
+        --seed "${SEED}" --output_dir "${OUT}/midi" --device cuda "${POOL_ARGS[@]}"
     MIDI_DIR="${OUT}/midi"; GEN_GLOB='*_prompt_with_generated_continuation.mid'
 fi
 

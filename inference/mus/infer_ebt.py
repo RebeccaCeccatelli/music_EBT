@@ -86,6 +86,7 @@ def main():
     parser.add_argument("--ebt_advanced",      action="store_true", help="Use multi-sample energy-based selection")
     parser.add_argument("--use_test_split",    action="store_true", help="Use test split instead of validation")
     parser.add_argument("--seed",              type=int,   default=None, help="Random seed for song selection (random each run if not set)")
+    parser.add_argument("--prompt_indices_file", type=str, default=None, help="JSON list of dataset indices to sample songs from (default: whole split)")
     parser.add_argument("--output_dir",        type=str,   default="./ebt_inference")
     parser.add_argument("--device",            type=str,   default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
@@ -130,7 +131,15 @@ def main():
     seed = args.seed if args.seed is not None else random.randint(0, 2**31 - 1)
     rng = random.Random(seed)
     num_samples = min(args.num_samples, len(dataset))
-    sample_indices = rng.sample(range(len(dataset)), num_samples)
+    if args.prompt_indices_file:
+        # Draw from a candidate pool instead of the whole split (e.g. AUTOREGRESS-only
+        # Anticipation windows, whose prompts and ground truth contain no controls).
+        import json
+        with open(args.prompt_indices_file) as f:
+            pool = json.load(f)
+        sample_indices = rng.sample(pool, min(num_samples, len(pool)))
+    else:
+        sample_indices = rng.sample(range(len(dataset)), num_samples)
     print(f"Random seed: {seed}")
     print(f"Sample indices: {sample_indices}")
 
