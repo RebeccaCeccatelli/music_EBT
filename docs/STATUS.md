@@ -29,7 +29,7 @@ Scratch: ~39 GB used by checkpoints after the 2026-10-05 cleanup.
 | Job | What | Paired EBT ckpt |
 |---|---|---|
 | 25280946 / 47 / 48 | EBT REMI sweeps velocity / duration / pitch_register (6 h; reruns of 25261488–90, which timed out at the script's 1:30 default; pitch_register moved to mit_preemptable) | REMI 33,732 |
-| 25296369 / 70 | EBT Ant **fine** sweeps duration / pitch_register, λ 0.002–0.02 (mit_preemptable; coarse 25261491/2 done: guidance too strong above λ≈0.015) | Ant s1 88,800 |
+| 25296410 / 11 | EBT Ant **fine** sweeps duration / pitch_register, λ 0.002–0.02, control-free prompts (mit_preemptable; complements coarse 25296307/08) | Ant s1 88,800 |
 
 
 Outputs: `~/orcd/scratch/rebcecca/music_EBT_logs/attr_control/<attr>_regressor_<tok>_<timestamp>/best.pt`;
