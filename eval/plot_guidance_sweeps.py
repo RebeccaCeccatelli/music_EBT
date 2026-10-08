@@ -7,8 +7,11 @@ Static figures for guidance sweeps (thesis-ready PNGs).
               docs/thesis_findings/2026-09-24_remi_guidance_strength_sweeps.md.
   tradeoff  — controllability vs music quality from score_sweep_quality.py's
               JSON: one panel per attribute, x = OA vs the system's own
-              unguided samples (musical change; ~0.93 = ceiling at these n),
-              y = strict accuracy, one line per system through its strengths.
+              unguided samples (musical change; ~0.85 = no change at these n),
+              y = strict accuracy with 95% prompt-bootstrap CIs, one line per
+              system through its strengths; the ring marks each system's
+              operating point (best accuracy within the quality budget), and
+              the legend gives its compute (forward-equivalents per token).
 
 Accuracy is strict: a sample whose achieved value equals its baseline (guidance
 changed nothing) counts as a miss in both directions — the 2026-09-24 figures
@@ -145,9 +148,12 @@ def cmd_strength(args):
 
 
 def cmd_tradeoff(args):
-    systems = {}
+    systems, operating = {}, {}
     for p in args.results:
-        systems.update(json.loads(Path(p).read_text()))
+        d = json.loads(Path(p).read_text())
+        for attr, by_sys in d.get('_operating_points', {}).items():
+            operating.setdefault(attr, {}).update(by_sys)
+        systems.update({k: v for k, v in d.items() if not k.startswith('_')})
     attrs = [a for a in ATTR_ORDER if any(a in v for v in systems.values())]
     names = sorted(systems)
     fig, axes = plt.subplots(1, len(attrs), figsize=(4.4 * len(attrs), 4), sharey=True)
@@ -159,15 +165,33 @@ def cmd_tradeoff(args):
             if not pts:
                 continue
             pts.sort()
-            _line(ax, i, [v['oa_unguided'] for _, v in pts], [v['accuracy'] for _, v in pts], s)
+            xs = [v['oa_unguided'] for _, v in pts]
+            ys = [v['accuracy'] for _, v in pts]
+            cost = pts[-1][1].get('fwd_per_token')
+            label = s if cost is None else f"{s} ({'≤' if 'best_of_n' in s else ''}{cost:.0f}× fwd/token)"
+            _line(ax, i, xs, ys, label)
+            if all(v.get('acc_lo') is not None for _, v in pts):
+                ax.errorbar(xs, ys, yerr=[[y - v['acc_lo'] for y, (_, v) in zip(ys, pts)],
+                                          [v['acc_hi'] - y for y, (_, v) in zip(ys, pts)]],
+                            fmt='none', ecolor=SERIES[i % len(SERIES)], elinewidth=1, alpha=0.5, capsize=2)
+            op = operating.get(a, {}).get(s)
+            if op:  # operating point: best accuracy within the quality budget
+                ax.plot([op['oa_unguided']], [op['accuracy']], marker='o', ms=14, mfc='none',
+                        mec=SERIES[i % len(SERIES)], mew=1.8)
         ax.axhline(0.5, color=INK2, lw=1, ls=':')
         ax.set_ylim(0, 1.02)
         ax.invert_xaxis()  # left → right = more musical change
         _style(ax, 'overlap with own unguided output (←less change)', 'directional accuracy (strict)' if a == attrs[0] else '')
         ax.set_title(a, color=INK, loc='left')
-    axes[0].legend(frameon=False, fontsize=8)
-    fig.suptitle('Controllability vs musical change, by method', color=INK, x=0.01, ha='left')
-    fig.tight_layout()
+    handles, labels = axes[0].get_legend_handles_labels()
+    for ax in axes[1:]:  # systems missing from the first panel still get a legend entry
+        for h, l in zip(*ax.get_legend_handles_labels()):
+            if l not in labels:
+                handles.append(h); labels.append(l)
+    fig.legend(handles, labels, loc='lower center', ncol=min(len(labels), 3), frameon=False, fontsize=8)
+    fig.suptitle('Controllability vs musical change, by method (bars: 95% CI over prompts; '
+                 'ring: best accuracy within the quality budget)', color=INK, x=0.01, ha='left', fontsize=10)
+    fig.tight_layout(rect=(0, 0.12, 1, 1))
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     fig.savefig(out / 'guidance_tradeoff.png', dpi=160)
