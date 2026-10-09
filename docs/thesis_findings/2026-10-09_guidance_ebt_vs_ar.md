@@ -105,7 +105,32 @@ Anticipation: ![duration](figures/guidance_final/ant/steering_duration.png)
   while push-down stays near 0 (REMI) or goes the wrong way (Ant
   duration: −1.8 at λ=0.64). Velocity is the mirror image: down
   overshoots (1.35), up plateaus at ~0.55.
-- **Why:** EBT guidance is target-sensitive (at the highest λ, push-up vs
+- **Mechanism, measured** (`eval/guidance_mechanism.py`;
+  `figures/guidance_final/{remi,ant}/guidance_mechanism.{png,json}`):
+
+  ![REMI mechanism](figures/guidance_final/remi/guidance_mechanism.png)
+  ![Ant mechanism](figures/guidance_final/ant/guidance_mechanism.png)
+
+  | attribute | baseline → random-token value | predicted easy dir. | observed | value entropy: EBT unguided → max λ | AR at max strength |
+  |---|---|---|---|---|---|
+  | REMI velocity | 0.674 → 0.509 | down | down ✓ | 0.24 → 0.73 | 0.27–0.42 |
+  | REMI duration | 0.047 → 0.498 | up | up ✓ | 0.27 → 0.58 | 0.22–0.41 |
+  | REMI pitch | 0.356 → 0.511 | up | up ✓ | 0.36 → 0.62 | 0.37–0.42 |
+  | Ant duration | 0.025 → 0.502 | up | up ✓ (down reverses) | 0.29 → 0.58 | 0.30–0.31 |
+  | Ant pitch | 0.467 → 0.499 | ≈ none | both work ✓ | 0.47 → 0.76 | 0.46 |
+
+  "Random-token value" = `attributes.py`'s own `compute_*` on tokens drawn
+  uniformly from that attribute's value tokens. Entropy = normalized
+  entropy of the attribute's values in each continuation (1 = uniform).
+  **In 5/5 cases the easy direction is the one pointing from the baseline
+  to the random-token value.** Where the two are close (Ant pitch), both
+  directions work. EBT's value entropy roughly doubles with λ, while no AR
+  method at full strength raises it much (PPLM most, +0.1–0.18). REMI
+  velocity push-down converges onto the random-token value itself. So
+  strong EBT guidance largely **flattens the attribute-token choice**:
+  this moves the attribute toward its random value (helping one
+  direction, hurting the other) and produces the random-note dissonance.
+- **Earlier reading:** EBT guidance is target-sensitive (at the highest λ, push-up vs
   push-down samples end up clearly apart: REMI velocity 0.75 vs 0.48,
   duration 0.136 vs 0.038, pitch 0.466 vs 0.347; Ant duration 0.39 vs
   0.12). On top of that, strong guidance adds a direction-independent
