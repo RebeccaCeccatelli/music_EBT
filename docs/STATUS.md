@@ -78,6 +78,9 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
 3. Demo freeze: **done 2026-10-08.** Defaults to the final checkpoints
    ("★ final"), and regressors are paired with the selected EBT checkpoint
    (warns otherwise). Remaining: a final click-through of the running demo.
+   Static listening page: `demo/showcase/` (GitHub Pages via
+   `.github/workflows/showcase-pages.yml`). Remaining: listen through the
+   clips, swap any in `selection.json`, enable Pages.
 4. Writing: thesis sections from `thesis_findings/` + diary, then paper.
    Don't cite post-resume val readings. Thesis source: `eth-mit-master-thesis/` (own git repo,
    ignored here; Overleaf export, ch. 2-4 drafted 2026-10-08; build with

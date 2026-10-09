@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Energy-Based Transformers for Symbolic Music: Listening Examples</title>
+  <meta name="description" content="Listening examples: continuation and attribute steering with an Energy-Based Transformer, compared with GPT-2 and Llama.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <header class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Master's thesis · listening examples</p>
+      <h1 id="title">Energy-Based Transformers for Symbolic Music</h1>
+      <p class="lede" id="subtitle"></p>
+      <nav class="toc" id="toc"></nav>
+    </div>
+  </header>
+
+  <main class="wrap" id="sections">
+    <noscript><p>This page needs JavaScript to load the examples.</p></noscript>
+  </main>
+
+  <section class="wrap legend-block">
+    <h3>Reading the piano rolls</h3>
+    <div class="legend">
+      <span><i class="sw sw-prompt"></i>prompt given to the model</span>
+      <span><i class="sw sw-note"></i>pitched note (brighter = louder)</span>
+      <span><i class="sw sw-drum"></i>drum hit</span>
+      <span>Click a roll to play or jump to that point. Within an example, all rolls share the same time and pitch axes.</span>
+    </div>
+    <p class="disclaimer" id="disclaimer"></p>
+  </section>
+
+  <footer class="wrap footer">
+    <span id="author"></span>
+    <a id="repo" href="#" target="_blank" rel="noopener">Code on GitHub ↗</a>
+  </footer>
+
+  <audio id="player" preload="none"></audio>
+  <script src="app.js"></script>
+</body>
+</html>
