@@ -32,11 +32,37 @@ evidence is not proof of novelty: phrase claims as "to our knowledge"._
   arXiv:2505.20934, 2412.10193). In discrete diffusion, strong guidance is
   reported to *concentrate* probability.
 
+## Closest prior work in detail
+Prokopiou et al., "Latent Space Disentanglement via Activation Steering for
+Interpretable Attribute Control in Symbolic Music Generation"
+(arXiv:2605.31295, May 2026; `papers/Explicit control over generation/`):
+- Frozen Multitrack Music Transformer (SOD); difference-in-means activation
+  steering for pitch and duration; Gram–Schmidt for dual steering.
+- Metrics: "Steering Success" (sign-based) and quality degradation from
+  pitch-class entropy, scale and groove consistency (δ≈10 ≈ random notes).
+- They report **asymmetric steering**: pitch +15.5 vs −29 semitones at
+  α=±2 around a 65.7 baseline; duration −59% (floor) vs +407%. They
+  attribute duration's asymmetry to a physical lower bound and leave
+  pitch unexplained. Our random-token-value account predicts pitch's
+  easier direction too (uniform MIDI pitch ≈ 63.5 < 65.7 → down easier),
+  as a consistency check only: different steering mechanism, and their
+  pitch-token range was not verified.
+
 ## Plausibly new (to our knowledge)
 1. **Energy-Based Transformers for symbolic music**, with attribute
    guidance folded into EBT's own MCMC refinement (R³). The EBT paper
-   (Gladstone et al., arXiv:2507.02092) tests text and images. No music,
-   MIDI or audio application was found.
+   (Gladstone et al., arXiv:2507.02092; ICLR 2026) tests text and images.
+   **Citation check (2026-10-09):**
+   - Google Scholar lists 22 citations of the ICLR version (that list was
+     blocked by a bot check) and 5 of the arXiv version.
+   - Semantic Scholar lists **37 citing papers; none applies EBTs to music,
+     MIDI or audio generation**.
+   - The only music-related one is "Text Dictates, Music Decorates:
+     Energy-based Attention for Editable Dance Motion Generation" (Yoo et
+     al., 2026, ECCV/arXiv). It generates *dance motion* conditioned on
+     music, a different task.
+   - The rest are pretraining, reasoning/IR and recursive models (e.g.
+     "Energy-guided Recursive Model", "Explorative Modeling").
 2. **A controlled head-to-head** of EBT energy guidance vs plug-and-play AR
    methods (PPLM-style, tilt, best-of-N) on symbolic music under one
    protocol, with compute, prompt-bootstrap CIs and MIDI-level musical
