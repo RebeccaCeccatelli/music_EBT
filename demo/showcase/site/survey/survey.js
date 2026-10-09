@@ -118,7 +118,7 @@
       const t = player.currentTime;
       if (lastT != null && t > lastT && t - lastT < 0.5) listened[current.hash] = (listened[current.hash] || 0) + (t - lastT);
       lastT = t;
-      const d = player.duration || survey.clips[current.hash].duration || 1;
+      const d = survey.clips[current.hash].audio || player.duration || 1;
       current.card.querySelector(".prog-fill").style.width = `${Math.min(100, (t / d) * 100)}%`;
       current.card.querySelector(".time").textContent = `${fmt(t)} / ${fmt(d)}`;
       const inPrompt = t < survey.clips[current.hash].prompt_end;
@@ -140,21 +140,26 @@
     const btn = h("button", "play", ICON_PLAY);
     btn.setAttribute("aria-label", "Play " + label);
     top.append(btn, h("div", "clip-label", label), h("span", "heard", ""));
+    const dur = c.audio || c.duration;
+    const share = Math.min(100, (c.prompt_end / dur) * 100);
+    // Labels sit above the bar so "prompt" is always readable, however short it is.
+    const labels = h("div", "prog-labels");
+    const lp = h("span", "lab-prompt", "prompt");
+    const lc = h("span", "lab-cont", "continuation · judge this");
+    lc.style.left = `max(${share}%, 64px)`;
+    labels.append(lp, lc);
     const prog = h("div", "prog");
-    const share = Math.min(100, (c.prompt_end / c.duration) * 100);
-    const pr = h("div", "prog-prompt", share > 18 ? "<span>prompt</span>" : "");
+    const pr = h("div", "prog-prompt");
     pr.style.width = `${share}%`;
-    const cont = h("div", "prog-cont", "<span>continuation · judge this</span>");
-    cont.style.left = `${share}%`;
-    prog.append(pr, cont, h("div", "prog-fill"));
+    prog.append(pr, h("div", "prog-fill"));
     const foot = h("div", "clip-foot");
-    foot.append(h("span", "time", fmt(c.duration)), h("span", "phase", ""));
-    card.append(top, prog, foot);
+    foot.append(h("span", "time", fmt(dur)), h("span", "phase", ""));
+    card.append(top, labels, prog, foot);
     btn.addEventListener("click", () => playCard(card, hash));
     prog.addEventListener("click", (e) => {
       const r = prog.getBoundingClientRect();
       playCard(card, hash);
-      player.currentTime = ((e.clientX - r.left) / r.width) * c.duration;
+      player.currentTime = ((e.clientX - r.left) / r.width) * dur;
       lastT = player.currentTime;
     });
     card.dataset.hash = hash;
@@ -196,8 +201,8 @@
     go.addEventListener("click", onNext);
     const kids = [];
     if (back) {
-      const b = h("button", "btn ghost", "Back");
-      b.addEventListener("click", () => { state.step = back; save(); route(); });
+      const b = h("button", "btn ghost back", "Back");
+      b.addEventListener("click", typeof back === "function" ? back : () => { state.step = back; save(); route(); });
       kids.push(b);
     }
     kids.push(go);
@@ -298,7 +303,10 @@
     },
     intro2a: {
       kicker: "Part 2 of 3", title: "Do you hear a difference?",
-      text: "Now you'll hear a <b>reference</b> and a <b>second version</b> of the same music. The second version may have been changed in one way: louder or softer, shorter or longer notes, or higher or lower pitch. The question tells you which one to listen for.",
+      text: "Now you'll hear a <b>reference</b> and a <b>second version</b> of the same music. The second version may have been changed in one way. The question tells you which one to listen for:",
+      list: "<li><b>Loudness</b>, from <i>piano</i> (soft) to <i>forte</i> (loud)</li>" +
+            "<li><b>Note length</b>, from <i>staccato</i> (short, detached) to <i>legato</i> (long, connected)</li>" +
+            "<li><b>Pitch</b>, from low (deep) to high (bright) tones</li>",
       tip: "Often the change is subtle, or there is none. “No difference” is a perfectly good answer.",
       preview: '<div class="pv-label">The second version is…</div><div class="chips"><span class="chip">clearly softer</span><span class="chip">slightly softer</span><span class="chip on">no difference</span><span class="chip">slightly louder</span><span class="chip">clearly louder</span></div>',
     },
@@ -317,6 +325,7 @@
       h("p", "eyebrow", it.kicker),
       h("h2", "s-title", it.title),
       h("p", "lede", it.text),
+      ...(it.list ? [h("ul", "facts attrs", it.list)] : []),
       h("div", "preview", it.preview),
       h("ul", "facts tips",
         `<li>${it.tip}</li>` +
@@ -324,7 +333,12 @@
         "<li>Judge the <b>continuation</b>, the part after the prompt.</li>" +
         "<li>Not sure? You can skip any question.</li>"),
     );
-    s.append(nav("Begin", () => { state.trial = 0; save(); route(); }).row);
+    const back = () => {
+      if (state.part === 0) { state.step = "about"; }
+      else { state.part -= 1; state.trial = state.plan[state.part].trials.length - 1; }
+      save(); route();
+    };
+    s.append(nav("Begin", () => { state.trial = 0; save(); route(); }, back).row);
     screen(s);
   }
 
@@ -333,9 +347,11 @@
     const t = p.trials[state.trial];
     const pool = survey.pool[t.kind][t.pool_index];
     for (const k in listened) delete listened[k];
+    const prev = state.responses.find((r) => r.part === state.part && r.trial === state.trial);
+    if (prev) Object.assign(listened, prev.listened);   // already heard: stays unlocked
     const started = performance.now();
     const s = h("section", "trial");
-    const answer = {};
+    const answer = prev && !prev.answer.skipped ? { ...prev.answer } : {};
     const submit = h("button", "btn primary", "Next");
     submit.disabled = true;
     let ready = () => false;
@@ -354,6 +370,7 @@
         t.order.forEach((hash, i) => {
           const b = h("button", "chip letter", LETTERS[i]);
           b.type = "button";
+          if (answer[name] === hash) b.classList.add("on");
           b.addEventListener("click", () => {
             answer[name] = hash;
             row.querySelectorAll(".chip").forEach((x) => x.classList.toggle("on", x === b));
@@ -385,6 +402,7 @@
       survey.scale[attr].forEach((lab, i) => {
         const b = h("button", "chip", lab);
         b.type = "button";
+        if (answer.scale === i - 2) b.classList.add("on");
         b.addEventListener("click", () => {
           answer.scale = i - 2;   // -2 .. +2
           scaleRow.querySelectorAll(".chip").forEach((x) => x.classList.toggle("on", x === b));
@@ -397,9 +415,32 @@
       ready = () => answer.scale != null;
     }
 
-    s.querySelector(".t-q").after(h("p", "t-hint", t.kind.includes("change")
+    // Optional: which versions sounded cacophonous? (multi-select, per clip)
+    const cacoClips = t.order || [pool.reference, pool.test];
+    const cacoNames = t.order ? t.order.map((_, i) => LETTERS[i]) : ["Reference", "Second version"];
+    if (t.order === null && pool.reference === pool.test) cacoClips.pop();   // same clip twice
+    answer.cacophonous = answer.cacophonous || [];
+    const caco = h("fieldset", "q caco");
+    caco.append(h("legend", null, "Optional: did any version sound <b>cacophonous</b> (harsh, chaotic, random-sounding notes)? Tick those that did."));
+    const cacoRow = h("div", "chips");
+    cacoClips.forEach((hash, i) => {
+      const b = h("button", "chip tick", cacoNames[i]);
+      b.type = "button";
+      if (answer.cacophonous.includes(hash)) b.classList.add("on");
+      b.addEventListener("click", () => {
+        const on = !answer.cacophonous.includes(hash);
+        answer.cacophonous = on ? [...answer.cacophonous, hash] : answer.cacophonous.filter((x) => x !== hash);
+        b.classList.toggle("on", on);
+      });
+      cacoRow.append(b);
+    });
+    caco.append(cacoRow);
+    s.querySelector(".answers").append(caco);
+
+    const help = pool.attribute ? ` <span class="help">${survey.attr_help[pool.attribute]}</span>` : "";
+    s.querySelector(".t-q").after(h("p", "t-hint", (t.kind.includes("change")
       ? "Both start with the same prompt. Listen for the difference in the <b>continuation</b>, after the grey part of the bar."
-      : "All versions start with the same prompt (grey part of the bar). Judge only the <b>continuation</b> that follows."));
+      : "All versions start with the same prompt (grey part of the bar). Judge only the <b>continuation</b> that follows.") + help));
     const hashes = t.order || [pool.reference, pool.test];
     const status = h("p", "hint", "");
     function update() {
@@ -414,8 +455,10 @@
     skip.addEventListener("click", () => record({ skipped: true }));
     submit.addEventListener("click", () => record({ ...answer }));
     function record(ans) {
+      // Going back and answering again replaces the earlier answer.
+      state.responses = state.responses.filter((r) => !(r.part === state.part && r.trial === state.trial));
       state.responses.push({
-        part: state.part, kind: t.kind, pool_index: t.pool_index,
+        part: state.part, trial: state.trial, kind: t.kind, pool_index: t.pool_index,
         order: hashes, answer: ans,
         listened: Object.fromEntries(hashes.map((x) => [x, +(listened[x] || 0).toFixed(1)])),
         ms: Math.round(performance.now() - started),
@@ -424,7 +467,9 @@
       save();
       route();
     }
-    s.append(status, row("actions", skip, submit));
+    const back = h("button", "btn ghost back", "Back");
+    back.addEventListener("click", () => { state.trial -= 1; save(); route(); });
+    s.append(status, row("actions", back, skip, submit));
     screen(s);
     update();
   }
@@ -436,12 +481,28 @@
     const ta = h("textarea", "comments");
     ta.value = state.comments || "";
     ta.addEventListener("input", () => { state.comments = ta.value; save(); });
+    const copy = h("div", "copybox");
+    copy.append(
+      h("label", "check", `<input type="checkbox" id="wantcopy"> Email me a copy of my answers`),
+      h("input", "email"),
+      h("p", "hint", "Optional. Your email address is used only to send you the copy; it is not stored with your answers."));
+    const emailIn = copy.querySelector("input.email");
+    emailIn.type = "email"; emailIn.placeholder = "you@example.com"; emailIn.hidden = true;
+    copy.querySelector("#wantcopy").addEventListener("change", (e) => { emailIn.hidden = !e.target.checked; if (e.target.checked) emailIn.focus(); });
     const go = h("button", "btn primary", "Submit answers");
     const msg = h("p", "hint", "");
     go.addEventListener("click", async () => {
       state.finished = new Date().toISOString();
       save();
-      const payload = { ...state, version: survey.version, ua: navigator.userAgent };
+      const payload = { ...state, version: survey.version, ua: navigator.userAgent, summary: summaryText() };
+      const wantCopy = copy.querySelector("#wantcopy").checked;
+      if (wantCopy) {
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailIn.value.trim())) {
+          msg.textContent = "Please enter a valid email address, or untick the copy option.";
+          return;
+        }
+        payload.copy_to = emailIn.value.trim();   // used for sending only; the script drops it before storing
+      }
       if (!CFG.endpoint) {
         downloadJSON(payload);
         state.step = "done"; save(); route();
@@ -458,8 +519,31 @@
         msg.querySelector("#dl").addEventListener("click", (ev) => { ev.preventDefault(); downloadJSON(payload); });
       }
     });
-    s.append(ta, msg, row("actions", go));
+    s.append(ta, copy, msg, row("actions", go));
     screen(s);
+  }
+
+  function summaryText() {
+    const lines = [`Listening study — your answers (participant ${state.id})`, ""];
+    state.plan.forEach((p, pi) => {
+      lines.push(p.part);
+      p.trials.forEach((t, ti) => {
+        const r = state.responses.find((x) => x.part === pi && x.trial === ti);
+        const pool = survey.pool[t.kind][t.pool_index];
+        const name = (hash) => t.order ? `Version ${LETTERS[t.order.indexOf(hash)]}` : (hash === pool.test && hash !== pool.reference ? "Second version" : "Reference");
+        let a;
+        if (!r) a = "not answered";
+        else if (r.answer.skipped) a = "skipped";
+        else if (r.answer.scale != null) a = `second version: ${survey.scale[pool.attribute][r.answer.scale + 2]}`;
+        else a = `most musical: ${name(r.answer.best)}` + (t.order.length > 2 ? `, least musical: ${name(r.answer.worst)}` : "");
+        if (r && r.answer.cacophonous && r.answer.cacophonous.length) a += ` · cacophonous: ${r.answer.cacophonous.map(name).join(", ")}`;
+        lines.push(`  Q${ti + 1}: ${a}`);
+      });
+      lines.push("");
+    });
+    if (state.comments) lines.push(`Comments: ${state.comments}`);
+    lines.push("", "Thank you for taking part!");
+    return lines.join("\n");
   }
 
   function downloadJSON(obj) {

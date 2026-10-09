@@ -13,6 +13,7 @@ Reports, with 95% bootstrap CIs over participants:
           signed response in the requested direction (-2..+2), share heard in
           the right direction, share "no difference"
   Part 3  best-worst score per system among steered versions
+  Ticks   share of appearances marked "cacophonous", per system and condition
 Skipped questions are ignored. Participants who fail an attention check are
 excluded unless --keep-failed-catch.
 """
@@ -137,6 +138,27 @@ def main():
         for system, by_pid in sorted(systems.items(), key=lambda kv: -mean([v for x in kv[1].values() for v in x])):
             m, lo, hi = boot(by_pid, mean)
             print(f"  {tok:5s} {attr:15s} {system:16s} {m:+.2f} [{lo:+.2f}, {hi:+.2f}]  n={sum(map(len, by_pid.values()))}")
+
+    print("\n== Optional ticks: share of appearances marked cacophonous")
+    for (tok, system, cond), by_pid in sorted(cacophony(subs, key).items()):
+        m, lo, hi = boot(by_pid, mean)
+        print(f"  {tok:5s} {system:16s} {cond:13s} {m:.2f} [{lo:.2f}, {hi:.2f}]  n={sum(map(len, by_pid.values()))}")
+
+
+def cacophony(subs, key):
+    """Share of appearances in which a clip was ticked as cacophonous,
+    by tokenizer x system x condition (unguided / steered / original / catch)."""
+    out = defaultdict(lambda: defaultdict(list))
+    for s in subs:
+        for r in s["responses"]:
+            if r["answer"].get("skipped"):
+                continue
+            ticked = set(r["answer"].get("cacophonous", []))
+            for hsh in dict.fromkeys(r["order"]):
+                k = key["clips"][hsh]
+                cond = k.get("condition", "original")
+                out[(k["tok"], k["system"], cond)][s["id"]].append(hsh in ticked)
+    return out
 
 
 if __name__ == "__main__":

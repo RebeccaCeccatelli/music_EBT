@@ -14,6 +14,10 @@ primed by the hand-picked examples). Source: `demo/showcase/site/survey/`.
   pitch for the other attributes). Measures whether the steering is audible.
 - **Part 3 · Comparing versions:** the steered outputs of all systems for one
   prompt, attribute and direction. Listeners pick the most and the least musical.
+- **Optional cacophony ticks:** every question ends with "did any version sound
+  cacophonous?". These are per-version ticks, stored as `answer.cacophonous`.
+- **Navigation:** Back to any earlier question (the answer is restored and replaced on
+  resubmit). Every question can be skipped (`answer.skipped`).
 - **Attention checks:** Part 1 includes a near-random EBT clip (λ far past the
   operating point), which should be picked as least musical. Part 2 includes a
   reference compared with itself, which should get "no difference".
@@ -50,7 +54,16 @@ To publish a changed survey, rebuild, bump `--version` if trials changed
    Copy the web-app URL.
 3. Put the URL in `demo/showcase/site/survey/config.js` (`endpoint`). Optionally
    add a contact email there. Commit and push.
-4. Each submission becomes one row in the `responses` sheet.
+4. Each submission becomes one row in the `responses` sheet and is emailed
+   to the account the script runs as (set `OWNER_EMAIL` to send elsewhere).
+   It includes a readable summary and the raw JSON as an attachment. On the first
+   deploy, Google asks to authorize sending email: allow it.
+5. Participants can tick "Email me a copy". Their address is sent along only for
+   that email: the script removes it before storing, so the sheet stays anonymous.
+   Gmail accounts can send ~100 emails/day via Apps Script; each submission
+   uses 1 (2 with a copy).
+6. After editing the script: **Deploy → Manage deployments → Edit → New version**
+   (the URL stays the same).
 
 Without an endpoint the survey runs in test mode: the last screen downloads
 the answers as JSON. Use this for piloting.
