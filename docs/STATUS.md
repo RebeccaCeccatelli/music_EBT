@@ -108,5 +108,8 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
 8. Repo tidy: project README (currently the upstream EBT one), final tag.
 
 ## Decisions
+- 2026-10-09: the EBT music generation system is named **TONIC** (the tonic
+  as the "home" where tension resolves ↔ EBT settling into an energy
+  minimum). Use it in the thesis and demo; code/paths keep their names.
 - 2026-10-05: no further pretraining. Final EBT ckpts = REMI 33,732 and
   Ant s1 88,800 (better val than stab+). Medium-Ant-AT dropped.
