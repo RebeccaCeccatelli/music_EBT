@@ -157,14 +157,17 @@
   // ---------------------------------------------------------------- clips
   function makeClip(data, range, opts = {}) {
     const el = h("div", "clip");
-    if (data.tag === "ours" || data.row === "EBT") el.classList.add("ours");
+    if (data.tag === "ours") el.classList.add("ours");
     if (opts.col) el.classList.add("col-" + opts.col);
 
     const top = h("div", "clip-top");
     const btn = h("button", "play", ICON_PLAY);
     top.append(btn);
     if (opts.label) top.append(h("div", "clip-label", opts.label));
-    if (data.tag) {
+    if (data.placeholder) {
+      el.classList.add("placeholder");
+      top.append(h("span", "tag ph", "placeholder"));
+    } else if (data.tag) {
       const cls = { ours: "ours", human: "human", "too strong": "warn" }[data.tag] || "";
       top.append(h("span", "tag " + cls, data.tag));
     }
@@ -188,9 +191,10 @@
   }
 
   function metricCell(ex, clip, ref) {
+    if (clip.placeholder) return "";
     const v = clip.metrics && clip.metrics[ex.metric];
     let html = `${ex.metric_label} <b>${fmtMetric(ex.metric, v, ex.metric_unit)}</b>`;
-    if (ref != null && v != null && clip !== ref) {
+    if (ref != null && v != null && clip !== ref && !ref.placeholder && ref.metrics[ex.metric] !== v) {
       const r = ref.metrics[ex.metric];
       const up = v > r;
       html += ` <span class="${up ? "up" : "down"}">${up ? "▲" : "▼"}</span>`;
@@ -198,52 +202,112 @@
     return html;
   }
 
-  // ------------------------------------------------------------- sections
-  function gridExample(ex) {
+  // --------------------------------------------------------------- blocks
+  const fmtSd = (sd) => `${sd > 0 ? "+" : "−"}${Math.abs(sd)} SD`;
+
+  function blockCard(b, sub) {
     const card = h("article", "example");
     const head = h("div", "example-head");
-    head.append(h("h3", null, ex.title), h("span", "pid", `validation prompt #${ex.prompt_id}`));
+    const titles = h("div", "titles");
+    titles.append(h("h3", null, b.title || ""));
+    if (b.subtitle) titles.append(h("p", "subtitle", b.subtitle));
+    head.append(titles);
+    if (b.prompt != null) head.append(h("span", "pid", `prompt #${b.prompt}${sub ? " · " + sub : ""}`));
+    card.append(head);
+    return card;
+  }
+
+  function clipsBlock(b) {
+    const card = blockCard(b);
     const grid = h("div", "grid");
-    const range = exampleRange(ex);
-    const ref = ex.clips[0];
-    const shown = ex.metrics || (ex.metric ? [ex] : []);
-    for (const c of ex.clips) {
+    const range = exampleRange(b);
+    const ref = b.clips[0];
+    const shown = b.metrics || (b.metric ? [b] : []);
+    for (const c of b.clips) {
       grid.append(makeClip(c, range, {
         label: c.label,
         metricHTML: shown.map((m) => metricCell(m, c, ref)).join("<br>") || null,
       }));
     }
-    card.append(head, grid);
+    card.append(grid);
     return card;
   }
 
-  function steerExample(ex) {
-    const card = h("article", "example");
-    const head = h("div", "example-head");
-    head.append(h("h3", null, ex.title), h("span", "pid", `validation prompt #${ex.prompt_id} · target ±2 SD`));
-    const range = exampleRange(ex);
+  function steerBlock(b) {
+    const card = blockCard(b);
+    const range = exampleRange(b);
     const table = h("div", "steer");
-    const COLS = [["down", "▼ push down"], ["unguided", "unguided"], ["up", "▲ push up"]];
+    const COLS = [["down", `▼ push down`], ["unguided", "unguided"], ["up", `▲ push up`]];
     table.append(h("div"));
     for (const [k, lab] of COLS) table.append(h("div", "colhead " + k, lab));
 
-    const rows = [...new Set(ex.clips.map((c) => c.row))];
-    const SUB = { "EBT": "energy minimisation + regressor", "Llama + PPLM": "logit gradient step" };
+    const rows = [...new Set(b.clips.map((c) => c.row))];
     const values = {};
     for (const row of rows) {
-      const rc = Object.fromEntries(ex.clips.filter((c) => c.row === row).map((c) => [c.col, c]));
-      table.append(h("div", "rowhead", `${row}<small>${SUB[row] || ""}</small>`));
-      for (const [k, lab] of COLS) {
-        const c = rc[k];
-        table.append(makeClip(c, range, {
+      const rc = Object.fromEntries(b.clips.filter((c) => c.row === row).map((c) => [c.col, c]));
+      table.append(h("div", "rowhead", `${row}<small>${rc.unguided.row_sub || ""}</small>`));
+      for (const [k] of COLS) {
+        table.append(makeClip(rc[k], range, {
           label: { down: "Down", unguided: "Unguided", up: "Up" }[k],
           col: k,
-          metricHTML: metricCell(ex, c, rc.unguided),
+          metricHTML: b.metric ? metricCell(b, rc[k], rc.unguided) : null,
         }));
       }
-      values[row] = Object.fromEntries(COLS.map(([k]) => [k, rc[k].metrics[ex.metric]]));
+      if (!rc.unguided.placeholder) values[row] = Object.fromEntries(COLS.map(([k]) => [k, rc[k].metrics[b.metric]]));
     }
-    card.append(head, table, scaleBlock(ex, values));
+    card.append(table);
+    if (b.metric && Object.keys(values).length) card.append(scaleBlock(b, values));
+    return card;
+  }
+
+  function intensityBlock(b) {
+    const card = blockCard(b);
+    const range = exampleRange(b);
+    const ref = b.clips.find((c) => c.col === "unguided");
+    const sds = [...new Set(b.clips.filter((c) => c !== ref).map((c) => c.sd))];
+    const lambdas = [...new Set(b.clips.filter((c) => c !== ref).map((c) => c.strength))];
+    const table = h("div", "intensity");
+    table.style.setProperty("--cols", sds.length);
+
+    table.append(h("div", "colhead", "λ"));
+    for (const sd of sds) table.append(h("div", "colhead " + (sd > 0 ? "up" : "down"), (sd > 0 ? "▲ " : "▼ ") + fmtSd(sd)));
+
+    // Reference row: the unguided continuation every cell is compared to.
+    table.append(h("div", "rowhead", `unguided<small>reference</small>`));
+    table.append(makeClip(ref, range, {
+      label: "Unguided",
+      metricHTML: b.metric ? metricCell(b, ref, null) : null,
+    }));
+    const hint = h("div", "ref-hint", "Every cell below continues the same prompt with the EBT. Moving right pushes harder toward a bigger target; moving down raises the guidance strength.");
+    hint.style.gridColumn = `span ${sds.length - 1}`;
+    table.append(hint);
+
+    const r0 = ref.metrics[b.metric];
+    const devs = b.clips.filter((c) => c !== ref && c.metrics[b.metric] != null).map((c) => Math.abs(c.metrics[b.metric] - r0));
+    const maxDev = Math.max(...devs, 1e-9);
+    for (const lam of lambdas) {
+      const cells = b.clips.filter((c) => c.strength === lam);
+      const op = cells.some((c) => c.operating);
+      table.append(h("div", "rowhead lam", `λ = ${lam}${op ? '<small class="op">operating point</small>' : ""}`));
+      for (const sd of sds) {
+        const c = cells.find((x) => x.sd === sd);
+        const el = makeClip(c, range, {
+          label: fmtSd(sd),
+          col: sd > 0 ? "up" : "down",
+          metricHTML: b.metric ? metricCell(b, c, ref) : null,
+        });
+        const v = c.metrics[b.metric];
+        if (v != null && !c.placeholder) {
+          const k = Math.abs(v - r0) / maxDev;
+          el.style.setProperty("--int", k.toFixed(3));
+          el.classList.add(v > r0 ? "tint-up" : "tint-down");
+        }
+        table.append(el);
+      }
+    }
+    const scroll = h("div", "intensity-scroll");
+    scroll.append(table);
+    card.append(scroll);
     return card;
   }
 
@@ -256,14 +320,12 @@
       const r = h("div", "scale-row");
       r.append(h("div", "lab", row));
       const track = h("div", "track");
-      if (v.down != null && v.unguided != null) {
-        const s = h("div", "span"); s.style.left = pos(Math.min(v.down, v.unguided)) + "%";
-        s.style.width = Math.abs(pos(v.unguided) - pos(v.down)) + "%"; s.style.background = "rgba(90,169,255,.45)";
-        track.append(s);
-      }
-      if (v.up != null && v.unguided != null) {
-        const s = h("div", "span"); s.style.left = pos(Math.min(v.up, v.unguided)) + "%";
-        s.style.width = Math.abs(pos(v.up) - pos(v.unguided)) + "%"; s.style.background = "rgba(255,138,92,.5)";
+      for (const [k, color] of [["down", "rgba(90,169,255,.45)"], ["up", "rgba(255,138,92,.5)"]]) {
+        if (v[k] == null || v.unguided == null) continue;
+        const s = h("div", "span");
+        s.style.left = pos(Math.min(v[k], v.unguided)) + "%";
+        s.style.width = Math.abs(pos(v.unguided) - pos(v[k])) + "%";
+        s.style.background = color;
         track.append(s);
       }
       for (const k of ["down", "unguided", "up"]) {
@@ -279,6 +341,45 @@
       `<span style="color:var(--down)">●</span> pushed down · <span style="color:var(--text)">●</span> unguided · ` +
       `<span style="color:var(--up)">●</span> pushed up`));
     return wrap;
+  }
+
+  function noteBlock(b) {
+    const card = h("aside", "note");
+    card.append(h("h4", null, b.title || ""), h("p", null, b.text || ""));
+    return card;
+  }
+
+  const BLOCKS = { clips: clipsBlock, steer: steerBlock, intensity: intensityBlock, note: noteBlock };
+
+  // ----------------------------------------------------------------- tabs
+  function renderNode(node, depth) {
+    const frag = h("div", "node depth-" + depth);
+    if (node.intro && depth > 0) frag.append(h("p", "intro", node.intro));
+    for (const b of node.blocks || []) frag.append(BLOCKS[b.type](b));
+    if (node.tabs && node.tabs.length) {
+      const bar = h("div", "tabs " + (depth === 0 ? "tabs-main" : "tabs-sub"));
+      bar.setAttribute("role", "tablist");
+      const panels = node.tabs.map((t) => {
+        const p = renderNode(t, depth + 1);
+        p.setAttribute("role", "tabpanel");
+        return p;
+      });
+      const buttons = node.tabs.map((t, i) => {
+        const btn = h("button", "tab", `<span>${t.label}</span>${t.sublabel ? `<small>${t.sublabel}</small>` : ""}`);
+        btn.setAttribute("role", "tab");
+        btn.addEventListener("click", () => select(i));
+        bar.append(btn);
+        return btn;
+      });
+      function select(i) {
+        buttons.forEach((b, j) => { b.classList.toggle("active", j === i); b.setAttribute("aria-selected", j === i); });
+        panels.forEach((p, j) => { p.hidden = j !== i; });
+        requestAnimationFrame(() => clips.forEach((c) => { if (panels[i].contains(c.el)) drawBase(c); }));
+      }
+      frag.append(bar, ...panels);
+      select(0);
+    }
+    return frag;
   }
 
   function render(data) {
@@ -300,8 +401,7 @@
       s.id = sec.id;
       const head = h("div", "section-head");
       head.append(h("div", "kicker", sec.kicker), h("h2", null, sec.title), h("p", "intro", sec.intro));
-      s.append(head);
-      for (const ex of sec.examples) s.append(sec.layout === "steer" ? steerExample(ex) : gridExample(ex));
+      s.append(head, renderNode(sec, 0));
       main.append(s);
     }
     requestAnimationFrame(() => clips.forEach(drawBase));
@@ -314,6 +414,7 @@
   });
 
   fetch("data.json").then((r) => r.json()).then(render).catch((err) => {
+    console.error(err);
     document.getElementById("sections").innerHTML =
       `<p class="intro">Could not load data.json (${err}). If you opened this file directly, ` +
       `serve the folder instead: <code>python -m http.server</code>.</p>`;

@@ -2,15 +2,27 @@
 """Build the static (non-interactive) showcase page from saved sweep MIDI.
 
 No generation happens here: every clip is an existing output of the final
-guidance sweeps (same 16 REMI validation prompts for all models), so the
-comparison is like-for-like.
+guidance sweeps (per tokenizer, the same 16 validation prompts for every
+model and method), so comparisons are like-for-like.
 
-    python demo/showcase/build_showcase.py candidates   # table to pick clips from
-    python demo/showcase/build_showcase.py build        # render selection.json -> site/
+    python demo/showcase/build_showcase.py candidates [--tok ant]  # table to pick prompts from
+    python demo/showcase/build_showcase.py build                   # selection.json -> site/
 
-`build` renders each selected MIDI to MP3 (FluidSynth + MuseScore General,
-fixed gain, no loudness normalisation so velocity steering stays audible)
-and writes site/data.json with the notes for the piano rolls.
+selection.json is a tree: section -> tabs (tokenizer) -> tabs (attribute or
+combination) -> blocks. Block types, expanded here into clips:
+
+  clips      explicit list of clip specs, shown as a grid
+  steer      rows of methods x (down, unguided, up) at one target size
+  intensity  EBT grid: rows = lambda, columns = target sizes, plus unguided
+  note       a text card (e.g. "not available for this tokenizer")
+
+Clip spec: {"tok", "kind": ground_truth|unguided|guided, "model", "method",
+"attribute", "prompt", "sd", "strength"}. A spec (or a whole block/row) with
+"placeholder": true plays PLACEHOLDER and is tagged as such on the page.
+
+`build` renders each MIDI to MP3 (FluidSynth + MuseScore General, fixed
+gain, no loudness normalisation so velocity steering stays audible) and
+writes site/data.json with notes for the piano rolls.
 """
 
 import argparse
@@ -31,53 +43,110 @@ SOUNDFONT = os.environ.get(
     "SOUNDFONT", str(Path.home() / "orcd/scratch/rebcecca/soundfonts/MuseScore_General.sf3"))
 BIN = Path(sys.executable).parent
 
-# Unguided continuations (r0..r2 = 3 baseline draws per prompt).
-BASELINE_DIRS = {
-    "ebt": LOGS / "listen_midi/25280946/baseline",
-    "gpt2": LOGS / "ar_guidance/gpt2_tilt_20261005_153523_24940378/midi/baseline",
-    "llama": LOGS / "ar_guidance/llama_tilt_20261005_150439_24940374/midi/baseline",
-}
-GROUND_TRUTH_DIR = LOGS / "listen_midi/25280946/ground_truth"
+AR = LOGS / "ar_guidance"
+LM = LOGS / "listen_midi"
 
-# Steered outputs at the thesis operating points
-# (docs/thesis_findings/2026-10-09_guidance_ebt_vs_ar.md).
-EBT_DIRS = {
-    "velocity": LOGS / "listen_midi/25280946/guided",
-    "duration": LOGS / "listen_midi/25280947/guided",
-    "pitch_register": LOGS / "listen_midi/25280948/guided",
+# Per tokenizer: where each run's MIDI lives. EBT dirs are lists because
+# Anticipation's coarse and fine lambda grids are separate jobs.
+RUNS = {
+    "remi": {
+        "ground_truth": LM / "25280946/ground_truth",
+        "unguided": {
+            "ebt": LM / "25280946/baseline",
+            "gpt2": AR / "gpt2_tilt_20261005_153523_24940378/midi/baseline",
+            "llama": AR / "llama_tilt_20261005_150439_24940374/midi/baseline",
+        },
+        "ebt": {
+            "velocity": [LM / "25280946/guided"],
+            "duration": [LM / "25280947/guided"],
+            "pitch_register": [LM / "25280948/guided"],
+        },
+        "ar": {  # (method, model) -> run dir
+            ("tilt", "gpt2"): AR / "gpt2_tilt_20261005_153523_24940378/midi",
+            ("tilt", "llama"): AR / "llama_tilt_20261005_150439_24940374/midi",
+            ("best_of_n", "gpt2"): AR / "gpt2_best_of_n_20261005_154305_24940380/midi",
+            ("best_of_n", "llama"): AR / "llama_best_of_n_20261005_153108_24940376/midi",
+            ("pplm", "llama"): AR / "llama_pplm_20261008_070421_25261493/midi",
+        },
+    },
+    "ant": {  # control-free Anticipation prompts (commit 1802c3f)
+        "ground_truth": LM / "25296307/ground_truth",
+        "unguided": {
+            "ebt": LM / "25296307/baseline",
+            "gpt2": AR / "gpt2_best_of_n_20261008_154914_25296309/midi/baseline",
+            "llama": AR / "llama_best_of_n_20261008_155455_25296310/midi/baseline",
+        },
+        "ebt": {
+            "duration": [LM / "25296307/guided", LM / "25296410/guided"],
+            "pitch_register": [LM / "25296308/guided", LM / "25296411/guided"],
+        },
+        "ar": {
+            ("best_of_n", "gpt2"): AR / "gpt2_best_of_n_20261008_154914_25296309/midi",
+            ("best_of_n", "llama"): AR / "llama_best_of_n_20261008_155455_25296310/midi",
+        },
+    },
 }
-EBT_LAMBDA = {"velocity": "0.03", "duration": "0.02", "pitch_register": "0.02"}
-PPLM_DIR = LOGS / "ar_guidance/llama_pplm_20261008_070421_25261493/midi"
-PPLM_STRENGTH = {"velocity": "16", "duration": "16", "pitch_register": "32"}
 
-PROMPTS = [1326, 3107, 4563, 4579, 7157, 8484, 9235, 9938,
-           11732, 12623, 13268, 13781, 15617, 15922, 16537, 16753]
+# Operating points (docs/thesis_findings/2026-10-09_guidance_ebt_vs_ar.md).
+OPERATING = {
+    "remi": {"velocity": "0.03", "duration": "0.02", "pitch_register": "0.02"},
+    "ant": {"duration": "0.005", "pitch_register": "0.01"},
+}
+
+# Played wherever a slot has no real output yet.
+PLACEHOLDER = {"tok": "remi", "kind": "unguided", "model": "ebt", "prompt": 9235}
+
+METHOD_LABEL = {"tilt": "Tilt", "best_of_n": "Best-of-N", "pplm": "PPLM", "ebt": "EBT"}
+MODEL_LABEL = {"ebt": "EBT", "gpt2": "GPT-2", "llama": "Llama"}
 
 
 # --------------------------------------------------------------------- paths
 
-def baseline_path(model, pid, draw=0):
-    return BASELINE_DIRS[model] / f"p{pid}_r{draw}_generated.mid"
+def _delta(name):
+    return float(name.split("_d")[-1].split("_")[0])
 
 
-def ebt_path(attr, pid, sd, lam=None):
-    """sd in {-2,-1,-0.5,0.5,1,2}; EBT files name the target delta in raw units."""
-    lam = lam or EBT_LAMBDA[attr]
-    hits = sorted(EBT_DIRS[attr].glob(f"p{pid}_{attr}_r3{lam}_d*_generated.mid"))
-    deltas = sorted({float(h.name.split("_d")[-1].split("_")[0]) for h in hits})
-    pos = [d for d in deltas if d > 0]  # 0.5, 1, 2 SD in raw units
-    if len(pos) != 3:
-        return None
-    raw = dict(zip([0.5, 1, 2], pos))[abs(sd)] * (1 if sd > 0 else -1)
-    for h in hits:
-        if abs(float(h.name.split("_d")[-1].split("_")[0]) - raw) < 1e-6:
-            return h
+def ebt_path(tok, attr, pid, sd, lam):
+    """EBT files name the target delta in raw units; map sd (±0.5/1/2) onto them."""
+    for d in RUNS[tok]["ebt"].get(attr, []):
+        hits = sorted(d.glob(f"p{pid}_{attr}_r3{lam}_d*_generated.mid"))
+        pos = sorted({_delta(h.name) for h in hits if _delta(h.name) > 0})
+        if len(pos) != 3:
+            continue
+        raw = dict(zip([0.5, 1, 2], pos))[abs(sd)] * (1 if sd > 0 else -1)
+        for h in hits:
+            if abs(_delta(h.name) - raw) < 1e-6:
+                return h
     return None
 
 
-def pplm_path(attr, pid, sd):
-    s = f"{sd:+g}"
-    return PPLM_DIR / attr / f"p{pid}_{attr}_pplm{PPLM_STRENGTH[attr]}_d{s}_generated.mid"
+def resolve(spec):
+    """Clip spec -> MIDI path (None if that output doesn't exist)."""
+    if spec.get("placeholder"):
+        spec = PLACEHOLDER
+    runs, pid = RUNS[spec["tok"]], spec["prompt"]
+    kind = spec["kind"]
+    if kind == "ground_truth":
+        return runs["ground_truth"] / f"p{pid}_ground_truth.mid"
+    if kind == "unguided":
+        return runs["unguided"][spec["model"]] / f"p{pid}_r{spec.get('draw', 0)}_generated.mid"
+    attr, sd = spec["attribute"], spec["sd"]
+    if spec["method"] == "ebt":
+        return ebt_path(spec["tok"], attr, pid, sd, spec["strength"])
+    run = runs["ar"].get((spec["method"], spec["model"]))
+    if run is None:
+        return None
+    return run / attr / f"p{pid}_{attr}_{spec['method']}{spec['strength']}_d{sd:+g}_generated.mid"
+
+
+def clip_id(spec):
+    if spec.get("placeholder"):
+        spec = PLACEHOLDER
+    parts = [spec["tok"], spec["kind"], spec.get("method"), spec.get("model"),
+             spec.get("attribute"), str(spec["prompt"]), spec.get("strength"),
+             None if spec.get("sd") is None else f"{spec['sd']:+g}",
+             None if not spec.get("draw") else f"r{spec['draw']}"]
+    return "_".join(p for p in parts if p).replace(".", "p").replace("+", "u").replace("-", "d")
 
 
 # ------------------------------------------------------------------ analysis
@@ -85,12 +154,8 @@ def pplm_path(attr, pid, sd):
 def _notes(path):
     """All notes in seconds: (start, end, pitch, velocity, program, is_drum)."""
     score = symusic.Score(str(path)).to("second")
-    out = []
-    for t in score.tracks:
-        for n in t.notes:
-            out.append((round(n.time, 4), round(n.time + n.duration, 4), n.pitch,
-                        n.velocity, t.program, t.is_drum))
-    return sorted(out)
+    return sorted((round(n.time, 4), round(n.time + n.duration, 4), n.pitch, n.velocity,
+                   t.program, t.is_drum) for t in score.tracks for n in t.notes)
 
 
 def _beat_lengths(path):
@@ -121,72 +186,6 @@ def split_prompt(gen_path):
     return cont, prompt_end
 
 
-def metrics(gen_path):
-    cont, prompt_end = split_prompt(gen_path)
-    pitched = [n for n in cont if not n[5]]
-    beats = _beat_lengths(gen_path)
-    pp = prompt_of(gen_path)
-    ponset = {(b[0], b[1]) for b in _beat_lengths(pp)} if pp.exists() else set()
-    lens = [b[2] for b in beats if (b[0], b[1]) not in ponset]
-    end = max((n[1] for n in cont), default=0.0)
-    return {
-        "n_notes": len(cont),
-        "n_pitched": len(pitched),
-        "seconds": round(end, 1),
-        "prompt_end": round(prompt_end, 2),
-        "velocity": round(sum(n[3] for n in cont) / len(cont), 1) if cont else None,
-        "pitch": round(sum(n[2] for n in pitched) / len(pitched), 1) if pitched else None,
-        "note_beats": round(sum(lens) / len(lens), 3) if lens else None,
-    }
-
-
-ATTR_KEY = {"velocity": "velocity", "duration": "note_beats", "pitch_register": "pitch"}
-
-
-def cmd_candidates(_args):
-    print("== Unguided (draw r0): continuation length / notes / pitched notes")
-    for pid in PROMPTS:
-        row = [f"p{pid:<6}"]
-        for m in BASELINE_DIRS:
-            p = baseline_path(m, pid)
-            if p.exists():
-                x = metrics(p)
-                row.append(f"{m}:{x['seconds']:5.1f}s {x['n_notes']:3d}n {x['n_pitched']:3d}p")
-        print("  ".join(row))
-
-    for attr, key in ATTR_KEY.items():
-        print(f"\n== {attr} ({key}); baseline = mean of EBT r0-r2; values at -2 / +2 SD")
-        for pid in PROMPTS:
-            base = [metrics(baseline_path("ebt", pid, r))[key] for r in range(3)
-                    if baseline_path("ebt", pid, r).exists()]
-            base = [b for b in base if b is not None]
-            if not base:
-                continue
-            b = sum(base) / len(base)
-            cells = []
-            for name, fn in (("EBT", ebt_path), ("PPLM", pplm_path)):
-                lo, hi = fn(attr, pid, -2), fn(attr, pid, 2)
-                if lo and hi and Path(lo).exists() and Path(hi).exists():
-                    vlo, vhi = metrics(lo)[key], metrics(hi)[key]
-                    ok = (vlo is not None and vhi is not None and vlo < b < vhi)
-                    cells.append(f"{name} {vlo} / {vhi} {'OK' if ok else '--'}")
-                else:
-                    cells.append(f"{name} missing")
-            print(f"p{pid:<6} base {b:7.3f}   " + "   ".join(cells))
-
-
-# ------------------------------------------------------------------- render
-
-def render_mp3(midi, mp3):
-    with tempfile.TemporaryDirectory() as tmp:
-        wav = Path(tmp) / "x.wav"
-        subprocess.run([str(BIN / "fluidsynth"), "-ni", "-q", "-r", "44100", "-g", "0.6",
-                        "-F", str(wav), SOUNDFONT, str(midi)],
-                       check=True, capture_output=True, timeout=120)
-        subprocess.run([str(BIN / "lame"), "--quiet", "-V", "4", str(wav), str(mp3)],
-                       check=True, timeout=120)
-
-
 _QUALITY = {}
 
 
@@ -205,84 +204,187 @@ def dissonance(midi):
     return _QUALITY[csv].get(Path(midi).name.replace("_generated.mid", ""))
 
 
-def clip_entry(midi, clip_id, sources, force=False):
-    midi = Path(midi)
-    mp3 = SITE / "audio" / f"{clip_id}.mp3"
-    # Re-render when the clip id now points at a different MIDI.
-    src = str(midi.relative_to(LOGS)) if midi.is_relative_to(LOGS) else midi.name
-    if force or not mp3.exists() or sources.get(clip_id) != src:
-        render_mp3(midi, mp3)
-    sources[clip_id] = src
-    notes = _notes(midi)
-    m = metrics(midi)
-    m["dissonance"] = dissonance(midi)
+def metrics(gen_path):
+    cont, prompt_end = split_prompt(gen_path)
+    pitched = [n for n in cont if not n[5]]
+    pp = prompt_of(gen_path)
+    ponset = {(b[0], b[1]) for b in _beat_lengths(pp)} if pp.exists() else set()
+    lens = [b[2] for b in _beat_lengths(gen_path) if (b[0], b[1]) not in ponset]
+    end = max((n[1] for n in cont), default=0.0)
     return {
-        "audio": f"audio/{clip_id}.mp3",
-        "prompt_end": m["prompt_end"],
-        "notes": [[n[0], round(n[1] - n[0], 4), n[2], n[3], int(n[5])] for n in notes],
-        "metrics": m,
+        "n_notes": len(cont),
+        "n_pitched": len(pitched),
+        "seconds": round(end, 1),
+        "prompt_end": round(prompt_end, 2),
+        "velocity": round(sum(n[3] for n in cont) / len(cont), 1) if cont else None,
+        "pitch": round(sum(n[2] for n in pitched) / len(pitched), 1) if pitched else None,
+        "note_beats": round(sum(lens) / len(lens), 3) if lens else None,
+        "dissonance": dissonance(gen_path),
     }
 
 
-def resolve(spec):
-    kind = spec["kind"]
-    pid = spec["prompt"]
-    if kind == "baseline":
-        return baseline_path(spec["model"], pid, spec.get("draw", 0))
-    if kind == "ground_truth":
-        return GROUND_TRUTH_DIR / f"p{pid}_ground_truth.mid"
-    if kind == "ebt":
-        return ebt_path(spec["attribute"], pid, spec["sd"], spec.get("lambda"))
-    if kind == "pplm":
-        return pplm_path(spec["attribute"], pid, spec["sd"])
-    raise ValueError(kind)
+ATTR_KEY = {"velocity": "velocity", "duration": "note_beats", "pitch_register": "pitch"}
+
+
+def cmd_candidates(args):
+    tok = args.tok
+    runs = RUNS[tok]
+    pids = sorted(int(p.name[1:].split("_")[0]) for p in runs["unguided"]["ebt"].glob("*_r0_generated.mid"))
+    print(f"== {tok} unguided (r0): continuation seconds / notes / pitched notes")
+    for pid in pids:
+        row = [f"p{pid:<8}"]
+        for m in runs["unguided"]:
+            p = resolve({"tok": tok, "kind": "unguided", "model": m, "prompt": pid})
+            if p.exists():
+                x = metrics(p)
+                row.append(f"{m}:{x['seconds']:5.1f}s {x['n_notes']:3d}n {x['n_pitched']:3d}p")
+        print("  ".join(row))
+    for attr in runs["ebt"]:
+        key, lam = ATTR_KEY[attr], OPERATING[tok][attr]
+        print(f"\n== {attr} ({key}); EBT at operating lambda {lam}: unguided | -2 / +2 SD")
+        for pid in pids:
+            u = resolve({"tok": tok, "kind": "unguided", "model": "ebt", "prompt": pid})
+            lo, hi = ebt_path(tok, attr, pid, -2, lam), ebt_path(tok, attr, pid, 2, lam)
+            if not (u.exists() and lo and hi):
+                continue
+            b, vlo, vhi = metrics(u)[key], metrics(lo)[key], metrics(hi)[key]
+            ok = None not in (b, vlo, vhi) and vlo < b < vhi
+            print(f"p{pid:<8} {b} | {vlo} / {vhi} {'OK' if ok else '--'}")
+
+
+# ---------------------------------------------------------------- expansion
+
+def _with(base, **kw):
+    out = dict(base)
+    out.update({k: v for k, v in kw.items() if v is not None})
+    return out
+
+
+def expand_block(b):
+    """Block spec -> block with a flat list of clip specs (row/col/label set)."""
+    t = b["type"]
+    if t in ("clips", "note"):
+        return b
+    ctx = {"tok": b["tok"], "prompt": b["prompt"], "attribute": b.get("attribute")}
+    clips = []
+    if t == "steer":
+        sd = b.get("sd", 2)
+        for row in b["rows"]:
+            ph = row.get("placeholder") or b.get("placeholder")
+            un = {"kind": "unguided", "model": row["model"]}
+            g = {"kind": "guided", "method": row["method"], "model": row["model"],
+                 "strength": row["strength"]}
+            for col, spec in (("down", _with(g, sd=-sd)), ("unguided", un), ("up", _with(g, sd=sd))):
+                clips.append({**ctx, **spec, "row": row["label"], "row_sub": row.get("sub", ""),
+                              "col": col, "placeholder": ph})
+    elif t == "intensity":
+        ph = b.get("placeholder")
+        clips.append({**ctx, "kind": "unguided", "model": "ebt", "row": "unguided",
+                      "col": "unguided", "placeholder": ph})
+        for lam in b["lambdas"]:
+            for sd in b["sds"]:
+                clips.append({**ctx, "kind": "guided", "method": "ebt", "model": "ebt",
+                              "strength": lam, "sd": sd, "row": lam, "col": f"{sd:+g}",
+                              "operating": lam == OPERATING.get(b["tok"], {}).get(b.get("attribute")),
+                              "placeholder": ph})
+    else:
+        raise ValueError(t)
+    return {**{k: v for k, v in b.items() if k not in ("rows",)}, "clips": clips}
+
+
+# ------------------------------------------------------------------- render
+
+def render_mp3(midi, mp3):
+    with tempfile.TemporaryDirectory() as tmp:
+        wav = Path(tmp) / "x.wav"
+        subprocess.run([str(BIN / "fluidsynth"), "-ni", "-q", "-r", "44100", "-g", "0.6",
+                        "-F", str(wav), SOUNDFONT, str(midi)],
+                       check=True, capture_output=True, timeout=120)
+        subprocess.run([str(BIN / "lame"), "--quiet", "-V", "4", str(wav), str(mp3)],
+                       check=True, timeout=120)
+
+
+class Builder:
+    def __init__(self, force):
+        self.force = force
+        self.used = set()
+        self.cache = {}
+        self.manifest = SITE / "audio" / "sources.json"
+        self.sources = json.loads(self.manifest.read_text()) if self.manifest.exists() else {}
+        self.missing = []
+
+    def clip(self, spec):
+        path = resolve(spec)
+        if path is None or not Path(path).exists():
+            # Not produced (yet): fall back to the placeholder so the layout still renders.
+            self.missing.append({k: spec.get(k) for k in
+                                 ("tok", "kind", "method", "model", "attribute", "prompt", "strength", "sd")})
+            spec = {**spec, "placeholder": True}
+            path = resolve(spec)
+        cid = clip_id(spec)
+        if cid not in self.cache:
+            midi = Path(path)
+            mp3 = SITE / "audio" / f"{cid}.mp3"
+            src = str(midi.relative_to(LOGS)) if midi.is_relative_to(LOGS) else midi.name
+            if self.force or not mp3.exists() or self.sources.get(cid) != src:
+                print(f"  render {cid}")
+                render_mp3(midi, mp3)
+            self.sources[cid] = src
+            m = metrics(midi)
+            self.cache[cid] = {
+                "audio": f"audio/{cid}.mp3",
+                "prompt_end": m["prompt_end"],
+                "notes": [[n[0], round(n[1] - n[0], 4), n[2], n[3], int(n[5])] for n in _notes(midi)],
+                "metrics": m,
+            }
+        self.used.add(f"{cid}.mp3")
+        keep = {k: v for k, v in spec.items()
+                if k in ("label", "tag", "row", "row_sub", "col", "operating", "placeholder", "sd", "strength")
+                and v not in (None, False)}
+        return {"id": cid, **keep, **self.cache[cid]}
+
+    def node(self, n):
+        out = {k: v for k, v in n.items() if k not in ("tabs", "blocks")}
+        if "blocks" in n:
+            out["blocks"] = []
+            for b in n["blocks"]:
+                b = expand_block(b)
+                if "clips" in b:
+                    b = {**b, "clips": [self.clip({"tok": b.get("tok"), "prompt": b.get("prompt"),
+                                                   "placeholder": b.get("placeholder"), **c})
+                                        for c in b["clips"]]}
+                out["blocks"].append(b)
+        if "tabs" in n:
+            out["tabs"] = [self.node(t) for t in n["tabs"]]
+        return out
 
 
 def cmd_build(args):
     sel = json.loads(SELECTION.read_text())
     (SITE / "audio").mkdir(parents=True, exist_ok=True)
-    used = set()
-    manifest = SITE / "audio" / "sources.json"
-    sources = json.loads(manifest.read_text()) if manifest.exists() else {}
-
-    def build_clips(clips):
-        out = []
-        for c in clips:
-            path = resolve(c)
-            if path is None or not Path(path).exists():
-                sys.exit(f"missing clip: {c}")
-            cid = c["id"]
-            used.add(f"{cid}.mp3")
-            print(f"  {cid:<40} {Path(path).name}")
-            out.append({**{k: v for k, v in c.items() if k not in ("kind",)},
-                        **clip_entry(path, cid, sources, args.force)})
-        return out
-
-    data = {"meta": sel["meta"], "sections": []}
-    for sec in sel["sections"]:
-        s = {k: v for k, v in sec.items() if k != "examples"}
-        s["examples"] = []
-        for ex in sec["examples"]:
-            e = {k: v for k, v in ex.items() if k != "clips"}
-            e["clips"] = build_clips(ex["clips"])
-            s["examples"].append(e)
-        data["sections"].append(s)
+    b = Builder(args.force)
+    data = {"meta": sel["meta"], "sections": [b.node(s) for s in sel["sections"]]}
 
     for f in (SITE / "audio").glob("*.mp3"):
-        if f.name not in used:
+        if f.name not in b.used:
             f.unlink()
-    manifest.write_text(json.dumps({k: v for k, v in sources.items() if f"{k}.mp3" in used},
-                                   indent=1, sort_keys=True))
+    b.manifest.write_text(json.dumps({k: v for k, v in b.sources.items() if f"{k}.mp3" in b.used},
+                                     indent=1, sort_keys=True))
     (SITE / "data.json").write_text(json.dumps(data, separators=(",", ":")))
     total = sum(f.stat().st_size for f in (SITE / "audio").glob("*.mp3"))
-    print(f"wrote {SITE/'data.json'}; {len(used)} clips, {total/1e6:.1f} MB audio")
+    print(f"wrote {SITE/'data.json'}; {len(b.used)} audio files, {total/1e6:.1f} MB")
+    if b.missing:
+        print(f"{len(b.missing)} slots have no output yet and use the placeholder, e.g.:")
+        for m in b.missing[:5]:
+            print("  ", m)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("candidates")
+    c = sub.add_parser("candidates")
+    c.add_argument("--tok", choices=list(RUNS), default="remi")
     b = sub.add_parser("build")
     b.add_argument("--force", action="store_true", help="re-render existing MP3s")
     args = ap.parse_args()
