@@ -146,12 +146,19 @@
 
 /* labels above the progress bar */
 .prog-labels { position: relative; height: 14px; margin-bottom: -4px; }
-.prog-labels span {
+.prog-labels > span {
   position: absolute; top: 0; white-space: nowrap;
   font: 600 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase;
 }
 .lab-prompt { left: 0; color: var(--faint); }
-.lab-cont { color: rgba(191,238,233,.7); padding-left: 6px; }
+.lab-cont { color: rgba(191,238,233,.7); padding-left: 6px; right: 0; overflow: hidden; text-overflow: clip; }
+.lab-cont .short { display: none; }
+/* Narrow cards (e.g. four versions side by side): use the short label. */
+.scard { container-type: inline-size; }
+@container (max-width: 300px) {
+  .lab-cont .long { display: none; }
+  .lab-cont .short { display: inline; }
+}
 .t-q .ends {
   display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 999px; vertical-align: 2px;
   font: 600 12px var(--mono); color: #d6d0ff; background: rgba(139,124,255,.15); border: 1px solid rgba(139,124,255,.35);
@@ -159,7 +166,8 @@
 .t-hint .help { display: block; margin-top: 4px; color: var(--faint); }
 
 /* optional cacophony ticks and emailed copy */
-.q.caco { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--border); }
+.caco-wrap { margin-top: 18px; padding-top: 2px; border-top: 1px dashed var(--border); }
+.q.caco { margin-top: 14px; }
 .q.caco legend { font-weight: 500; color: var(--muted); font-size: 14px; }
 .q.caco legend b { color: var(--text); }
 .chip.tick { font-size: 13px; padding: 7px 12px; }
