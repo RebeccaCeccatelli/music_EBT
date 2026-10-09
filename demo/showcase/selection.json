@@ -1,373 +1,825 @@
 {
-  "meta": {
-    "title": "Energy-Based Transformers for Symbolic Music",
-    "subtitle": "Listening examples: continuation and attribute steering with an Energy-Based Transformer (EBT), compared with GPT-2 and Llama baselines.",
-    "author": "Rebecca Ceccatelli",
-    "repo": "https://github.com/RebeccaCeccatelli/music_EBT",
-    "disclaimer": "These are selected examples. All clips come from the final evaluation runs: frozen final checkpoints, the same 16 REMI validation prompts for every model, 64-token prompt, 256 generated tokens, temperature 0.7, top-p 0.9. Within each example, every system gets the same prompt and its first sample (no per-model cherry-picking). The aggregate results are in the thesis."
-  },
-  "sections": [
+ "meta": {
+  "title": "Energy-Based Transformers for Symbolic Music",
+  "subtitle": "Listening examples: continuation and attribute steering with an Energy-Based Transformer (EBT), compared with GPT-2 and Llama baselines.",
+  "author": "Rebecca Ceccatelli",
+  "repo": "https://github.com/RebeccaCeccatelli/music_EBT",
+  "disclaimer": "These are selected examples. All clips come from the final evaluation runs: frozen final checkpoints, per tokenizer the same 16 validation prompts for every model and method, 256 generated tokens, temperature 0.7, top-p 0.9. Within each example every system gets the same prompt and its first sample (no per-system cherry-picking). Clips tagged PLACEHOLDER are stand-ins for outputs that don't exist yet. The aggregate results are in the thesis."
+ },
+ "sections": [
+  {
+   "id": "unguided",
+   "kicker": "01",
+   "title": "Unguided Generation",
+   "intro": "Each model gets the same short prompt (shaded) and continues it, with no control. All models are small and trained on GigaMIDI, once per tokenizer. REMI encodes music as bar/position/pitch/velocity/duration tokens; Anticipation encodes (time, duration, note) triplets. The EBT generates each token by minimising a learned energy with a few gradient steps; Llama and GPT-2 are standard next-token predictors.",
+   "tabs": [
     {
-      "id": "continuation",
-      "title": "Continuation",
-      "kicker": "01",
-      "intro": "Each model gets the same short prompt (shaded) and continues it. All three are small models trained on GigaMIDI with REMI tokens. The EBT generates each token by minimising a learned energy with a few gradient steps; GPT-2 and Llama are standard next-token predictors.",
-      "layout": "grid",
-      "examples": [
+     "label": "REMI",
+     "blocks": [
+      {
+       "type": "clips",
+       "tok": "remi",
+       "prompt": 13268,
+       "title": "Solo piano",
+       "clips": [
         {
-          "title": "Solo piano",
-          "prompt_id": 13268,
-          "clips": [
-            {
-              "id": "cont_13268_gt",
-              "kind": "ground_truth",
-              "prompt": 13268,
-              "label": "Original",
-              "tag": "human"
-            },
-            {
-              "id": "cont_13268_ebt",
-              "kind": "baseline",
-              "model": "ebt",
-              "prompt": 13268,
-              "label": "EBT",
-              "tag": "ours"
-            },
-            {
-              "id": "cont_13268_gpt2",
-              "kind": "baseline",
-              "model": "gpt2",
-              "prompt": 13268,
-              "label": "GPT-2"
-            },
-            {
-              "id": "cont_13268_llama",
-              "kind": "baseline",
-              "model": "llama",
-              "prompt": 13268,
-              "label": "Llama"
-            }
-          ]
+         "kind": "ground_truth",
+         "label": "Original",
+         "tag": "human"
         },
         {
-          "title": "Band: drums, bass, guitar, flute",
-          "prompt_id": 3107,
-          "clips": [
-            {
-              "id": "cont_3107_gt",
-              "kind": "ground_truth",
-              "prompt": 3107,
-              "label": "Original",
-              "tag": "human"
-            },
-            {
-              "id": "cont_3107_ebt",
-              "kind": "baseline",
-              "model": "ebt",
-              "prompt": 3107,
-              "label": "EBT",
-              "tag": "ours"
-            },
-            {
-              "id": "cont_3107_gpt2",
-              "kind": "baseline",
-              "model": "gpt2",
-              "prompt": 3107,
-              "label": "GPT-2"
-            },
-            {
-              "id": "cont_3107_llama",
-              "kind": "baseline",
-              "model": "llama",
-              "prompt": 3107,
-              "label": "Llama"
-            }
-          ]
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "EBT",
+         "tag": "ours"
         },
         {
-          "title": "Groove: drums and two basses",
-          "prompt_id": 8484,
-          "clips": [
-            {
-              "id": "cont_8484_gt",
-              "kind": "ground_truth",
-              "prompt": 8484,
-              "label": "Original",
-              "tag": "human"
-            },
-            {
-              "id": "cont_8484_ebt",
-              "kind": "baseline",
-              "model": "ebt",
-              "prompt": 8484,
-              "label": "EBT",
-              "tag": "ours"
-            },
-            {
-              "id": "cont_8484_gpt2",
-              "kind": "baseline",
-              "model": "gpt2",
-              "prompt": 8484,
-              "label": "GPT-2"
-            },
-            {
-              "id": "cont_8484_llama",
-              "kind": "baseline",
-              "model": "llama",
-              "prompt": 8484,
-              "label": "Llama"
-            }
-          ]
+         "kind": "unguided",
+         "model": "llama",
+         "label": "Llama"
+        },
+        {
+         "kind": "unguided",
+         "model": "gpt2",
+         "label": "GPT-2"
         }
-      ]
+       ]
+      },
+      {
+       "type": "clips",
+       "tok": "remi",
+       "prompt": 3107,
+       "title": "Band: drums, bass, guitar, flute",
+       "clips": [
+        {
+         "kind": "ground_truth",
+         "label": "Original",
+         "tag": "human"
+        },
+        {
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "EBT",
+         "tag": "ours"
+        },
+        {
+         "kind": "unguided",
+         "model": "llama",
+         "label": "Llama"
+        },
+        {
+         "kind": "unguided",
+         "model": "gpt2",
+         "label": "GPT-2"
+        }
+       ]
+      },
+      {
+       "type": "clips",
+       "tok": "remi",
+       "prompt": 8484,
+       "title": "Groove: drums and two basses",
+       "clips": [
+        {
+         "kind": "ground_truth",
+         "label": "Original",
+         "tag": "human"
+        },
+        {
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "EBT",
+         "tag": "ours"
+        },
+        {
+         "kind": "unguided",
+         "model": "llama",
+         "label": "Llama"
+        },
+        {
+         "kind": "unguided",
+         "model": "gpt2",
+         "label": "GPT-2"
+        }
+       ]
+      }
+     ]
     },
     {
-      "id": "steering",
-      "title": "Steering",
-      "kicker": "02",
-      "intro": "With a small regressor that predicts a musical attribute, generation can be pushed toward a target without retraining. For the EBT, the regressor's error is added to the energy it already minimises. For the Llama baseline we use PPLM-style guidance: one gradient step on the logits. Targets are 2 standard deviations (of the corpus) below or above the prompt's own unguided level. Each system is shown at its operating point (the strongest setting that keeps dissonance in the range of real music). One pattern to listen for: the EBT moves strongly in one direction per attribute (up for duration and pitch, down for velocity) and only weakly in the other. PPLM moves both ways but often undershoots.",
-      "layout": "steer",
-      "examples": [
+     "label": "Anticipation",
+     "blocks": [
+      {
+       "type": "clips",
+       "tok": "ant",
+       "prompt": 1550614,
+       "title": "Example A",
+       "clips": [
         {
-          "title": "Velocity (loudness)",
-          "attribute": "velocity",
-          "metric": "velocity",
-          "metric_label": "mean velocity",
-          "metric_unit": "/127",
-          "prompt_id": 9235,
-          "clips": [
-            {
-              "id": "steer_vel_ebt_dn",
-              "kind": "ebt",
-              "attribute": "velocity",
-              "prompt": 9235,
-              "sd": -2,
-              "row": "EBT",
-              "col": "down"
-            },
-            {
-              "id": "steer_vel_ebt_un",
-              "kind": "baseline",
-              "model": "ebt",
-              "prompt": 9235,
-              "row": "EBT",
-              "col": "unguided"
-            },
-            {
-              "id": "steer_vel_ebt_up",
-              "kind": "ebt",
-              "attribute": "velocity",
-              "prompt": 9235,
-              "sd": 2,
-              "row": "EBT",
-              "col": "up"
-            },
-            {
-              "id": "steer_vel_pplm_dn",
-              "kind": "pplm",
-              "attribute": "velocity",
-              "prompt": 9235,
-              "sd": -2,
-              "row": "Llama + PPLM",
-              "col": "down"
-            },
-            {
-              "id": "steer_vel_pplm_un",
-              "kind": "baseline",
-              "model": "llama",
-              "prompt": 9235,
-              "row": "Llama + PPLM",
-              "col": "unguided"
-            },
-            {
-              "id": "steer_vel_pplm_up",
-              "kind": "pplm",
-              "attribute": "velocity",
-              "prompt": 9235,
-              "sd": 2,
-              "row": "Llama + PPLM",
-              "col": "up"
-            }
-          ]
+         "kind": "ground_truth",
+         "label": "Original",
+         "tag": "human"
         },
         {
-          "title": "Note duration (staccato ↔ legato)",
-          "attribute": "duration",
-          "metric": "note_beats",
-          "metric_label": "mean note length",
-          "metric_unit": " beats",
-          "prompt_id": 8484,
-          "clips": [
-            {
-              "id": "steer_dur_ebt_dn",
-              "kind": "ebt",
-              "attribute": "duration",
-              "prompt": 8484,
-              "sd": -2,
-              "row": "EBT",
-              "col": "down"
-            },
-            {
-              "id": "steer_dur_ebt_un",
-              "kind": "baseline",
-              "model": "ebt",
-              "prompt": 8484,
-              "row": "EBT",
-              "col": "unguided"
-            },
-            {
-              "id": "steer_dur_ebt_up",
-              "kind": "ebt",
-              "attribute": "duration",
-              "prompt": 8484,
-              "sd": 2,
-              "row": "EBT",
-              "col": "up"
-            },
-            {
-              "id": "steer_dur_pplm_dn",
-              "kind": "pplm",
-              "attribute": "duration",
-              "prompt": 8484,
-              "sd": -2,
-              "row": "Llama + PPLM",
-              "col": "down"
-            },
-            {
-              "id": "steer_dur_pplm_un",
-              "kind": "baseline",
-              "model": "llama",
-              "prompt": 8484,
-              "row": "Llama + PPLM",
-              "col": "unguided"
-            },
-            {
-              "id": "steer_dur_pplm_up",
-              "kind": "pplm",
-              "attribute": "duration",
-              "prompt": 8484,
-              "sd": 2,
-              "row": "Llama + PPLM",
-              "col": "up"
-            }
-          ]
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "EBT",
+         "tag": "ours"
         },
         {
-          "title": "Pitch register (low ↔ high)",
-          "attribute": "pitch_register",
-          "metric": "pitch",
-          "metric_label": "mean pitch",
-          "metric_unit": "",
-          "prompt_id": 4563,
-          "clips": [
-            {
-              "id": "steer_pitch_ebt_dn",
-              "kind": "ebt",
-              "attribute": "pitch_register",
-              "prompt": 4563,
-              "sd": -2,
-              "row": "EBT",
-              "col": "down"
-            },
-            {
-              "id": "steer_pitch_ebt_un",
-              "kind": "baseline",
-              "model": "ebt",
-              "prompt": 4563,
-              "row": "EBT",
-              "col": "unguided"
-            },
-            {
-              "id": "steer_pitch_ebt_up",
-              "kind": "ebt",
-              "attribute": "pitch_register",
-              "prompt": 4563,
-              "sd": 2,
-              "row": "EBT",
-              "col": "up"
-            },
-            {
-              "id": "steer_pitch_pplm_dn",
-              "kind": "pplm",
-              "attribute": "pitch_register",
-              "prompt": 4563,
-              "sd": -2,
-              "row": "Llama + PPLM",
-              "col": "down"
-            },
-            {
-              "id": "steer_pitch_pplm_un",
-              "kind": "baseline",
-              "model": "llama",
-              "prompt": 4563,
-              "row": "Llama + PPLM",
-              "col": "unguided"
-            },
-            {
-              "id": "steer_pitch_pplm_up",
-              "kind": "pplm",
-              "attribute": "pitch_register",
-              "prompt": 4563,
-              "sd": 2,
-              "row": "Llama + PPLM",
-              "col": "up"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "limits",
-      "title": "Pushing too hard",
-      "kicker": "03",
-      "intro": "Guidance strength is a trade-off. Past the operating point, strong EBT guidance flattens the model's choice among attribute values: the target is reached by scattering near-random notes. Harsh dissonance (share of simultaneous note pairs a semitone, major seventh or tritone apart) rises to the level of uniformly random notes, about 0.25. This is the main limitation we found.",
-      "layout": "grid",
-      "examples": [
+         "kind": "unguided",
+         "model": "llama",
+         "label": "Llama"
+        },
         {
-          "title": "Pitch register pushed up, at increasing guidance strength",
-          "prompt_id": 3107,
-          "clips": [
-            {
-              "id": "lim_pitch_un",
-              "kind": "baseline",
-              "model": "ebt",
-              "prompt": 3107,
-              "label": "Unguided"
-            },
-            {
-              "id": "lim_pitch_op",
-              "kind": "ebt",
-              "attribute": "pitch_register",
-              "prompt": 3107,
-              "sd": 2,
-              "label": "λ = 0.02",
-              "tag": "operating point"
-            },
-            {
-              "id": "lim_pitch_hi",
-              "kind": "ebt",
-              "attribute": "pitch_register",
-              "prompt": 3107,
-              "sd": 2,
-              "lambda": "0.16",
-              "label": "λ = 0.16",
-              "tag": "too strong"
-            }
-          ],
-          "metrics": [
-            {
-              "metric": "pitch",
-              "metric_label": "mean pitch",
-              "metric_unit": ""
-            },
-            {
-              "metric": "dissonance",
-              "metric_label": "harsh dissonance",
-              "metric_unit": ""
-            }
-          ]
+         "kind": "unguided",
+         "model": "gpt2",
+         "label": "GPT-2"
         }
-      ]
+       ]
+      },
+      {
+       "type": "clips",
+       "tok": "ant",
+       "prompt": 1287257,
+       "title": "Example B",
+       "clips": [
+        {
+         "kind": "ground_truth",
+         "label": "Original",
+         "tag": "human"
+        },
+        {
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "EBT",
+         "tag": "ours"
+        },
+        {
+         "kind": "unguided",
+         "model": "llama",
+         "label": "Llama"
+        },
+        {
+         "kind": "unguided",
+         "model": "gpt2",
+         "label": "GPT-2"
+        }
+       ]
+      }
+     ]
     }
-  ]
+   ]
+  },
+  {
+   "id": "single",
+   "kicker": "02",
+   "title": "Single-Attribute Control",
+   "intro": "With a small regressor that predicts a musical attribute, generation can be steered toward a target without retraining. First the standard methods for autoregressive models, then the EBT, where the regressor's error is added to the energy it already minimises and the guidance strength λ sets how hard it pushes. Targets are given in standard deviations of the corpus, relative to the prompt's own unguided level.",
+   "tabs": [
+    {
+     "label": "REMI",
+     "tabs": [
+      {
+       "label": "Velocity",
+       "sublabel": "loudness",
+       "blocks": [
+        {
+         "type": "steer",
+         "tok": "remi",
+         "prompt": 9235,
+         "attribute": "velocity",
+         "sd": 2,
+         "title": "Baseline methods",
+         "subtitle": "target ±2 SD, each at its operating point",
+         "metric": "velocity",
+         "metric_label": "mean velocity",
+         "metric_unit": "/127",
+         "rows": [
+          {
+           "label": "Tilt",
+           "method": "tilt",
+           "model": "llama",
+           "strength": "1",
+           "sub": "Llama · reweights the attribute's own tokens (oracle reference)"
+          },
+          {
+           "label": "Best-of-16",
+           "method": "best_of_n",
+           "model": "llama",
+           "strength": "16",
+           "sub": "Llama · keeps the closest of 16 unguided samples"
+          },
+          {
+           "label": "PPLM",
+           "method": "pplm",
+           "model": "llama",
+           "sub": "Llama · one regressor-gradient step on the logits",
+           "strength": "16"
+          }
+         ]
+        },
+        {
+         "type": "intensity",
+         "tok": "remi",
+         "prompt": 9235,
+         "attribute": "velocity",
+         "lambdas": [
+          "0.01",
+          "0.03",
+          "0.06"
+         ],
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "EBT: guidance strength × target",
+         "subtitle": "rows: guidance strength λ · columns: target, in corpus SD from the unguided level",
+         "metric": "velocity",
+         "metric_label": "mean velocity",
+         "metric_unit": "/127"
+        }
+       ]
+      },
+      {
+       "label": "Duration",
+       "sublabel": "staccato ↔ legato",
+       "blocks": [
+        {
+         "type": "steer",
+         "tok": "remi",
+         "prompt": 8484,
+         "attribute": "duration",
+         "sd": 2,
+         "title": "Baseline methods",
+         "subtitle": "target ±2 SD, each at its operating point",
+         "metric": "note_beats",
+         "metric_label": "mean note length",
+         "metric_unit": " beats",
+         "rows": [
+          {
+           "label": "Tilt",
+           "method": "tilt",
+           "model": "llama",
+           "strength": "1",
+           "sub": "Llama · reweights the attribute's own tokens (oracle reference)"
+          },
+          {
+           "label": "Best-of-16",
+           "method": "best_of_n",
+           "model": "llama",
+           "strength": "16",
+           "sub": "Llama · keeps the closest of 16 unguided samples"
+          },
+          {
+           "label": "PPLM",
+           "method": "pplm",
+           "model": "llama",
+           "sub": "Llama · one regressor-gradient step on the logits",
+           "strength": "16"
+          }
+         ]
+        },
+        {
+         "type": "intensity",
+         "tok": "remi",
+         "prompt": 8484,
+         "attribute": "duration",
+         "lambdas": [
+          "0.005",
+          "0.02",
+          "0.04"
+         ],
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "EBT: guidance strength × target",
+         "subtitle": "rows: guidance strength λ · columns: target, in corpus SD from the unguided level",
+         "metric": "note_beats",
+         "metric_label": "mean note length",
+         "metric_unit": " beats"
+        }
+       ]
+      },
+      {
+       "label": "Pitch register",
+       "sublabel": "low ↔ high",
+       "blocks": [
+        {
+         "type": "steer",
+         "tok": "remi",
+         "prompt": 4563,
+         "attribute": "pitch_register",
+         "sd": 2,
+         "title": "Baseline methods",
+         "subtitle": "target ±2 SD, each at its operating point",
+         "metric": "pitch",
+         "metric_label": "mean pitch",
+         "metric_unit": "",
+         "rows": [
+          {
+           "label": "Tilt",
+           "method": "tilt",
+           "model": "llama",
+           "strength": "1",
+           "sub": "Llama · reweights the attribute's own tokens (oracle reference)"
+          },
+          {
+           "label": "Best-of-16",
+           "method": "best_of_n",
+           "model": "llama",
+           "strength": "16",
+           "sub": "Llama · keeps the closest of 16 unguided samples"
+          },
+          {
+           "label": "PPLM",
+           "method": "pplm",
+           "model": "llama",
+           "sub": "Llama · one regressor-gradient step on the logits",
+           "strength": "32"
+          }
+         ]
+        },
+        {
+         "type": "intensity",
+         "tok": "remi",
+         "prompt": 4563,
+         "attribute": "pitch_register",
+         "lambdas": [
+          "0.01",
+          "0.02",
+          "0.06"
+         ],
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "EBT: guidance strength × target",
+         "subtitle": "rows: guidance strength λ · columns: target, in corpus SD from the unguided level",
+         "metric": "pitch",
+         "metric_label": "mean pitch",
+         "metric_unit": ""
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "label": "Anticipation",
+     "tabs": [
+      {
+       "label": "Velocity",
+       "sublabel": "loudness",
+       "blocks": [
+        {
+         "type": "note",
+         "title": "Not available for Anticipation",
+         "text": "The Anticipation vocabulary has no velocity field: every note is rendered at the same default velocity, so there is nothing to steer."
+        }
+       ]
+      },
+      {
+       "label": "Duration",
+       "sublabel": "staccato ↔ legato",
+       "blocks": [
+        {
+         "type": "note",
+         "title": "Tilt: not applicable",
+         "text": "Tilt needs a hand-written value map over the attribute's own tokens, which only exists for REMI."
+        },
+        {
+         "type": "steer",
+         "tok": "ant",
+         "prompt": 428653,
+         "attribute": "duration",
+         "sd": 2,
+         "title": "Baseline methods",
+         "subtitle": "target ±2 SD, each at its operating point",
+         "metric": "note_beats",
+         "metric_label": "mean note length",
+         "metric_unit": " beats",
+         "rows": [
+          {
+           "label": "Best-of-16",
+           "method": "best_of_n",
+           "model": "llama",
+           "strength": "16",
+           "sub": "Llama · keeps the closest of 16 unguided samples"
+          },
+          {
+           "label": "PPLM",
+           "method": "pplm",
+           "model": "llama",
+           "sub": "Llama · run in progress, placeholder audio",
+           "strength": "16",
+           "placeholder": true
+          }
+         ]
+        },
+        {
+         "type": "intensity",
+         "tok": "ant",
+         "prompt": 428653,
+         "attribute": "duration",
+         "lambdas": [
+          "0.002",
+          "0.005",
+          "0.04"
+         ],
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "EBT: guidance strength × target",
+         "subtitle": "rows: guidance strength λ · columns: target, in corpus SD from the unguided level",
+         "metric": "note_beats",
+         "metric_label": "mean note length",
+         "metric_unit": " beats"
+        }
+       ]
+      },
+      {
+       "label": "Pitch register",
+       "sublabel": "low ↔ high",
+       "blocks": [
+        {
+         "type": "note",
+         "title": "Tilt: not applicable",
+         "text": "Tilt needs a hand-written value map over the attribute's own tokens, which only exists for REMI."
+        },
+        {
+         "type": "steer",
+         "tok": "ant",
+         "prompt": 428653,
+         "attribute": "pitch_register",
+         "sd": 2,
+         "title": "Baseline methods",
+         "subtitle": "target ±2 SD, each at its operating point",
+         "metric": "pitch",
+         "metric_label": "mean pitch",
+         "metric_unit": "",
+         "rows": [
+          {
+           "label": "Best-of-16",
+           "method": "best_of_n",
+           "model": "llama",
+           "strength": "16",
+           "sub": "Llama · keeps the closest of 16 unguided samples"
+          },
+          {
+           "label": "PPLM",
+           "method": "pplm",
+           "model": "llama",
+           "sub": "Llama · run in progress, placeholder audio",
+           "strength": "32",
+           "placeholder": true
+          }
+         ]
+        },
+        {
+         "type": "intensity",
+         "tok": "ant",
+         "prompt": 428653,
+         "attribute": "pitch_register",
+         "lambdas": [
+          "0.004",
+          "0.01",
+          "0.04"
+         ],
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "EBT: guidance strength × target",
+         "subtitle": "rows: guidance strength λ · columns: target, in corpus SD from the unguided level",
+         "metric": "pitch",
+         "metric_label": "mean pitch",
+         "metric_unit": ""
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "combined",
+   "kicker": "03",
+   "title": "Combined Control",
+   "intro": "Several attributes steered at once: the EBT simply adds one regressor energy per attribute; the baselines combine the regressors' gradients (PPLM) or the distances (best-of-N). Same layout as single-attribute control.",
+   "tabs": [
+    {
+     "label": "REMI",
+     "tabs": [
+      {
+       "label": "Louder + higher",
+       "sublabel": "velocity ↑ · pitch ↑",
+       "blocks": [
+        {
+         "type": "note",
+         "title": "Skeleton",
+         "text": "Combined-control runs don't exist yet; every clip here is a placeholder."
+        },
+        {
+         "type": "steer",
+         "tok": "remi",
+         "prompt": 9235,
+         "placeholder": true,
+         "sd": 2,
+         "title": "Baseline methods",
+         "subtitle": "both targets at once, ±2 SD each",
+         "metric": "velocity",
+         "metric_label": "metric",
+         "metric_unit": "",
+         "rows": [
+          {
+           "label": "Best-of-16",
+           "method": "best_of_n",
+           "model": "llama",
+           "strength": "16",
+           "sub": "Llama · keeps the closest of 16 unguided samples"
+          },
+          {
+           "label": "PPLM",
+           "method": "pplm",
+           "model": "llama",
+           "sub": "Llama · summed regressor gradients",
+           "strength": "16"
+          }
+         ]
+        },
+        {
+         "type": "intensity",
+         "tok": "remi",
+         "prompt": 9235,
+         "placeholder": true,
+         "lambdas": [
+          "low",
+          "mid",
+          "high"
+         ],
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "EBT: guidance strength × target",
+         "subtitle": "rows: guidance strength λ · columns: target size, applied to both attributes",
+         "metric": "velocity",
+         "metric_label": "metric",
+         "metric_unit": ""
+        }
+       ]
+      },
+      {
+       "label": "Legato + lower",
+       "sublabel": "duration ↑ · pitch ↓",
+       "blocks": [
+        {
+         "type": "note",
+         "title": "Skeleton",
+         "text": "Combined-control runs don't exist yet; every clip here is a placeholder."
+        },
+        {
+         "type": "steer",
+         "tok": "remi",
+         "prompt": 9235,
+         "placeholder": true,
+         "sd": 2,
+         "title": "Baseline methods",
+         "subtitle": "both targets at once, ±2 SD each",
+         "metric": "velocity",
+         "metric_label": "metric",
+         "metric_unit": "",
+         "rows": [
+          {
+           "label": "Best-of-16",
+           "method": "best_of_n",
+           "model": "llama",
+           "strength": "16",
+           "sub": "Llama · keeps the closest of 16 unguided samples"
+          },
+          {
+           "label": "PPLM",
+           "method": "pplm",
+           "model": "llama",
+           "sub": "Llama · summed regressor gradients",
+           "strength": "16"
+          }
+         ]
+        },
+        {
+         "type": "intensity",
+         "tok": "remi",
+         "prompt": 9235,
+         "placeholder": true,
+         "lambdas": [
+          "low",
+          "mid",
+          "high"
+         ],
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "EBT: guidance strength × target",
+         "subtitle": "rows: guidance strength λ · columns: target size, applied to both attributes",
+         "metric": "velocity",
+         "metric_label": "metric",
+         "metric_unit": ""
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "label": "Anticipation",
+     "tabs": [
+      {
+       "label": "Legato + higher",
+       "sublabel": "duration ↑ · pitch ↑",
+       "blocks": [
+        {
+         "type": "note",
+         "title": "Skeleton",
+         "text": "Combined-control runs don't exist yet; every clip here is a placeholder."
+        },
+        {
+         "type": "steer",
+         "tok": "ant",
+         "prompt": 9235,
+         "placeholder": true,
+         "sd": 2,
+         "title": "Baseline methods",
+         "subtitle": "both targets at once, ±2 SD each",
+         "metric": "velocity",
+         "metric_label": "metric",
+         "metric_unit": "",
+         "rows": [
+          {
+           "label": "Best-of-16",
+           "method": "best_of_n",
+           "model": "llama",
+           "strength": "16",
+           "sub": "Llama · keeps the closest of 16 unguided samples"
+          },
+          {
+           "label": "PPLM",
+           "method": "pplm",
+           "model": "llama",
+           "sub": "Llama · summed regressor gradients",
+           "strength": "16"
+          }
+         ]
+        },
+        {
+         "type": "intensity",
+         "tok": "ant",
+         "prompt": 9235,
+         "placeholder": true,
+         "lambdas": [
+          "low",
+          "mid",
+          "high"
+         ],
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "EBT: guidance strength × target",
+         "subtitle": "rows: guidance strength λ · columns: target size, applied to both attributes",
+         "metric": "velocity",
+         "metric_label": "metric",
+         "metric_unit": ""
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "limits",
+   "kicker": "04",
+   "title": "Pushing Too Hard",
+   "intro": "Guidance strength is a trade-off. Past the operating point, strong EBT guidance flattens the model's choice among attribute values: the target is reached by scattering near-random notes. Harsh dissonance (share of simultaneous note pairs a semitone, major seventh or tritone apart) rises to the level of uniformly random notes, about 0.25.",
+   "tabs": [
+    {
+     "label": "REMI",
+     "blocks": [
+      {
+       "type": "clips",
+       "tok": "remi",
+       "prompt": 3107,
+       "title": "Pitch register pushed up (+2 SD), at increasing guidance strength",
+       "metrics": [
+        {
+         "metric": "pitch",
+         "metric_label": "mean pitch",
+         "metric_unit": ""
+        },
+        {
+         "metric": "dissonance",
+         "metric_label": "harsh dissonance",
+         "metric_unit": ""
+        }
+       ],
+       "clips": [
+        {
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "Unguided"
+        },
+        {
+         "kind": "guided",
+         "method": "ebt",
+         "model": "ebt",
+         "attribute": "pitch_register",
+         "sd": 2,
+         "strength": "0.02",
+         "label": "λ = 0.02",
+         "tag": "operating point"
+        },
+        {
+         "kind": "guided",
+         "method": "ebt",
+         "model": "ebt",
+         "attribute": "pitch_register",
+         "sd": 2,
+         "strength": "0.16",
+         "label": "λ = 0.16",
+         "tag": "too strong"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "label": "Anticipation",
+     "blocks": [
+      {
+       "type": "clips",
+       "tok": "ant",
+       "prompt": 1287257,
+       "title": "Pitch register pushed up (+2 SD), at increasing guidance strength",
+       "metrics": [
+        {
+         "metric": "pitch",
+         "metric_label": "mean pitch",
+         "metric_unit": ""
+        },
+        {
+         "metric": "dissonance",
+         "metric_label": "harsh dissonance",
+         "metric_unit": ""
+        }
+       ],
+       "clips": [
+        {
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "Unguided"
+        },
+        {
+         "kind": "guided",
+         "method": "ebt",
+         "model": "ebt",
+         "attribute": "pitch_register",
+         "sd": 2,
+         "strength": "0.01",
+         "label": "λ = 0.01",
+         "tag": "operating point"
+        },
+        {
+         "kind": "guided",
+         "method": "ebt",
+         "model": "ebt",
+         "attribute": "pitch_register",
+         "sd": 2,
+         "strength": "0.08",
+         "label": "λ = 0.08",
+         "tag": "too strong"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
 }

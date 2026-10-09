@@ -16,12 +16,29 @@ $PY demo/showcase/build_showcase.py build        # MP3s + site/data.json
 cd demo/showcase/site && $PY -m http.server 8000 # preview at localhost:8000
 ```
 
+Page structure (`selection.json` is a tree: section → tokenizer tab →
+attribute/combination tab → blocks):
+1. Unguided Generation: REMI / Anticipation; original vs EBT, Llama, GPT-2.
+2. Single-Attribute Control: REMI / Anticipation → velocity, duration,
+   pitch register. A `steer` block (tilt, best-of-16, PPLM on Llama:
+   down / unguided / up) and an `intensity` block (EBT: λ rows × target columns).
+3. Combined Control: same skeleton, all placeholders for now.
+4. Pushing Too Hard: EBT pitch register at operating vs high λ, per tokenizer.
+
+Block types: `clips` (explicit list), `steer` (`rows` of method/model/strength),
+`intensity` (`lambdas` × `sds`), `note` (text card). Clip specs:
+`kind` = ground_truth | unguided (`model`) | guided (`method`, `model`,
+`attribute`, `sd`, `strength`; for EBT the strength is λ). Strengths are
+written as in the file names (`pplm16`, `tilt1`, `best_of_n16`, `r30.02`).
+`"placeholder": true` on a clip, row or block plays a stand-in clip tagged
+PLACEHOLDER. A slot whose output doesn't exist also falls back to it and is
+listed at the end of `build`. Run locations are in `RUNS` in
+`build_showcase.py`.
+
 - `build` renders with FluidSynth + MuseScore General at a fixed gain
   (no loudness normalisation, so velocity steering stays audible) and
   re-renders a clip only when its source MIDI changes (`site/audio/sources.json`).
-- Clip kinds in `selection.json`: `ground_truth`, `baseline` (`model`:
-  ebt/gpt2/llama, `draw` 0-2), `ebt` and `pplm` (`attribute`, `sd` in
-  ±0.5/1/2; `ebt` takes an optional `lambda`, default = operating point).
+  A full fresh render (~120 clips) takes ~10 min.
 - Displayed metrics are computed on the continuation only: mean velocity,
   mean pitch, mean note length (beats); harsh dissonance comes from the
   sweep's `quality_scores.csv`.
