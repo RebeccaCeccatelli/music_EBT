@@ -13,7 +13,8 @@ Reports, with 95% bootstrap CIs over participants:
           signed response in the requested direction (-2..+2), share heard in
           the right direction, share "no difference"
   Part 3  best-worst score per system among steered versions
-Participants who fail the attention checks are excluded unless --keep-failed-catch.
+Skipped questions are ignored. Participants who fail an attention check are
+excluded unless --keep-failed-catch.
 """
 
 import argparse
@@ -65,6 +66,8 @@ def mean(xs):
 def passed_catch(sub, key):
     ok = True
     for r in sub["responses"]:
+        if r["answer"].get("skipped"):
+            continue   # a skipped check is neither passed nor failed
         if r["kind"] == "catch_unguided":
             ok &= r["answer"].get("worst") in key["catch_unguided_expect_worst"]
         if r["kind"] == "catch_change":
@@ -77,7 +80,7 @@ def best_worst(subs, key, kinds, group):
     out = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     for s in subs:
         for r in s["responses"]:
-            if r["kind"] not in kinds:
+            if r["kind"] not in kinds or r["answer"].get("skipped"):
                 continue
             for hsh in r["order"]:
                 k = key["clips"][hsh]
@@ -102,6 +105,9 @@ def main():
     for s in subs:
         bg[s.get("background", {}).get("training", "n/a")] += 1
     print("training:", dict(bg))
+    n_all = sum(len(s["responses"]) for s in subs)
+    n_skip = sum(r["answer"].get("skipped", False) for s in subs for r in s["responses"])
+    print(f"skipped: {n_skip} of {n_all} answers")
 
     print("\n== Part 1: unguided, best-worst score (−1..+1)")
     for tok, systems in sorted(best_worst(subs, key, {"unguided"}, lambda k: k["tok"]).items()):
@@ -113,7 +119,7 @@ def main():
     cells = defaultdict(lambda: defaultdict(list))
     for s in subs:
         for r in s["responses"]:
-            if r["kind"] != "change":
+            if r["kind"] != "change" or r["answer"].get("skipped"):
                 continue
             t = key["clips"][r["order"][1]]
             sign = 1 if t["sd"] > 0 else -1
