@@ -73,13 +73,64 @@ Llama final steps). Tools: `eval/score_sweep_quality.py`,
 - Pre-correction runs (prompts with anticipated controls, 2026-10-08
   morning) showed the same picture.
 
+## Does the steering go the right way, and how far? (added 2026-10-09)
+
+Directional accuracy only checks the *sign* of the change. These figures
+show **progress toward the target** = (achieved − baseline) / requested
+change, separately for push-up and push-down targets (1 = reached, 0 = no
+movement, < 0 = wrong direction; per-sample values clipped to ±3), and
+**harsh dissonance** against strength, with the real-music band, the
+model's own unguided level, and the uniformly-random-notes level (0.246).
+Made with `eval/plot_guidance_sweeps.py steering`.
+
+REMI: ![velocity](figures/guidance_final/remi/steering_velocity.png)
+![duration](figures/guidance_final/remi/steering_duration.png)
+![pitch_register](figures/guidance_final/remi/steering_pitch_register.png)
+
+Anticipation: ![duration](figures/guidance_final/ant/steering_duration.png)
+![pitch_register](figures/guidance_final/ant/steering_pitch_register.png)
+
+- **Sign accuracy overstates best-of-N.** Its progress is only ~0.1
+  (Anticipation) to ~0.2–0.3 (REMI) of the requested change, even at
+  N=16. It picks a draw that moved slightly the right way, so it scores
+  ~1.0 accuracy on Anticipation while hardly changing the attribute. The
+  "best-of-N wins on Anticipation" reading above holds for sign accuracy
+  and musical preservation, **not** for reaching the target.
+- **AR methods move symmetrically but undershoot.** Tilt reaches ~0.7–1.0
+  of the requested change at full strength (velocity, pitch). PPLM
+  reaches ~0.4–0.75. Neither leaves the real-music dissonance band.
+- **EBT is the only method that reaches or overshoots targets, but only
+  in one direction per attribute.** Push-up on duration and pitch_register
+  overshoots (1.3–1.6 on REMI; Ant duration saturates the clip at 3×),
+  while push-down stays near 0 (REMI) or goes the wrong way (Ant
+  duration: −1.8 at λ=0.64). Velocity is the mirror image: down
+  overshoots (1.35), up plateaus at ~0.55.
+- **Why:** EBT guidance is target-sensitive (at the highest λ, push-up vs
+  push-down samples end up clearly apart: REMI velocity 0.75 vs 0.48,
+  duration 0.136 vs 0.038, pitch 0.466 vs 0.347; Ant duration 0.39 vs
+  0.12). On top of that, strong guidance adds a direction-independent
+  drift: Ant push-down samples end at 0.12, above the 0.026 baseline.
+  The drift is consistent with guidance flattening the attribute-token
+  choice toward a random-token value. That helps one direction, fights
+  the other, and coincides with the dissonance rise.
+- **Cacophony is not only Anticipation:** REMI EBT pitch_register also
+  reaches the random-note dissonance level at λ ≥ 0.04 (0.19 → 0.25),
+  inside the λ grid tuned on the old checkpoint. Duration and velocity
+  guidance stay inside the real-music band.
+- Implication: for a thesis claim, report progress toward target (by
+  direction) next to accuracy. EBT's controllability story is "strong but
+  asymmetric and, for pitch, musically destructive at high λ".
+
 ## Reading
 - **Matched comparison (EBT vs Llama PPLM, both single-sample regressor
   gradients):** on REMI the two are statistically indistinguishable on all
   three attributes. EBT costs ~6× more compute per token.
-- EBT's guidance is effective (≈0.8–1.0 accuracy within the quality
-  budget on REMI). It is not more controllable than a gradient-steered AR
-  baseline, and on Anticipation simple reranking is better.
+- EBT's guidance is effective (≈0.8–1.0 sign accuracy within the quality
+  budget on REMI). On sign accuracy it is not more controllable than a
+  gradient-steered AR baseline. It is the only method that actually
+  reaches the requested magnitude, but asymmetrically (see the section
+  above). On Anticipation, reranking wins on sign accuracy but barely
+  moves the attribute.
 - EBT's distinctive failure mode is that strong guidance can satisfy the
   regressor with musically incoherent output. This is detectable by the
   MIDI-level metrics, invisible to token-level ones (bigram_ll and gvr
