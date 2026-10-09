@@ -117,10 +117,16 @@ case "${TOKENIZER_TYPE}" in
     *)                          TOK_SLUG=$(echo "${TOKENIZER_TYPE}" | tr '[:upper:]' '[:lower:]') ;;
 esac
 PEAK_LR="${lr[${SLURM_ARRAY_TASK_ID}]}"
-BASE_RUN_NAME="baseline-llama-small-${TOK_SLUG}"
+# RUN_TAG: separate lineage name (e.g. RUN_TAG=tokmatched). Auto-resume and the
+# resubmit guard match on BASE_RUN_NAME, so a tagged run never resumes from the
+# untagged 100k-step checkpoints.
+BASE_RUN_NAME="baseline-llama-small-${TOK_SLUG}${RUN_TAG:+-${RUN_TAG}}"
 FULL_RUN_NAME="${BASE_RUN_NAME}-job${SLURM_JOB_ID:-local}"
 scontrol update JobId="${SLURM_JOB_ID}" Name="${FULL_RUN_NAME}" 2>/dev/null || true
-MAX_STEPS=100000
+# MAX_STEPS: stop early (e.g. at the EBT's tokens seen) while the LR schedule
+# still runs over --max_scheduling_steps 100000, so the run passes through the
+# same states as the full one.
+MAX_STEPS="${MAX_STEPS:-100000}"
 
 # Auto-resume from the highest-step checkpoint of any previous run with the
 # same base name — selected by the step number embedded in the checkpoint
@@ -169,7 +175,7 @@ python train_model.py \
 --gradient_clip_val 1.0 \
 --weight_decay 0.05 \
 --min_lr_scale 10 \
---max_steps 100000 \
+--max_steps "${MAX_STEPS}" \
 --max_scheduling_steps 100000 \
 --warm_up_steps 10000 \
 --dataset_name "${DATASET_NAME}" \
