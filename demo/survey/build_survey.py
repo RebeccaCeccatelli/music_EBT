@@ -14,7 +14,8 @@ Design (each participant gets a random subset, see PLAN):
   Part 2b compare    the steered outputs of all systems (same prompt, attribute,
                      direction); pick most / least musical.
   Catch trials       Part 1: one option is near-random EBT output (λ far past the
-                     operating point). Part 2a: reference vs. itself.
+                     operating point). Part 2a: reference vs. itself. Both use
+                     prompts no regular trial of that part uses.
 
 Blinding: audio files are named by a salted hash. The key (hash -> system,
 prompt, settings) is written to KEY_PATH on scratch, NOT into the public site.
@@ -158,8 +159,11 @@ def build_pool():
                     if len(compare) >= 2:
                         pool["compare"].append({"tok": tok, "attribute": attr, "options": compare})
 
-        # Catch trials.
-        for pid in prompts[:2]:
+        # Catch trials use prompts that no regular trial of the same part uses,
+        # so no clip is heard twice within a part.
+        n_u, n_s = N_PROMPTS["unguided"], N_PROMPTS["steer"]
+        assert len(prompts) >= n_u + 2, f"{tok}: not enough eligible prompts for catch trials"
+        for pid in prompts[n_u:n_u + 2]:
             broken = bs.ebt_path(tok, "pitch_register", pid, 2, "0.16" if tok == "remi" else "0.32")
             if broken and broken.exists():
                 opts = [clip(bs.resolve({"tok": tok, "kind": "ground_truth", "prompt": pid}),
@@ -172,7 +176,7 @@ def build_pool():
                 pool["catch_unguided"].append({"tok": tok, "prompt": pid, "options": opts,
                                                "expect_worst": str(opts[-1])})
         for attr in ATTRIBUTES[tok][:1]:
-            pid = prompts[0]
+            pid = prompts[n_s]
             ref = reference(tok, SYSTEMS[tok][0], attr, pid)
             if ref.exists():
                 r = clip(ref, tok=tok, prompt=pid, system="ebt", attribute=attr, condition="unguided")
