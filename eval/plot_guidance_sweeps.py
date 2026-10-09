@@ -5,6 +5,14 @@ Static figures for guidance sweeps (thesis-ready PNGs).
               strict directional accuracy, MAE, bigram_ll, and accuracy split
               by push direction. Rebuilds the figures of
               docs/thesis_findings/2026-09-24_remi_guidance_strength_sweeps.md.
+  steering  — per attribute, one column per method, x = guidance strength:
+              top row "progress toward target" = (achieved − baseline) /
+              requested change, split into push-up and push-down targets
+              (1 = reached, 0 = no movement, < 0 = wrong direction); bottom
+              row harsh dissonance (cacophony) with the real-music band and
+              the method's own unguided level. Means with 95% prompt-bootstrap
+              CIs. Inputs are the same "<tables>::<midi root>" sweep specs as
+              eval/score_sweep_quality.py (per-sample scores come from its cache).
   tradeoff  — controllability vs music quality from score_sweep_quality.py's
               JSON: one panel per attribute, x = OA vs the system's own
               unguided samples (musical change; ~0.85 = no change at these n),
@@ -199,17 +207,138 @@ def cmd_tradeoff(args):
     print(f"→ {out / 'guidance_tradeoff.png'}")
 
 
+def _boot_mean(pairs, n_boot=1000, seed=0):
+    """Mean and 95% CI of values from (prompt_id, value) pairs, resampling prompts."""
+    import numpy as np
+    by = defaultdict(list)
+    for pid, v in pairs:
+        by[pid].append(v)
+    keys = list(by)
+    vals = [v for _, v in pairs]
+    if len(keys) < 2:
+        return (float(np.mean(vals)), None, None) if vals else (None, None, None)
+    rng = np.random.default_rng(seed)
+    boots = []
+    for _ in range(n_boot):
+        pick = [x for i in rng.integers(len(keys), size=len(keys)) for x in by[keys[i]]]
+        boots.append(np.mean(pick))
+    return float(np.mean(vals)), float(np.percentile(boots, 2.5)), float(np.percentile(boots, 97.5))
+
+
+METHOD_ORDER = ['ebt/r3', 'llama/pplm', 'llama/tilt', 'gpt2/tilt', 'llama/best_of_n', 'gpt2/best_of_n']
+METHOD_LABEL = {'ebt/r3': 'EBT (R³)', 'llama/pplm': 'Llama PPLM', 'llama/tilt': 'Llama tilt',
+                'gpt2/tilt': 'GPT-2 tilt', 'llama/best_of_n': 'Llama best-of-N',
+                'gpt2/best_of_n': 'GPT-2 best-of-N'}
+STRENGTH_LABEL = {'r3': 'λ', 'pplm': 'PPLM step size', 'tilt': 'tilt fraction', 'best_of_n': 'N'}
+
+
+def cmd_steering(args):
+    import glob as _glob
+    import numpy as np
+    from eval.music_quality import _read_csv, _sample_base
+    from eval.score_sweep_quality import score_root
+
+    ref = _read_csv(Path(args.ref))
+    real = ref['sharp_dissonance'][np.isfinite(ref['sharp_dissonance'])]
+    real_mean, real_sd = float(real.mean()), float(real.std())
+
+    data = defaultdict(lambda: {'progress': defaultdict(lambda: {'up': [], 'down': []}),
+                                'diss': defaultdict(list), 'unguided': []})
+    for spec in args.sweep:
+        tables_glob, root = spec.split('::')
+        root = Path(root).expanduser()
+        scores = score_root(root)
+        base_ids = {_sample_base(p) for p in (root / 'baseline').glob('*_generated.mid')}
+        unguided = [scores[i]['sharp_dissonance'] for i in base_ids if i in scores]
+        for t in sorted(_glob.glob(tables_glob)):
+            for r in load_rows(t):
+                key = (f"{r['model']}/{r['method']}", r['attribute'])
+                d = data[key]
+                if not d['unguided']:
+                    d['unguided'] = unguided
+                if r.get('target_delta') is None or not r['target_delta']:
+                    continue
+                lam = r['lambda']
+                prog = (r['achieved_value'] - r['baseline_value']) / r['target_delta']
+                prog = float(np.clip(prog, -args.clip, args.clip))  # tiny targets → huge ratios
+                d['progress'][lam]['up' if r['target_delta'] > 0 else 'down'].append((r['prompt_id'], prog))
+                sc = scores.get(r.get('sample_id'))
+                if sc is not None and np.isfinite(sc.get('sharp_dissonance', np.nan)):
+                    d['diss'][lam].append((r['prompt_id'], sc['sharp_dissonance']))
+
+    out = Path(args.out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    attrs = [a for a in ATTR_ORDER if any(k[1] == a for k in data)]
+    for attr in attrs:
+        systems = [m for m in METHOD_ORDER if (m, attr) in data]
+        fig, axes = plt.subplots(2, len(systems), figsize=(3.6 * len(systems), 6.2),
+                                 sharey='row', squeeze=False)
+        for c, sysname in enumerate(systems):
+            d = data[(sysname, attr)]
+            lams = sorted(d['progress'])
+            ax = axes[0][c]
+            ax.axhline(1, color=INK2, lw=1, ls='--')
+            ax.axhline(0, color=INK2, lw=1, ls=':')
+            for i, direction in enumerate(('up', 'down')):
+                pts = [(l, *_boot_mean(d['progress'][l][direction])) for l in lams if d['progress'][l][direction]]
+                xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+                _line(ax, i, xs, ys, f'push {direction}')
+                if all(p[2] is not None for p in pts):
+                    ax.fill_between(xs, [p[2] for p in pts], [p[3] for p in pts],
+                                    color=SERIES[i], alpha=0.15, lw=0)
+            method = sysname.split('/')[-1]
+            ax.set_xscale('log', base=2 if method == 'best_of_n' else 10)
+            _style(ax, '', 'progress toward target\n(1 = reached, 0 = no move)' if c == 0 else '')
+            ax.set_title(METHOD_LABEL.get(sysname, sysname), color=INK, loc='left')
+
+            ax = axes[1][c]
+            ax.axhspan(max(real_mean - real_sd, 0), real_mean + real_sd, color=GRID, alpha=0.8, lw=0,
+                       label='real music (mean ± 1 SD)')
+            ax.axhline(real_mean, color=INK2, lw=1)
+            if d['unguided']:
+                ax.axhline(float(np.mean(d['unguided'])), color=SERIES[2], lw=1.2, ls=':',
+                           label='this model, unguided')
+            pts = [(l, *_boot_mean(d['diss'][l])) for l in lams if d['diss'][l]]
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            ax.plot(xs, ys, color=SERIES[2], marker='o', lw=2, ms=6, mec='white', mew=1.2,
+                    label='guided')
+            if all(p[2] is not None for p in pts):
+                ax.fill_between(xs, [p[2] for p in pts], [p[3] for p in pts], color=SERIES[2], alpha=0.15, lw=0)
+            ax.axhline(args.random_level, color=SERIES[1], lw=1, ls='--', label='uniformly random notes')
+            ax.set_xscale('log', base=2 if method == 'best_of_n' else 10)
+            _style(ax, f"guidance strength ({STRENGTH_LABEL.get(method, 'strength')}, log)",
+                   'harsh dissonance\n(m2/M7/tritone share)' if c == 0 else '')
+        axes[0][0].legend(frameon=False, fontsize=8, loc='upper left')
+        axes[1][0].legend(frameon=False, fontsize=7, loc='upper left')
+        fig.suptitle(f"{args.title} — {attr}: does guidance move the attribute the right way, "
+                     f"and what does it cost? (bands: 95% CI over prompts)",
+                     color=INK, x=0.01, ha='left', fontsize=10)
+        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        path = out / f'steering_{attr}.png'
+        fig.savefig(path, dpi=160)
+        plt.close(fig)
+        print(f"→ {path}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
     s = sub.add_parser('strength')
     s.add_argument('tables', nargs='+')
     s.add_argument('--out_dir', required=True)
+    st = sub.add_parser('steering')
+    st.add_argument('--sweep', action='append', required=True, help='"<table glob>::<midi root>"')
+    st.add_argument('--ref', required=True, help='real-data reference scores.csv')
+    st.add_argument('--out_dir', required=True)
+    st.add_argument('--title', default='')
+    st.add_argument('--clip', type=float, default=3.0, help='clip per-sample progress to ±clip')
+    st.add_argument('--random_level', type=float, default=0.246,
+                    help='harsh dissonance of uniformly random notes (synthetic check, 2026-10-05)')
     t = sub.add_parser('tradeoff')
     t.add_argument('results', nargs='+')
     t.add_argument('--out_dir', required=True)
     args = ap.parse_args()
-    {'strength': cmd_strength, 'tradeoff': cmd_tradeoff}[args.cmd](args)
+    {'strength': cmd_strength, 'tradeoff': cmd_tradeoff, 'steering': cmd_steering}[args.cmd](args)
 
 
 if __name__ == '__main__':
