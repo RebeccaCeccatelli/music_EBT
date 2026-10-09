@@ -14,3 +14,4 @@ research *results* worth citing; this is the changelog of the work itself.
 - [2026-10-05](2026-10-05.md) — decided to stop pretraining and wrap up; scratch cleanup (1,081 ckpts / ~932 GB deleted, real best per run kept); regressor NaN guard; 6 regressors resubmitted against final ckpts; STATUS.md started.
 - [2026-10-06](2026-10-06.md) — context-matched perplexity (most of the baselines' advantage was context); unguided music quality across models (all near ceiling on REMI, EBT slightly lowest, outputs repetitive rather than cacophonic).
 - [2026-10-08](2026-10-08.md) — catch-up (VS Code jobs all done 10-05), merged music-quality-eval, submitted final controllability sweeps: EBT REMI ×3 on step 33,732, EBT Ant ×2, Llama PPLM, Ant best-of-N ×2.
+- [2026-10-09](2026-10-09.md) — all guidance sweeps scored; final EBT-vs-AR comparison (REMI: EBT ≈ PPLM; Ant: best-of-N wins; strong EBT pitch guidance → cacophony).
