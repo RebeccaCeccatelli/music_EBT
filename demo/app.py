@@ -445,11 +445,79 @@ def _attr_choice_tuples(attrs: list[str]) -> list[tuple[str, str]]:
 # velocity/pitch_register since it guides a different, non-overlapping gate
 # in this vocabulary (velocity on Pitch→Velocity steps, duration on
 # Velocity→Duration steps, pitch_register on Program→Pitch steps).
-_LAMBDA_RANGES = {
-    "velocity": {"min": 0.02, "max": 0.07, "default": 0.03, "step": 0.005},
-    "duration": {"min": 0.015, "max": 0.04, "default": 0.025, "step": 0.005},
-    "pitch_register": {"min": 0.01, "max": 0.07, "default": 0.02, "step": 0.005},
+# EBT guidance strength λ per tokenizer and attribute, from the final sweeps
+# (music_quality/sweeps/final_remi.json, final_ant_ar.json; diary 2026-10-09).
+# Each range spans "starts to work" (strict accuracy ≳ 0.75) to the edge of the
+# quality budget (overlap with own unguided output ≥ 0.75, harsh dissonance ≤
+# real mean + 1 SD); the default is the best accuracy inside the budget.
+#   REMI velocity 0.03: 0.97 acc. Tolerant up to 0.07.
+#   REMI duration 0.02: 0.85 acc. Still in budget at 0.055.
+#   REMI pitch_register 0.02: 0.79 acc. 0.04 is already cacophonic (diss 0.19).
+#   Ant duration 0.005: 0.78 acc. Collapses toward chance above ~0.01.
+#   Ant pitch_register 0.01: 0.76 acc. Leaves the budget at ~0.012-0.015.
+# Anticipation needs ~4x less λ than REMI.
+_LAMBDA_RANGES_BY_TOK = {
+    "REMI": {
+        "velocity":       {"min": 0.02,  "max": 0.07,  "default": 0.03,  "step": 0.005},
+        "duration":       {"min": 0.01,  "max": 0.055, "default": 0.02,  "step": 0.005},
+        "pitch_register": {"min": 0.01,  "max": 0.03,  "default": 0.02,  "step": 0.0025},
+    },
+    "Anticipation-Arrival-Time": {
+        "duration":       {"min": 0.002, "max": 0.008, "default": 0.005, "step": 0.001},
+        "pitch_register": {"min": 0.004, "max": 0.015, "default": 0.01,  "step": 0.001},
+    },
 }
+# Compose (one shared λ over all active attributes) was never swept: start from
+# the most fragile attribute's working point and cap below its breakdown.
+_COMPOSE_LAMBDA_BY_TOK = {
+    "REMI": {"min": 0.01, "max": 0.05, "default": 0.02, "step": 0.005},
+    "Anticipation-Arrival-Time": {"min": 0.002, "max": 0.012, "default": 0.005, "step": 0.001},
+}
+
+
+def _lambda_range(tokenizer_type: str, attribute: str) -> dict:
+    by_attr = _LAMBDA_RANGES_BY_TOK.get(tokenizer_type, _LAMBDA_RANGES_BY_TOK["REMI"])
+    return by_attr.get(attribute) or _LAMBDA_RANGES_BY_TOK["REMI"][attribute]
+
+
+# REMI ranges, kept under the old name for code that predates per-tokenizer ranges.
+_LAMBDA_RANGES = _LAMBDA_RANGES_BY_TOK["REMI"]
+
+
+# Single Attribute "Model & method" options: EBT's own energy guidance plus the
+# frozen-baseline guidance methods from attribute_control/ar_guidance_sweep.py,
+# run exactly as in the sweeps. key -> (model_key, method).
+_SOLO_METHODS = {
+    "ebt":         ("EBT", "energy"),
+    "llama_pplm":  ("Llama", "pplm"),
+    "llama_tilt":  ("Llama", "tilt"),
+    "gpt2_tilt":   ("GPT-2", "tilt"),
+    "llama_bon":   ("Llama", "best_of_n"),
+    "gpt2_bon":    ("GPT-2", "best_of_n"),
+}
+_SOLO_METHOD_LABELS = {
+    "ebt": "EBT · energy guidance",
+    "llama_pplm": "Llama · PPLM",
+    "llama_tilt": "Llama · tilting (REMI)",
+    "gpt2_tilt": "GPT-2 · tilting (REMI)",
+    "llama_bon": "Llama · best-of-N",
+    "gpt2_bon": "GPT-2 · best-of-N",
+}
+# Strength semantics differ per method (see ar_guidance_sweep.py): PPLM = L2
+# norm of the next-token logit perturbation, tilt = fraction of the per-step gap
+# to the target closed, best-of-N = number of unguided candidates.
+_METHOD_STRENGTH = {
+    "pplm":      {"min": 0.5,  "max": 32.0, "default": 4.0, "step": 0.5,  "label": "PPLM strength (logit-perturbation size)"},
+    "tilt":      {"min": 0.05, "max": 1.0,  "default": 0.5, "step": 0.05, "label": "Tilt fraction (0 = none, 1 = full)"},
+    "best_of_n": {"min": 1,    "max": 16,   "default": 4,   "step": 1,    "label": "N (candidates to choose from)"},
+}
+
+
+def _strength_range(method_key: str, attribute: str, tokenizer_type: str = "REMI") -> dict:
+    method = _SOLO_METHODS.get(method_key, ("EBT", "energy"))[1]
+    if method == "energy":
+        return {**_lambda_range(tokenizer_type, attribute), "label": "Guidance strength λ"}
+    return _METHOD_STRENGTH[method]
 
 
 def _card_classes(visible: bool) -> list[str]:
@@ -1287,15 +1355,48 @@ def _synth_with_retry(tokens: list[int], tokenizer, out_dir: Path, name: str, at
     return None, last_err
 
 
+def _find_baseline_regressor(attribute: str, tokenizer_type: str, model_key: str,
+                             model_checkpoint: str | None) -> tuple[str | None, str]:
+    """PPLM counterpart of _find_attribute_regressor: a regressor trained on the
+    selected baseline model's own embedding space (train_density.sh with
+    CHECKPOINT=<baseline ckpt>), preferring one paired with exactly the
+    selected checkpoint."""
+    if attribute == "velocity" and tokenizer_type != "REMI":
+        return None, f"Velocity control isn't available for {tokenizer_type} (no velocity in its tokens)."
+    slug = _TOK_SLUG.get(tokenizer_type, tokenizer_type.lower())
+    model_slug = {"Llama": "llama", "GPT-2": "gpt2"}[model_key]
+    candidates = sorted((SCRATCH_DIR / "attr_control").glob(f"{attribute}_regressor_{model_slug}-{slug}_*/best.pt"),
+                        key=lambda p: p.stat().st_mtime, reverse=True)
+    if not candidates:
+        return None, (f"No {model_key} {attribute} regressor for {tokenizer_type} — train one with "
+                      f"train_density.sh (CHECKPOINT=<{model_key} checkpoint>).")
+    if model_checkpoint:
+        target = Path(model_checkpoint).resolve()
+        for cand in candidates:
+            try:
+                src = torch.load(cand, map_location='cpu', weights_only=False).get('ebt_checkpoint', '') or ''
+            except Exception:
+                continue
+            if src and Path(src).resolve() == target:
+                return str(cand), f"Regressor: {cand.parent.name} (paired with the selected checkpoint)"
+    return str(candidates[0]), (f"Regressor: {candidates[0].parent.name} ⚠️ not trained on the selected "
+                                f"{model_key} checkpoint — guidance may be weaker")
+
+
 # ── Core single-model generation (shared by the baseline row and both EBT
 #    attribute-control windows) ───────────────────────────────────────────────
 
 def _run_generation(model_key: str, ckpt_path: str, tokenizer_type: str,
                      prompt_tokens: list[int], gt_tokens: list[int],
                      temperature: float, top_p: float, generation_length: int,
-                     attribute_overrides: dict | None = None):
+                     attribute_overrides: dict | None = None,
+                     logit_processor=None, best_of: tuple | None = None):
     """Returns dict with keys: wav_paths (prompt/generated/combined/gt_combined),
-    generated_tokens, tokenizer, hparams, status_lines. Raises on failure."""
+    generated_tokens, tokenizer, hparams, status_lines. Raises on failure.
+
+    logit_processor: e.g. ar_guidance.ExpectationTilt (baselines, REMI).
+    best_of: (n, attribute, target) — draw n unguided continuations and keep the
+    one whose rule-based attribute value is closest to target (as in the sweeps)."""
     device = "cuda" if torch.cuda.is_available() else "cpu"
     status_lines = [f"{model_key} · device={device} · checkpoint={Path(ckpt_path).parent.name}"]
 
@@ -1317,23 +1418,39 @@ def _run_generation(model_key: str, ckpt_path: str, tokenizer_type: str,
     if attribute_overrides:
         for k, v in attribute_overrides.items():
             setattr(hparams, k, v)
+    # Cached models share one hparams object across calls: always reset.
+    hparams.logit_processor = logit_processor
 
     prompt_tensor = torch.tensor(prompt_tokens, dtype=torch.long).unsqueeze(0).to(device)
     batch = {'input_ids': prompt_tensor}
     model_name = _MODEL_INFO[model_key]["model_name"]
 
-    with torch.no_grad():
-        if model_name == "ebt":
-            from inference.mus.generate_music import generate_music
-            outputs = generate_music(model, batch, hparams)
-        else:
+    def _generate_once():
+        with torch.no_grad():
+            if model_name == "ebt":
+                from inference.mus.generate_music import generate_music
+                return generate_music(model, batch, hparams)
             from inference.mus.generate_music import generate_remi, generate_anticipation
             if "Anticipation" in hparams.tokenizer_type:
-                outputs = generate_anticipation(model, batch, hparams)
-            else:
-                outputs = generate_remi(model, batch, hparams)
+                return generate_anticipation(model, batch, hparams)
+            return generate_remi(model, batch, hparams)
 
-    generated_tokens = [int(t) for t in outputs['generation_tokens'][0]]
+    try:
+        if best_of:
+            from attribute_control.attributes import ATTRIBUTES
+            n, attr, target = best_of
+            candidates = []
+            for _ in range(max(1, int(n))):
+                o = _generate_once()
+                toks = [int(t) for t in o['generation_tokens'][0]]
+                candidates.append((abs(ATTRIBUTES[attr](toks, hparams.tokenizer_type) - target), toks, o))
+            _, generated_tokens, outputs = min(candidates, key=lambda c: c[0])
+            status_lines.append(f"{model_key}: best of {len(candidates)} candidates")
+        else:
+            outputs = _generate_once()
+            generated_tokens = [int(t) for t in outputs['generation_tokens'][0]]
+    finally:
+        hparams.logit_processor = None
     status_lines.append(f"{model_key}: generated {len(generated_tokens)} tokens")
 
     out_dir = Path(tempfile.mkdtemp(prefix=f"demo_{model_key}_"))
@@ -1640,6 +1757,8 @@ def _solo_batch_start(
     tokenizer_type: str, song_choice: str, start_offset: int,
     temperature: float, top_p: float, generation_length: int,
     ebt_ckpt: str, ebt_paths_json: str,
+    llama_ckpt: str, llama_paths_json: str,
+    gpt2_ckpt: str, gpt2_paths_json: str,
     row_count: int, *row_values,
 ):
     """First step of the Single Attribute batch — click handler. Builds the
@@ -1664,29 +1783,45 @@ def _solo_batch_start(
             out.extend(slots[i])
         return tuple(out)
 
+    # row_values = (attr, strength, target) per row, then one method key per row.
+    methods = row_values[_MAX_SOLO_BATCH * 3:]
     rows = []
     for i in range(min(int(row_count), _MAX_SOLO_BATCH)):
         attr, lam, target = row_values[i * 3], row_values[i * 3 + 1], row_values[i * 3 + 2]
+        method_key = methods[i] if i < len(methods) and methods[i] in _SOLO_METHODS else "ebt"
         if attr in _SOLO_ATTRIBUTES:
-            rows.append((attr, float(target), float(lam)))
+            rows.append((attr, float(target), float(lam), method_key))
 
     if not rows:
         slots = [hidden_slot() for _ in range(_MAX_SOLO_BATCH)]
         return (*flat(slots),
                 "❌ No valid rows — each needs attribute ('velocity' or 'duration'), a numeric target, and a numeric λ.",
                 {"rows": []})
-    if not ebt_ckpt or not ebt_paths_json:
-        slots = [hidden_slot() for _ in range(_MAX_SOLO_BATCH)]
-        return (*flat(slots), "❌ Select an EBT checkpoint in the panel above first.", {"rows": []})
+    selected = {"EBT": (ebt_ckpt, ebt_paths_json), "Llama": (llama_ckpt, llama_paths_json),
+                "GPT-2": (gpt2_ckpt, gpt2_paths_json)}
+    ckpt_paths = {}
+    for model_key in sorted({_SOLO_METHODS[r[3]][0] for r in rows}):
+        label, paths_json = selected[model_key]
+        path = json.loads(paths_json or "{}").get(label) if label else None
+        if not path:
+            slots = [hidden_slot() for _ in range(_MAX_SOLO_BATCH)]
+            return (*flat(slots), f"❌ Select a {model_key} checkpoint in the panel above first.", {"rows": []})
+        ckpt_paths[model_key] = path
+
+    def _strength_text(method_key, lam):
+        method = _SOLO_METHODS[method_key][1]
+        return {"energy": f"λ = {lam:.3f}", "pplm": f"PPLM strength = {lam:g}",
+                "tilt": f"tilt = {lam:.2f}", "best_of_n": f"N = {int(lam)}"}[method]
 
     n = len(rows)
     # "Variant N" matches the numbering on the input row it came from, so the
     # output can be tracked back to its config at a glance.
-    titles = [f"<b>Variant {i + 1}</b><br>Attribute: {attr.replace('_', ' ')}<br>Parameters: λ = {lam:.3f}, T = {target:.3f}"
-              for i, (attr, target, lam) in enumerate(rows)]
+    titles = [f"<b>Variant {i + 1}</b> · {_SOLO_METHOD_LABELS[m]}<br>Attribute: {attr.replace('_', ' ')}<br>"
+              f"Parameters: {_strength_text(m, lam)}, T = {target:.3f}"
+              for i, (attr, target, lam, m) in enumerate(rows)]
 
     try:
-        ckpt_path = json.loads(ebt_paths_json).get(ebt_ckpt)
+        ckpt_path = ckpt_paths.get("EBT")
         token_offset = _offset_to_tokens(tokenizer_type, song_choice, start_offset)
         prompt_tokens, gt_tokens, prompt_label, _ = _resolve_prompt(tokenizer_type, song_choice, token_offset)
     except Exception as e:
@@ -1699,7 +1834,7 @@ def _solo_batch_start(
     slots = [pending_slot(titles[i]) if i < n else hidden_slot() for i in range(_MAX_SOLO_BATCH)]
     state = {
         "rows": rows, "titles": titles,
-        "ckpt_path": ckpt_path, "tokenizer_type": tokenizer_type,
+        "ckpt_path": ckpt_path, "ckpt_paths": ckpt_paths, "tokenizer_type": tokenizer_type,
         "prompt_tokens": prompt_tokens, "gt_tokens": gt_tokens, "prompt_label": prompt_label,
         "temperature": temperature, "top_p": top_p, "generation_length": generation_length,
     }
@@ -1721,32 +1856,49 @@ def _make_solo_row_step(i: int):
             # no-op here can never clobber a different row's real update.
             return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), status_text
 
-        attr, target, lam = rows[i]
+        attr, target, lam, method_key = rows[i]
+        model_key, method = _SOLO_METHODS[method_key]
         title = state["titles"][i]
         tokenizer_type = state["tokenizer_type"]
+        model_ckpt = state["ckpt_paths"][model_key]
         try:
-            reg_path, reg_status = _find_attribute_regressor(attr, tokenizer_type, ckpt_path)
-            if not reg_path:
-                status_text = status_text + f"\nRow {i + 1} ({attr}): ❌ {reg_status}"
-                return (*done_slot(title, None, ""), status_text)
-
-            out = _run_generation(
-                "EBT", state["ckpt_path"], tokenizer_type,
-                state["prompt_tokens"], state["gt_tokens"],
-                state["temperature"], state["top_p"], state["generation_length"],
-                attribute_overrides={
+            gen_kwargs = {}
+            if method in ("energy", "pplm"):
+                if method == "energy":
+                    reg_path, reg_status = _find_attribute_regressor(attr, tokenizer_type, model_ckpt)
+                else:
+                    reg_path, reg_status = _find_baseline_regressor(attr, tokenizer_type, model_key, model_ckpt)
+                if not reg_path:
+                    status_text = status_text + f"\nRow {i + 1} ({attr}): ❌ {reg_status}"
+                    return (*done_slot(title, None, ""), status_text)
+                gen_kwargs["attribute_overrides"] = {
                     "attribute_target": target,
                     "lambda_attribute": lam,
                     "attribute_regressor_ckpt": reg_path,
-                },
+                }
+            elif method == "tilt":
+                if tokenizer_type != "REMI":
+                    status_text = status_text + (f"\nRow {i + 1} ({attr}): ❌ Tilting is REMI-only: it needs "
+                                                 "a token type that carries the attribute directly.")
+                    return (*done_slot(title, None, ""), status_text)
+                from attribute_control.ar_guidance import ExpectationTilt
+                gen_kwargs["logit_processor"] = ExpectationTilt(attr, target, lam, state["temperature"])
+            else:  # best_of_n
+                gen_kwargs["best_of"] = (int(lam), attr, target)
+
+            out = _run_generation(
+                model_key, model_ckpt, tokenizer_type,
+                state["prompt_tokens"], state["gt_tokens"],
+                state["temperature"], state["top_p"], state["generation_length"],
+                **gen_kwargs,
             )
             from attribute_control.attributes import ATTRIBUTES
             achieved = ATTRIBUTES[attr](out["generated_tokens"], tokenizer_type)
-            gauge = _attribute_gauge_html(f"{attr.replace('_', ' ').capitalize()} guidance (λ={lam})",
+            gauge = _attribute_gauge_html(f"{attr.replace('_', ' ').capitalize()} guidance ({_SOLO_METHOD_LABELS[method_key]})",
                                            [(attr, target, achieved, _ATTRIBUTE_UI[attr]["max"])])
             status_text = status_text + "\n" + "\n".join(out["status_lines"])
-            _log_to_wandb(f"demo_EBT_{attr}_{tokenizer_type}", out["wav_paths"],
-                          {"attribute": attr, "target": target, "lambda": lam,
+            _log_to_wandb(f"demo_{model_key}_{method}_{attr}_{tokenizer_type}", out["wav_paths"],
+                          {"attribute": attr, "target": target, "lambda": lam, "method": method_key,
                            "achieved": achieved, "prompt": state.get("prompt_label", "")})
             return (*done_slot(title, out["wav_paths"].get("generated"), gauge), status_text)
         except Exception as e:
@@ -2229,7 +2381,7 @@ def build_ui():
                 model_output_cols[model_key] = _model_col
 
         # ── EBT attribute control ────────────────────────────────────────────
-        gr.Markdown("## 4. Guide EBT's attributes", elem_classes="section-title")
+        gr.Markdown("## 4. Guide attributes (EBT or baselines)", elem_classes="section-title")
         ebt_reference_audio = gr.Audio(
             label="Reference: EBT default (unguided, from the last Generate run above)",
             type="filepath", visible=False,
@@ -2243,14 +2395,19 @@ def build_ui():
             gr.Markdown("### Single attribute — generate multiple at once")
             gr.Markdown(
                 f"Each numbered box below is its own **separate variant** — its own "
-                f"attribute, guidance strength λ, and target value. Start with one, use **+ Add "
+                f"model & guidance method, attribute, strength, and target value. Start with one, use **+ Add "
                 f"another variant** to queue more (up to {_MAX_SOLO_BATCH}), then hit Generate "
-                "once to run all of them together.",
+                "once to run all of them together. **Model & method:** EBT steers its own "
+                "energy minimisation; for Llama/GPT-2, *PPLM* nudges the next-token scores with "
+                "a regressor's gradient, *tilting* shifts the probabilities of the attribute's own "
+                "tokens (REMI only), and *best-of-N* samples N unguided continuations and keeps "
+                "the closest one (N× the compute). All use the checkpoints selected above.",
                 elem_classes="section-sub",
             )
 
             solo_row_count_state = gr.State(1)
             solo_rows = []
+            solo_methods = []
             solo_sigma_htmls = []
             with gr.Column(elem_classes="variants-bundle"):
                 for _i in range(_MAX_SOLO_BATCH):
@@ -2267,6 +2424,10 @@ def build_ui():
                             _row_attr = gr.Radio(choices=_attr_choice_tuples(_SOLO_ATTRIBUTES),
                                                   value="velocity", label="Attribute")
                         with gr.Row():
+                            _row_method = gr.Dropdown(
+                                choices=[(lbl, key) for key, lbl in _SOLO_METHOD_LABELS.items()],
+                                value="ebt", label="Model & method")
+                        with gr.Row():
                             _row_lambda = gr.Slider(_LAMBDA_RANGES["velocity"]["min"], _LAMBDA_RANGES["velocity"]["max"],
                                                      value=_LAMBDA_RANGES["velocity"]["default"],
                                                      step=_LAMBDA_RANGES["velocity"]["step"],
@@ -2277,22 +2438,35 @@ def build_ui():
                         _row_sigma = gr.HTML(value=_sigma_annotation_html(
                             "velocity", _ATTRIBUTE_UI["velocity"]["default_target"]))
                     solo_rows.append((_row_group, _row_attr, _row_lambda, _row_target, _row_copy_btn))
+                    solo_methods.append(_row_method)
                     solo_sigma_htmls.append(_row_sigma)
 
                     def _make_row_attr_change():
-                        def _on_row_attr_change(attribute, ref_velocity, ref_duration, ref_pitch_register):
+                        def _on_row_attr_change(attribute, method_key, tokenizer_type, ref_velocity, ref_duration,
+                                                ref_pitch_register):
                             meta = _ATTRIBUTE_UI[attribute]
-                            lam = _LAMBDA_RANGES[attribute]
+                            lam = _strength_range(method_key, attribute, tokenizer_type)
                             target_update = gr.update(
                                 minimum=0.0, maximum=meta["max"], label=meta["label"],
                                 value=_target_default_value(attribute, ref_velocity, ref_duration, ref_pitch_register))
-                            lambda_update = gr.update(minimum=lam["min"], maximum=lam["max"],
-                                                       step=lam["step"], value=lam["default"])
+                            lambda_update = gr.update(minimum=lam["min"], maximum=lam["max"], step=lam["step"],
+                                                       value=lam["default"], label=lam["label"])
                             return target_update, lambda_update
                         return _on_row_attr_change
 
+                    # Method change: re-range/relabel the strength slider, keeping
+                    # its value when it still fits (so "Copy" keeps the copied one).
+                    def _on_row_method_change(method_key, attribute, current, tokenizer_type):
+                        lam = _strength_range(method_key, attribute, tokenizer_type)
+                        keep = current is not None and lam["min"] <= float(current) <= lam["max"]
+                        return gr.update(minimum=lam["min"], maximum=lam["max"], step=lam["step"],
+                                         label=lam["label"], value=current if keep else lam["default"])
+
+                    _row_method.change(_on_row_method_change, inputs=[_row_method, _row_attr, _row_lambda, tokenizer_dd],
+                                        outputs=[_row_lambda])
+
                     _row_attr.change(_make_row_attr_change(),
-                                      inputs=[_row_attr, ebt_ref_velocity_state, ebt_ref_duration_state,
+                                      inputs=[_row_attr, _row_method, tokenizer_dd, ebt_ref_velocity_state, ebt_ref_duration_state,
                                               ebt_ref_pitch_register_state],
                                       outputs=[_row_target, _row_lambda]).then(
                         _sigma_annotation_html, inputs=[_row_attr, _row_target], outputs=[_row_sigma],
@@ -2301,7 +2475,7 @@ def build_ui():
                                         outputs=[_row_sigma])
 
                     def _make_row_tokenizer_change():
-                        def _on_row_tokenizer_change(tokenizer_type, current_attr):
+                        def _on_row_tokenizer_change(tokenizer_type, current_attr, method_key):
                             # Switching to Anticipation drops "velocity" from
                             # this row's choices (see _solo_attribute_choices)
                             # — if that row was on velocity, fall back to
@@ -2309,11 +2483,14 @@ def build_ui():
                             # choice that no longer exists.
                             choices = _solo_attribute_choices(tokenizer_type)
                             value = current_attr if current_attr in choices else choices[0]
-                            return gr.update(choices=_attr_choice_tuples(choices), value=value)
+                            lam = _strength_range(method_key, value, tokenizer_type)
+                            return (gr.update(choices=_attr_choice_tuples(choices), value=value),
+                                    gr.update(minimum=lam["min"], maximum=lam["max"], step=lam["step"],
+                                              label=lam["label"], value=lam["default"]))
                         return _on_row_tokenizer_change
 
                     tokenizer_dd.change(_make_row_tokenizer_change(),
-                                         inputs=[tokenizer_dd, _row_attr], outputs=[_row_attr])
+                                         inputs=[tokenizer_dd, _row_attr, _row_method], outputs=[_row_attr, _row_lambda])
 
             with gr.Row():
                 solo_add_row_btn = gr.Button("+ Add another variant", size="sm")
@@ -2377,19 +2554,21 @@ def build_ui():
                 _solo_value_comps += [_attr, _lam, _target]
 
             def _make_copy_handler(src_idx):
-                def _copy(count, src_attr, src_lam, src_target):
+                def _copy(count, src_attr, src_lam, src_target, src_method):
                     count = int(count)
                     new_count = min(count + 1, _MAX_SOLO_BATCH)
                     dest_idx = new_count - 1
                     visibility_updates = [gr.update(elem_classes=_card_classes(i < new_count)) for i in range(_MAX_SOLO_BATCH)]
-                    value_updates = []
+                    value_updates, method_updates = [], []
                     for i in range(_MAX_SOLO_BATCH):
                         if i == dest_idx and dest_idx != src_idx:
                             value_updates.extend([gr.update(value=src_attr), gr.update(value=src_lam),
                                                    gr.update(value=src_target)])
+                            method_updates.append(gr.update(value=src_method))
                         else:
                             value_updates.extend([gr.update(), gr.update(), gr.update()])
-                    return (new_count, *visibility_updates, *value_updates)
+                            method_updates.append(gr.update())
+                    return (new_count, *visibility_updates, *value_updates, *method_updates)
                 return _copy
 
             for _i, (_, _row_attr, _row_lambda, _row_target, _row_copy_btn) in enumerate(solo_rows):
@@ -2397,8 +2576,8 @@ def build_ui():
                     lambda: gr.update(interactive=False, value="Copying…"), outputs=[_row_copy_btn],
                 ).then(
                     _make_copy_handler(_i),
-                    inputs=[solo_row_count_state, _row_attr, _row_lambda, _row_target],
-                    outputs=[solo_row_count_state, *_solo_row_groups, *_solo_value_comps],
+                    inputs=[solo_row_count_state, _row_attr, _row_lambda, _row_target, solo_methods[_i]],
+                    outputs=[solo_row_count_state, *_solo_row_groups, *_solo_value_comps, *solo_methods],
                     **_ROW_MUTATION_CONCURRENCY,
                 ).then(
                     lambda: gr.update(interactive=True, value="⧉ Copy to new variant"), outputs=[_row_copy_btn],
@@ -2526,10 +2705,15 @@ def build_ui():
             # weight tunes its mix) — spans the union of every attribute's own
             # tuned range rather than any single one alone, since which
             # attributes are active can change row to row.
-            compose_lambda = gr.Slider(
-                min(r["min"] for r in _LAMBDA_RANGES.values()),
-                max(r["max"] for r in _LAMBDA_RANGES.values()),
-                value=0.04, step=0.005, label="Guidance strength λ (shared across all active rows)")
+            _cl = _COMPOSE_LAMBDA_BY_TOK["REMI"]
+            compose_lambda = gr.Slider(_cl["min"], _cl["max"], value=_cl["default"], step=_cl["step"],
+                                       label="Guidance strength λ (shared across all active rows)")
+
+            def _on_compose_tokenizer_change(tokenizer_type):
+                c = _COMPOSE_LAMBDA_BY_TOK.get(tokenizer_type, _COMPOSE_LAMBDA_BY_TOK["REMI"])
+                return gr.update(minimum=c["min"], maximum=c["max"], step=c["step"], value=c["default"])
+
+            tokenizer_dd.change(_on_compose_tokenizer_change, inputs=[tokenizer_dd], outputs=[compose_lambda])
             compose_btn = gr.Button("🎹 Generate (Compose)", variant="primary")
             compose_status = gr.Textbox(label="Status", lines=4, interactive=False)
             # Hidden until Generate is clicked — see _compose_generate,
@@ -2737,6 +2921,7 @@ def build_ui():
 
         ebt_on_cb, ebt_ckpt_dd, _ = model_controls["EBT"]
         ebt_ckpt_state = ckpt_states["EBT"]
+        llama_ckpt_dd, gpt2_ckpt_dd = model_controls["Llama"][1], model_controls["GPT-2"][1]
 
         solo_batch_outputs = []
         for _col, _title, _ph, _audio, _gauge in solo_slots:
@@ -2755,7 +2940,8 @@ def build_ui():
         _solo_chain = solo_btn.click(
             _solo_batch_start,
             inputs=[tokenizer_dd, song_dd, start_offset, temperature, top_p, gen_length,
-                    ebt_ckpt_dd, ebt_ckpt_state, solo_row_count_state, *solo_row_inputs],
+                    ebt_ckpt_dd, ebt_ckpt_state, llama_ckpt_dd, ckpt_states["Llama"],
+                    gpt2_ckpt_dd, ckpt_states["GPT-2"], solo_row_count_state, *solo_row_inputs, *solo_methods],
             outputs=[*solo_batch_outputs, solo_status, solo_batch_state],
             **_SOLO_BATCH_CONCURRENCY,
         )
