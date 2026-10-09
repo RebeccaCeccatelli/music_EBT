@@ -1,6 +1,6 @@
 # Project status
 
-_Last updated: 2026-10-08._ Living snapshot of where music-EBT stands; the
+_Last updated: 2026-10-09._ Living snapshot of where music-EBT stands; the
 day-by-day history is in [diary/](diary/README.md), citable results in
 [thesis_findings/](thesis_findings/README.md).
 
@@ -28,8 +28,6 @@ Scratch: ~39 GB used by checkpoints after the 2026-10-05 cleanup.
 ## Running jobs
 | Job | What | Paired EBT ckpt |
 |---|---|---|
-| 25280946 / 47 / 48 | EBT REMI sweeps velocity / duration / pitch_register (6 h; reruns of 25261488–90, which timed out at the script's 1:30 default; pitch_register moved to mit_preemptable) | REMI 33,732 |
-| 25296410 / 11 | EBT Ant **fine** sweeps duration / pitch_register, λ 0.002–0.02, control-free prompts (mit_preemptable; complements coarse 25296307/08) | Ant s1 88,800 |
 
 
 Outputs: `~/orcd/scratch/rebcecca/music_EBT_logs/attr_control/<attr>_regressor_<tok>_<timestamp>/best.pt`;
@@ -44,7 +42,10 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
    sensible val loss; for Ant pitch_register re-run
    `attribute_control/eval_pitch_register_regressor.py` to confirm the
    predicted range is no longer collapsed.
-2. Final experiments: EBT vs plug-and-play GPT-2/Llama guidance (REMI),
+2. Final experiments: **done 2026-10-09** →
+   `thesis_findings/2026-10-09_guidance_ebt_vs_ar.md` (REMI + Anticipation, all methods,
+   CIs, compute, operating points). Remaining optional: blind listening calibration.
+   Original plan: EBT vs plug-and-play GPT-2/Llama guidance (REMI),
    paired checkpoints only. Code: `attribute_control/ar_guidance_sweep.py`,
    `job_scripts/mus/attr_control/ar_guidance_sweep.sh`,
    `attribute_control/aggregate_guidance_sweeps.py` (diary 2026-10-05).
