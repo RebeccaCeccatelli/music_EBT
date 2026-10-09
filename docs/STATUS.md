@@ -103,7 +103,7 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
    Ant numbers in 2026-10-06 are superseded. Thesis §4.3 updated.
 7. Fairness follow-ups (diary 2026-10-09): Llama PPLM on Anticipation
    (regressors 25385280/81 → sweep), and token-matched Llama baselines
-   (25385635 REMI → step 16,866; 25385636 Ant → step 22,200; then regressors,
+   (25404902 REMI → step 16,866; 25404903 Ant → step 22,200; then regressors,
    PPLM, unguided quality).
 8. Repo tidy: project README (currently the upstream EBT one), final tag.
 
