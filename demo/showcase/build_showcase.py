@@ -225,6 +225,36 @@ def metrics(gen_path):
 
 ATTR_KEY = {"velocity": "velocity", "duration": "note_beats", "pitch_register": "pitch"}
 
+# General MIDI program families, for naming prompts by their instruments
+# (the sweep prompts have no song titles in their metadata).
+GM_FAMILY = ["piano", "keys", "organ", "guitar", "bass", "strings", "strings", "brass",
+             "sax", "flute", "synth lead", "synth pad", "synth", "ethnic", "percussion", "effects"]
+GM_SPECIAL = {0: "piano", 1: "piano", 2: "electric piano", 3: "piano", 4: "electric piano",
+              5: "electric piano", 6: "harpsichord", 11: "vibraphone",
+              40: "violin", 42: "cello", 46: "harp", 48: "strings", 52: "choir", 56: "trumpet",
+              57: "trombone", 60: "horn", 65: "sax", 66: "sax", 68: "oboe", 71: "clarinet",
+              73: "flute", 70: "bassoon"}
+
+
+def prompt_name(tok, pid):
+    """'Piano, bass & drums': instruments by note count in the original excerpt."""
+    path = RUNS[tok]["ground_truth"] / f"p{pid}_ground_truth.mid"
+    if not path.exists():
+        return f"prompt {pid}"
+    counts = {}
+    for t in symusic.Score(str(path)).tracks:
+        name = "drums" if t.is_drum else GM_SPECIAL.get(t.program, GM_FAMILY[t.program // 8])
+        counts[name] = counts.get(name, 0) + len(t.notes)
+    total = sum(counts.values())
+    names = [n for n, c in sorted(counts.items(), key=lambda kv: -kv[1]) if c >= 0.08 * total][:4]
+    if not names:
+        return f"prompt {pid}"
+    if len(names) == 1:
+        text = f"solo {names[0]}" if names[0] != "drums" else "drums only"
+    else:
+        text = ", ".join(names[:-1]) + " & " + names[-1]
+    return text[0].upper() + text[1:]
+
 
 def cmd_candidates(args):
     tok = args.tok
@@ -349,6 +379,8 @@ class Builder:
             out["blocks"] = []
             for b in n["blocks"]:
                 b = expand_block(b)
+                if b.get("prompt") is not None and b.get("tok") and not b.get("placeholder"):
+                    b = {"prompt_name": prompt_name(b["tok"], b["prompt"]), **b}
                 if "clips" in b:
                     b = {**b, "clips": [self.clip({"tok": b.get("tok"), "prompt": b.get("prompt"),
                                                    "placeholder": b.get("placeholder"), **c})

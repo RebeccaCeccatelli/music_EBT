@@ -20,7 +20,6 @@
        "type": "clips",
        "tok": "remi",
        "prompt": 13268,
-       "title": "Solo piano",
        "clips": [
         {
          "kind": "ground_truth",
@@ -29,19 +28,21 @@
         },
         {
          "kind": "unguided",
-         "model": "ebt",
-         "label": "EBT",
-         "tag": "ours"
-        },
-        {
-         "kind": "unguided",
          "model": "llama",
-         "label": "Llama"
+         "label": "Llama",
+         "tag": "baseline"
         },
         {
          "kind": "unguided",
          "model": "gpt2",
-         "label": "GPT-2"
+         "label": "GPT-2",
+         "tag": "baseline"
+        },
+        {
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "EBT",
+         "tag": "ours"
         }
        ]
       },
@@ -49,7 +50,6 @@
        "type": "clips",
        "tok": "remi",
        "prompt": 3107,
-       "title": "Band: drums, bass, guitar, flute",
        "clips": [
         {
          "kind": "ground_truth",
@@ -58,19 +58,21 @@
         },
         {
          "kind": "unguided",
-         "model": "ebt",
-         "label": "EBT",
-         "tag": "ours"
-        },
-        {
-         "kind": "unguided",
          "model": "llama",
-         "label": "Llama"
+         "label": "Llama",
+         "tag": "baseline"
         },
         {
          "kind": "unguided",
          "model": "gpt2",
-         "label": "GPT-2"
+         "label": "GPT-2",
+         "tag": "baseline"
+        },
+        {
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "EBT",
+         "tag": "ours"
         }
        ]
       },
@@ -78,7 +80,6 @@
        "type": "clips",
        "tok": "remi",
        "prompt": 8484,
-       "title": "Groove: drums and two basses",
        "clips": [
         {
          "kind": "ground_truth",
@@ -87,19 +88,21 @@
         },
         {
          "kind": "unguided",
-         "model": "ebt",
-         "label": "EBT",
-         "tag": "ours"
-        },
-        {
-         "kind": "unguided",
          "model": "llama",
-         "label": "Llama"
+         "label": "Llama",
+         "tag": "baseline"
         },
         {
          "kind": "unguided",
          "model": "gpt2",
-         "label": "GPT-2"
+         "label": "GPT-2",
+         "tag": "baseline"
+        },
+        {
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "EBT",
+         "tag": "ours"
         }
        ]
       }
@@ -112,7 +115,6 @@
        "type": "clips",
        "tok": "ant",
        "prompt": 1550614,
-       "title": "Example A",
        "clips": [
         {
          "kind": "ground_truth",
@@ -121,19 +123,21 @@
         },
         {
          "kind": "unguided",
-         "model": "ebt",
-         "label": "EBT",
-         "tag": "ours"
-        },
-        {
-         "kind": "unguided",
          "model": "llama",
-         "label": "Llama"
+         "label": "Llama",
+         "tag": "baseline"
         },
         {
          "kind": "unguided",
          "model": "gpt2",
-         "label": "GPT-2"
+         "label": "GPT-2",
+         "tag": "baseline"
+        },
+        {
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "EBT",
+         "tag": "ours"
         }
        ]
       },
@@ -141,7 +145,6 @@
        "type": "clips",
        "tok": "ant",
        "prompt": 1287257,
-       "title": "Example B",
        "clips": [
         {
          "kind": "ground_truth",
@@ -150,19 +153,21 @@
         },
         {
          "kind": "unguided",
-         "model": "ebt",
-         "label": "EBT",
-         "tag": "ours"
-        },
-        {
-         "kind": "unguided",
          "model": "llama",
-         "label": "Llama"
+         "label": "Llama",
+         "tag": "baseline"
         },
         {
          "kind": "unguided",
          "model": "gpt2",
-         "label": "GPT-2"
+         "label": "GPT-2",
+         "tag": "baseline"
+        },
+        {
+         "kind": "unguided",
+         "model": "ebt",
+         "label": "EBT",
+         "tag": "ours"
         }
        ]
       }
