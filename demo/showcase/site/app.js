@@ -168,7 +168,7 @@
       el.classList.add("placeholder");
       top.append(h("span", "tag ph", "placeholder"));
     } else if (data.tag) {
-      const cls = { ours: "ours", human: "human", "too strong": "warn" }[data.tag] || "";
+      const cls = { ours: "ours", human: "human", baseline: "base", "too strong": "warn" }[data.tag] || "";
       top.append(h("span", "tag " + cls, data.tag));
     }
     const canvas = h("canvas", "roll");
@@ -209,10 +209,10 @@
     const card = h("article", "example");
     const head = h("div", "example-head");
     const titles = h("div", "titles");
-    titles.append(h("h3", null, b.title || ""));
+    titles.append(h("h3", null, b.title || b.prompt_name || ""));
     if (b.subtitle) titles.append(h("p", "subtitle", b.subtitle));
     head.append(titles);
-    if (b.prompt != null) head.append(h("span", "pid", `prompt #${b.prompt}${sub ? " · " + sub : ""}`));
+    if (b.title && b.prompt_name) head.append(h("span", "pid", `prompt: ${b.prompt_name}${sub ? " · " + sub : ""}`));
     card.append(head);
     return card;
   }
