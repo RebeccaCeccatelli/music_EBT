@@ -22,6 +22,22 @@ evidence is not proof of novelty: phrase claims as "to our knowledge"._
   - PID feedback-control activation steering for symbolic music (in `papers/`).
   - Amadeus (arXiv:2508.20665): training-free attribute control by
     specifying attribute values during decoding.
+- **Post-hoc steering of conventional (AR) symbolic-music models predates
+  2026**, so the AR side of our work is baselines, not a contribution:
+  - Ferreira, Lelis & Whitehead 2022, MCTS decoding steered by an emotion
+    classifier on a frozen symbolic LM (arXiv:2208.05162). The closest
+    analogue of our best-of-N / reranking baseline.
+  - Ferreira & Whitehead, ISMIR 2019: sentiment neurons in an mLSTM
+    adjusted by a genetic algorithm (arXiv:2103.06125). Sometimes classed
+    as training-time.
+  - PID feedback-control activation steering for symbolic music
+    (arXiv:2606.18790, June 2026), plus Prokopiou et al. 2026 (below).
+  - Our PPLM-style logit-gradient and expectation-tilt variants were not
+    found published for symbolic music, but they are direct transfers of
+    standard NLP techniques: present them as well-chosen baselines.
+  - Contrast: Kaliakatsos-Papakostas et al. ("Interactive Control of
+    Explicit Musical Features in LSTM-based systems") is training-time
+    conditioning (features as inputs).
 - **Classifier/gradient guidance for symbolic music** exists for
   *diffusion* models (e.g. note-density classifier guidance in discrete
   diffusion, SCHmUBERT, IJCAI 2023; loss-gradient guidance cited in
