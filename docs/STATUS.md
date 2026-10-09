@@ -81,6 +81,8 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
    Static listening page: `demo/showcase/` (GitHub Pages via
    `.github/workflows/showcase-pages.yml`). Remaining: listen through the
    clips, swap any in `selection.json`. Live: https://rebeccaceccatelli.github.io/music_EBT/
+   Blind listening survey: `demo/survey/` (page at /music_EBT/survey/, test
+   mode). Remaining: Apps Script endpoint, ethics check, pilot, then send.
 4. Writing: thesis sections from `thesis_findings/` + diary, then paper.
    Don't cite post-resume val readings. Thesis source: `eth-mit-master-thesis/` (own git repo,
    ignored here; Overleaf export, ch. 2-4 drafted 2026-10-08; build with
