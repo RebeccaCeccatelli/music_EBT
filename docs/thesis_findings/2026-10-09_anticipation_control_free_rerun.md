@@ -79,3 +79,27 @@ overlap with own unguided output ≥ 0.75):
 - EBT tables: `music_EBT_logs/attr_control/ant_ar_tables/<jobid>/`
 - Reference: `music_EBT_logs/music_quality/reference_ant-at-full-ar_256tok/`
 - Unguided: `music_EBT_logs/music_quality/gen_{ebt,gpt2,llama}_ant-at-full-ar/`
+
+## Update: Llama PPLM on Anticipation (like-for-like baseline)
+Added 2026-10-09 (job 25404826; Llama-Ant regressors 25385280/81, trained on
+Llama Ant step 100,000, val loss 0.000305 / 0.00034 vs EBT's 0.000314 /
+0.000463). Same 16 control-free prompts, targets and baseline draws; strengths
+0.5…64. Scored together with all other Ant sweeps (job 25415766,
+`ant_ar_scored/ant_ar_quality_with_pplm.json`).
+
+![tradeoff with PPLM](figures/ant_ar_pplm/guidance_tradeoff.png)
+
+| operating point | EBT (6 fwd/token) | Llama PPLM (~1 fwd/token) |
+|---|---|---|
+| duration | 0.78 [0.69, 0.86] at λ 0.005 | **0.95 [0.91, 0.98]** at 16 |
+| pitch register | 0.76 [0.70, 0.83] at λ 0.01 | **0.96 [0.89, 1.00]** at 16 |
+
+- **On Anticipation, the matched baseline clearly beats EBT**: the confidence
+  intervals don't overlap, at about 1/6 of EBT's compute per token.
+- PPLM stays musical across its whole range: harsh dissonance 0.04–0.06 at every
+  strength (EBT pitch register: 0.08 at its operating point, 0.23–0.25 above
+  λ ≈ 0.04), overlap with own unguided output ≥ 0.78. It saturates (~0.93–0.96
+  from strength 2–4 on) instead of breaking down.
+- Contrast with REMI, where EBT and Llama PPLM were level within the CIs.
+- Caveat: Llama Ant saw 4.5× the EBT's training tokens (13.1B vs 2.9B). The
+  token-matched Llama (25404903) will show how much of the gap is training budget.
