@@ -98,7 +98,11 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
    2026-10-09:** re-ran Ant guidance + unguided quality on control-free
    prompts/reference (`thesis_findings/2026-10-09_anticipation_control_free_rerun.md`).
    Ant numbers in 2026-10-06 are superseded. Thesis §4.3 updated.
-7. Repo tidy: project README (currently the upstream EBT one), final tag.
+7. Fairness follow-ups (diary 2026-10-09): Llama PPLM on Anticipation
+   (regressors 25385280/81 → sweep), and token-matched Llama baselines
+   (25385635 REMI → step 16,866; 25385636 Ant → step 22,200; then regressors,
+   PPLM, unguided quality).
+8. Repo tidy: project README (currently the upstream EBT one), final tag.
 
 ## Decisions
 - 2026-10-05: no further pretraining. Final EBT ckpts = REMI 33,732 and
