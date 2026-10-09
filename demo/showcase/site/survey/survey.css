@@ -127,18 +127,12 @@
 .tips { margin-bottom: 0; }
 .facts li::marker { color: var(--accent-2); }
 
-.btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); margin-right: auto; }
+.btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.btn.back { margin-right: auto; }
 .btn.ghost:hover { color: var(--text); border-color: rgba(255,255,255,.25); }
 .actions { gap: 10px; }
 
 /* ----------------------------------------------- prompt vs continuation */
-.prog-prompt span, .prog-cont span {
-  position: absolute; top: 50%; transform: translateY(-50%); left: 8px; z-index: 1;
-  font: 600 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; pointer-events: none;
-}
-.prog-prompt span { color: rgba(255,255,255,.45); }
-.prog-cont { position: absolute; top: 0; bottom: 0; right: 0; }
-.prog-cont span { color: rgba(191,238,233,.55); }
 .prog-fill { z-index: 0; }
 .phase { font: 11.5px var(--mono); color: var(--faint); }
 .phase.cont { color: var(--accent-2); }
@@ -149,3 +143,40 @@
   .steps3 { grid-template-columns: 1fr; }
   .an-prompt { width: 38%; }
 }
+
+/* labels above the progress bar */
+.prog-labels { position: relative; height: 14px; margin-bottom: -4px; }
+.prog-labels span {
+  position: absolute; top: 0; white-space: nowrap;
+  font: 600 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase;
+}
+.lab-prompt { left: 0; color: var(--faint); }
+.lab-cont { color: rgba(191,238,233,.7); padding-left: 6px; }
+.t-q .ends {
+  display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 999px; vertical-align: 2px;
+  font: 600 12px var(--mono); color: #d6d0ff; background: rgba(139,124,255,.15); border: 1px solid rgba(139,124,255,.35);
+}
+.t-hint .help { display: block; margin-top: 4px; color: var(--faint); }
+
+/* optional cacophony ticks and emailed copy */
+.q.caco { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--border); }
+.q.caco legend { font-weight: 500; color: var(--muted); font-size: 14px; }
+.q.caco legend b { color: var(--text); }
+.chip.tick { font-size: 13px; padding: 7px 12px; }
+.chip.tick { display: inline-flex; align-items: center; gap: 8px; }
+.chip.tick::before {
+  content: ""; width: 13px; height: 13px; border-radius: 4px; flex: none;
+  border: 1.5px solid var(--faint); background: transparent center/10px no-repeat;
+}
+.chip.tick.on { background: rgba(255,138,92,.16); border-color: rgba(255,138,92,.7); }
+.chip.tick.on::before {
+  border-color: var(--up); background-color: var(--up);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%230b0d14' stroke-width='2.4' d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E");
+}
+.copybox { margin-top: 18px; padding: 16px 18px; border-radius: 14px; background: rgba(0,0,0,.22); border: 1px solid var(--border); }
+.copybox .email {
+  display: block; width: 100%; max-width: 360px; margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+  background: rgba(0,0,0,.3); color: var(--text); border: 1px solid var(--border); font: 15px var(--font);
+}
+.copybox .email[hidden] { display: none; }
+.copybox .hint { margin-top: 8px; }

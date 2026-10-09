@@ -324,14 +324,46 @@ def expand_block(b):
 
 # ------------------------------------------------------------------- render
 
+TAIL = 1.5  # seconds of release kept after the last note ends
+
+
+def _trim_wav(wav, seconds):
+    """Cut FluidSynth's long reverb/release tail (often several seconds of near
+    silence) at `seconds`, with a 60 ms fade-out."""
+    import wave
+
+    import numpy as np
+    with wave.open(str(wav)) as w:
+        params = w.getparams()
+        frames = w.readframes(w.getnframes())
+    audio = np.frombuffer(frames, dtype=np.int16).reshape(-1, params.nchannels).copy()
+    n = min(len(audio), int(seconds * params.framerate))
+    audio = audio[:n]
+    fade = min(n, int(0.06 * params.framerate))
+    if fade:
+        audio[-fade:] = (audio[-fade:] * np.linspace(1, 0, fade)[:, None]).astype(np.int16)
+    with wave.open(str(wav), "wb") as w:
+        w.setparams(params)
+        w.writeframes(audio.tobytes())
+
+
 def render_mp3(midi, mp3):
+    """MIDI -> MP3, trimmed to the last note end + TAIL."""
+    end = max((n[1] for n in _notes(midi)), default=0.0) + TAIL
     with tempfile.TemporaryDirectory() as tmp:
         wav = Path(tmp) / "x.wav"
         subprocess.run([str(BIN / "fluidsynth"), "-ni", "-q", "-r", "44100", "-g", "0.6",
                         "-F", str(wav), SOUNDFONT, str(midi)],
                        check=True, capture_output=True, timeout=120)
+        _trim_wav(wav, end)
         subprocess.run([str(BIN / "lame"), "--quiet", "-V", "4", str(wav), str(mp3)],
                        check=True, timeout=120)
+
+
+def mp3_seconds(mp3):
+    """Exact decoded duration (the bar layout must match the real audio)."""
+    out = subprocess.run([str(BIN / "mpg123"), "-q", "-s", str(mp3)], capture_output=True, check=True)
+    return round(len(out.stdout) / (44100 * 2 * 2), 3)
 
 
 class Builder:

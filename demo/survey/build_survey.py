@@ -65,12 +65,25 @@ N_PROMPTS = {"unguided": 6, "steer": 4}   # per tokenizer, in the pool
 PLAN = {"unguided": 6, "change": 12, "compare": 5, "catch_unguided": 1, "catch_change": 1}
 
 SCALE = {
-    "velocity": ["clearly softer", "slightly softer", "no difference", "slightly louder", "clearly louder"],
-    "duration": ["clearly shorter, more detached notes", "slightly shorter notes", "no difference",
-                 "slightly longer notes", "clearly longer, more connected notes"],
-    "pitch_register": ["clearly lower", "slightly lower", "no difference", "slightly higher", "clearly higher"],
+    "velocity": ["clearly softer (more piano)", "slightly softer", "no difference",
+                 "slightly louder", "clearly louder (more forte)"],
+    "duration": ["clearly shorter notes (more staccato)", "slightly shorter notes", "no difference",
+                 "slightly longer notes", "clearly longer notes (more legato)"],
+    "pitch_register": ["clearly lower (deeper tones)", "slightly lower", "no difference",
+                       "slightly higher", "clearly higher (brighter tones)"],
 }
-ATTR_NAME = {"velocity": "loudness", "duration": "note length", "pitch_register": "pitch"}
+# Shown in the question text: name plus the musical terms for its two ends.
+ATTR_NAME = {
+    "velocity": "loudness <span class=\"ends\">piano ↔ forte</span>",
+    "duration": "note length <span class=\"ends\">staccato ↔ legato</span>",
+    "pitch_register": "pitch <span class=\"ends\">low tones ↔ high tones</span>",
+}
+# Longer explanations shown under the Part 2 / Part 3 questions.
+ATTR_HELP = {
+    "velocity": "Piano = soft, gentle playing; forte = loud, strong playing.",
+    "duration": "Staccato = short, detached notes; legato = long, smoothly connected notes.",
+    "pitch_register": "Low tones = deeper, bass-like notes; high tones = brighter, higher notes.",
+}
 
 
 # ------------------------------------------------------------------ prompts
@@ -221,8 +234,11 @@ def cmd_build(args):
             bs.render_mp3(path, mp3)
         m = bs.metrics(path)
         notes = bs._notes(path)
+        # audio = decoded MP3 length: the progress bar and the prompt divider are
+        # laid out against it (the notes end TAIL seconds earlier).
         meta[h] = {"prompt_end": m["prompt_end"],
-                   "duration": round(max((n[1] for n in notes), default=0.0), 2)}
+                   "duration": round(max((n[1] for n in notes), default=0.0), 2),
+                   "audio": bs.mp3_seconds(mp3)}
         key["clips"][h] = {**info, "midi": str(Path(path).relative_to(bs.LOGS)), "metrics": m}
         if i % 20 == 0:
             print(f"  {i}/{len(clips)}", flush=True)
@@ -247,6 +263,7 @@ def cmd_build(args):
         "plan": PLAN,
         "scale": SCALE,
         "attr_name": ATTR_NAME,
+        "attr_help": ATTR_HELP,
         "clips": meta,
         "pool": {k: [ids(t) for t in v] for k, v in pool.items()},
     }
