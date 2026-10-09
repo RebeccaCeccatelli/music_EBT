@@ -145,7 +145,7 @@
     // Labels sit above the bar so "prompt" is always readable, however short it is.
     const labels = h("div", "prog-labels");
     const lp = h("span", "lab-prompt", "prompt");
-    const lc = h("span", "lab-cont", "continuation · judge this");
+    const lc = h("span", "lab-cont", '<span class="long">continuation · judge this</span><span class="short">judge this</span>');
     lc.style.left = `max(${share}%, 64px)`;
     labels.append(lp, lc);
     const prog = h("div", "prog");
@@ -222,6 +222,7 @@
         '<div><b>2</b><span>Compare</span><small>a few versions at a time</small></div>' +
         '<div><b>3</b><span>Choose</span><small>click what fits best, or skip</small></div>'),
     );
+    if (CFG.contact) s.append(h("p", "hint contact", `Questions about the study? Write to <a href="mailto:${CFG.contact}">${CFG.contact}</a>`));
     s.append(nav("Let's go", goto("how")).row);
     screen(s);
   }
@@ -435,7 +436,9 @@
       cacoRow.append(b);
     });
     caco.append(cacoRow);
-    s.querySelector(".answers").append(caco);
+    // The separator lives on a wrapper: a fieldset's own top border is drawn
+    // through its legend, which showed up as a stray dashed line after the text.
+    s.querySelector(".answers").append(row("caco-wrap", caco));
 
     const help = pool.attribute ? ` <span class="help">${survey.attr_help[pool.attribute]}</span>` : "";
     s.querySelector(".t-q").after(h("p", "t-hint", (t.kind.includes("change")
