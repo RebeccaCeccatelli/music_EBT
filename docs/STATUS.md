@@ -93,12 +93,10 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
    Smoke tests 24938101/2 pending
    (CPU quota); then 6 × 100-sample runs. Tokens-matched loss done:
    `thesis_findings/2026-10-05_tokens_matched_validation_loss.md` (branch).
-6. Anticipation prompts/references contain anticipated controls (diary
-   2026-10-08): 15/16 Ant guidance prompts are ANTICIPATE windows and decoding
-   drops controls (~41% of tokens), so prompts and real-music reference windows
-   are thinned. **Re-running with control-free prompts/references** (jobs
-   25296307–15, diary 2026-10-08). Then: re-score Ant sweeps + quality against
-   `reference_ant-at-full-ar_256tok`, update thesis §4.3 TODO.
+6. ~~Anticipation prompts/references contain anticipated controls~~ **Done
+   2026-10-09:** re-ran Ant guidance + unguided quality on control-free
+   prompts/reference (`thesis_findings/2026-10-09_anticipation_control_free_rerun.md`).
+   Ant numbers in 2026-10-06 are superseded. Thesis §4.3 updated.
 7. Repo tidy: project README (currently the upstream EBT one), final tag.
 
 ## Decisions
