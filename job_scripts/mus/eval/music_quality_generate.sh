@@ -7,7 +7,7 @@
 ###   MODEL=ebt   TOK=REMI CHECKPOINT=<ckpt> sbatch job_scripts/mus/eval/music_quality_generate.sh
 ###   MODEL=llama TOK=Anticipation-Arrival-Time CHECKPOINT=<ckpt> sbatch ...
 #SBATCH --nodes=1
-#SBATCH --gpus=1
+#SBATCH --gpus=l40s:1  # L40S only: this torch build (2.4+cu121) has no kernels for the RTX Pro 6000 nodes
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --time=06:00:00

@@ -11,7 +11,7 @@
 
 ### SLURM CONFIGURATION ###
 #SBATCH --nodes=1
-#SBATCH --gpus=1
+#SBATCH --gpus=l40s:1  # L40S only: this torch build (2.4+cu121) has no kernels for the RTX Pro 6000 nodes
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --time=00:45:00
