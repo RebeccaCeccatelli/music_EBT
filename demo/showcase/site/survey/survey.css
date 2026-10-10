@@ -188,3 +188,8 @@
 }
 .copybox .email[hidden] { display: none; }
 .copybox .hint { margin-top: 8px; }
+
+/* "Start over": quiet text button under every screen after the welcome. */
+.restart { display: block; margin: 36px auto 0; background: none; border: 0; padding: 6px 10px;
+  color: var(--faint); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
+.restart:hover { color: var(--muted); }
