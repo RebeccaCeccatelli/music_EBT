@@ -245,7 +245,7 @@
     const s = h("section", "card-screen");
     s.append(
       dots("welcome"),
-      h("p", "eyebrow", "Studio di ascolto · circa 20 minuti"),
+      h("p", "eyebrow", "Test di ascolto · circa 20 minuti"),
       h("h1", "s-title", "Che effetto ti fa la musica composta da un computer?"),
       h("p", "lede", "Abbiamo sviluppato dei modelli che compongono musica e vorremmo sapere come la percepisce chi la ascolta. Non servono conoscenze musicali: basta ascoltare e dirci cosa ne pensi."),
       h("div", "steps3",
@@ -253,7 +253,7 @@
         '<div><b>2</b><span>Confronta</span><small>qualche versione alla volta</small></div>' +
         '<div><b>3</b><span>Scegli</span><small>clicca la risposta che preferisci, oppure salta</small></div>'),
     );
-    if (CFG.contact) s.append(h("p", "hint contact", `Hai domande sullo studio? Scrivi a <a href="mailto:${CFG.contact}">${CFG.contact}</a>`));
+    if (CFG.contact) s.append(h("p", "hint contact", `Hai domande sul test? Scrivi a <a href="mailto:${CFG.contact}">${CFG.contact}</a>`));
     s.append(nav("Iniziamo", goto("how")).row);
     screen(s);
   }
@@ -282,7 +282,7 @@
       h("h2", "s-title", "Prima di iniziare"),
       h("ul", "facts",
         "<li>Meglio ascoltare in <b>cuffia</b>, possibilmente in un ambiente tranquillo.</li>" +
-        "<li>Lo studio è <b>anonimo</b>. Conserviamo solo le tue risposte, un codice partecipante casuale e due domande facoltative su di te.</li>" +
+        "<li>Il test è <b>anonimo</b>. Conserviamo solo le tue risposte, un codice partecipante casuale e due domande facoltative su di te.</li>" +
         "<li>Le risposte saranno usate per una tesi di laurea magistrale e potranno comparire, in forma aggregata, in pubblicazioni scientifiche.</li>" +
         "<li>Puoi <b>saltare</b> qualunque domanda e interrompere quando vuoi. Le risposte vengono inviate solo alla fine.</li>" +
         (CFG.contact ? `<li>Per domande: <a href="mailto:${CFG.contact}">${CFG.contact}</a></li>` : "")),
@@ -558,7 +558,7 @@
   }
 
   function summaryText() {
-    const lines = [`Studio di ascolto — le tue risposte (partecipante ${state.id})`, ""];
+    const lines = [`Test di ascolto — le tue risposte (partecipante ${state.id})`, ""];
     state.plan.forEach((p, pi) => {
       lines.push(p.part);
       p.trials.forEach((t, ti) => {
@@ -631,5 +631,5 @@
       save();
     }
     route();
-  }).catch((e) => { app.innerHTML = `<p class="intro">Impossibile caricare lo studio (${e}).</p>`; });
+  }).catch((e) => { app.innerHTML = `<p class="intro">Impossibile caricare il test (${e}).</p>`; });
 })();
