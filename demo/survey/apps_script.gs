@@ -38,7 +38,7 @@ function doPost(e) {
     if (copyTo && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(copyTo)) {
       MailApp.sendEmail({
         to: copyTo,
-        subject: d.lang === "it" ? "Le tue risposte allo studio di ascolto sulla musica composta da un computer"
+        subject: d.lang === "it" ? "Le tue risposte al test di ascolto sulla musica composta da un computer"
                                  : "Your answers: listening study on computer-made music",
         body: summary,
       });
