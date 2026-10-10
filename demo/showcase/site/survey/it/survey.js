@@ -246,8 +246,8 @@
     s.append(
       dots("welcome"),
       h("p", "eyebrow", "Studio di ascolto · circa 20 minuti"),
-      h("h1", "s-title", "Aiutaci a scoprire come suona la musica composta da un computer"),
-      h("p", "lede", "Abbiamo sviluppato dei modelli che compongono musica e vorremmo sapere che impressione fa a chi la ascolta. Non servono conoscenze musicali: basta ascoltare e dirci cosa ne pensi."),
+      h("h1", "s-title", "Che effetto ti fa la musica composta da un computer?"),
+      h("p", "lede", "Abbiamo sviluppato dei modelli che compongono musica e vorremmo sapere come la percepisce chi la ascolta. Non servono conoscenze musicali: basta ascoltare e dirci cosa ne pensi."),
       h("div", "steps3",
         '<div><b>1</b><span>Ascolta</span><small>brevi clip da 3 a 20 secondi</small></div>' +
         '<div><b>2</b><span>Confronta</span><small>qualche versione alla volta</small></div>' +
