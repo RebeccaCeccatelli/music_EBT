@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Studio di ascolto · Generazione musicale simbolica</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="../../style.css">
+  <link rel="stylesheet" href="../survey.css">
+</head>
+<body>
+  <div class="bg-glow" aria-hidden="true"></div>
+  <div class="topbar" id="topbar" hidden>
+    <div class="wrap topbar-inner">
+      <span class="topbar-part" id="part-label"></span>
+      <div class="bar"><div class="bar-fill" id="bar-fill"></div></div>
+      <span class="topbar-count" id="count"></span>
+    </div>
+  </div>
+  <main class="wrap survey" id="app">
+    <p class="intro">Caricamento…</p>
+  </main>
+  <audio id="player" preload="auto"></audio>
+  <script src="../config.js"></script>
+  <script src="survey.js"></script>
+</body>
+</html>

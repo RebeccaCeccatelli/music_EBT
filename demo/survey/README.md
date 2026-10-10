@@ -4,6 +4,13 @@ A static survey page served with the showcase on GitHub Pages at
 `/music_EBT/survey/` (not linked from the showcase, so participants aren't
 primed by the hand-picked examples). Source: `demo/showcase/site/survey/`.
 
+An Italian version lives at `/music_EBT/survey/it/` (`site/survey/it/`). It
+reuses the same `survey.json`, audio and `config.js` endpoint, so responses go
+to the same sheet; they carry `"lang": "it"` and show as `v4 (it)` in the
+`version` column (after redeploying `apps_script.gs`). Background answers are
+stored with the English values, so the analysis treats both languages alike.
+`it/survey.js` is a translated copy of `survey.js`: mirror any logic change.
+
 ## Design
 - **Part 1 · Unguided:** 4 blinded continuations of one prompt (EBT, Llama,
   GPT-2, and the human original as a hidden anchor), shown as Version A–D
