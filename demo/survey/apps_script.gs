@@ -23,21 +23,23 @@ function doPost(e) {
       sheet.appendRow(["received", "participant", "version", "n_trials", "training", "device", "json"]);
     }
     sheet.appendRow([
-      new Date(), d.id, d.version, (d.responses || []).length,
+      // Italian page (survey/it/) responses are marked "v4 (it)"; the json column has lang too.
+      new Date(), d.id, d.version + (d.lang ? " (" + d.lang + ")" : ""), (d.responses || []).length,
       (d.background || {}).training || "", (d.background || {}).device || "", body,
     ]);
 
     var owner = OWNER_EMAIL || Session.getEffectiveUser().getEmail();
     MailApp.sendEmail({
       to: owner,
-      subject: "Listening study: new response (" + d.id + ")",
+      subject: "Listening study: new response (" + d.id + (d.lang ? ", " + d.lang : "") + ")",
       body: summary + "\n\n(Raw answers attached; also in the 'responses' sheet.)",
       attachments: [Utilities.newBlob(body, "application/json", "survey_" + d.id + ".json")],
     });
     if (copyTo && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(copyTo)) {
       MailApp.sendEmail({
         to: copyTo,
-        subject: "Your answers: listening study on computer-made music",
+        subject: d.lang === "it" ? "Le tue risposte: studio di ascolto sulla musica creata da un computer"
+                                 : "Your answers: listening study on computer-made music",
         body: summary,
       });
     }
