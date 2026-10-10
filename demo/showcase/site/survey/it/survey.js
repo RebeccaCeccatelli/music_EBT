@@ -196,6 +196,16 @@
     current = null;
     app.innerHTML = "";
     app.append(...nodes);
+    // Progress is kept across reloads; this discards it and starts a new participant.
+    if (state.step !== "welcome" && state.step !== "done") {
+      const again = h("button", "restart", "Ricomincia da capo");
+      again.addEventListener("click", () => {
+        if (!confirm("Vuoi ricominciare il questionario dall'inizio? Le risposte date finora verranno cancellate.")) return;
+        localStorage.removeItem(STORE);
+        location.reload();
+      });
+      app.append(again);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
