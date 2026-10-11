@@ -179,7 +179,7 @@
    "id": "single",
    "kicker": "02",
    "title": "Single-Attribute Control",
-   "intro": "With a small regressor that predicts a musical attribute, generation can be steered toward a target without retraining. First the standard methods for autoregressive models, then the EBT, where the regressor's error is added to the energy it already minimises and the guidance strength λ sets how hard it pushes. Targets are given in standard deviations of the corpus, relative to the prompt's own unguided level.",
+   "intro": "With a small regressor that predicts a musical attribute, generation can be steered toward a target without retraining. First the standard methods for autoregressive models, then the EBT, where the regressor's error is added to the energy it already minimises and a guidance strength sets how hard it pushes. Targets are given in standard deviations of the corpus, relative to the prompt's own unguided level.",
    "tabs": [
     {
      "label": "REMI",
@@ -195,7 +195,7 @@
          "attribute": "velocity",
          "sd": 2,
          "title": "Baseline methods",
-         "subtitle": "target ±2 SD, each at its operating point",
+         "subtitle": "target ±2 SD, each at its recommended strength",
          "metric": "velocity",
          "metric_label": "mean velocity",
          "metric_unit": "/127",
@@ -245,7 +245,7 @@
           2
          ],
          "title": "EBT: guidance strength × target",
-         "subtitle": "rows: guidance strength λ · columns: target, in corpus SD from the unguided level",
+         "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "velocity",
          "metric_label": "mean velocity",
          "metric_unit": "/127"
@@ -263,7 +263,7 @@
          "attribute": "duration",
          "sd": 2,
          "title": "Baseline methods",
-         "subtitle": "target ±2 SD, each at its operating point",
+         "subtitle": "target ±2 SD, each at its recommended strength",
          "metric": "note_beats",
          "metric_label": "mean note length",
          "metric_unit": " beats",
@@ -313,7 +313,7 @@
           2
          ],
          "title": "EBT: guidance strength × target",
-         "subtitle": "rows: guidance strength λ · columns: target, in corpus SD from the unguided level",
+         "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "note_beats",
          "metric_label": "mean note length",
          "metric_unit": " beats"
@@ -331,7 +331,7 @@
          "attribute": "pitch_register",
          "sd": 2,
          "title": "Baseline methods",
-         "subtitle": "target ±2 SD, each at its operating point",
+         "subtitle": "target ±2 SD, each at its recommended strength",
          "metric": "pitch",
          "metric_label": "mean pitch",
          "metric_unit": "",
@@ -381,7 +381,7 @@
           2
          ],
          "title": "EBT: guidance strength × target",
-         "subtitle": "rows: guidance strength λ · columns: target, in corpus SD from the unguided level",
+         "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "pitch",
          "metric_label": "mean pitch",
          "metric_unit": ""
@@ -420,7 +420,7 @@
          "attribute": "duration",
          "sd": 2,
          "title": "Baseline methods",
-         "subtitle": "target ±2 SD, each at its operating point",
+         "subtitle": "target ±2 SD, each at its recommended strength",
          "metric": "note_beats",
          "metric_label": "mean note length",
          "metric_unit": " beats",
@@ -463,7 +463,7 @@
           2
          ],
          "title": "EBT: guidance strength × target",
-         "subtitle": "rows: guidance strength λ · columns: target, in corpus SD from the unguided level",
+         "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "note_beats",
          "metric_label": "mean note length",
          "metric_unit": " beats"
@@ -486,7 +486,7 @@
          "attribute": "pitch_register",
          "sd": 2,
          "title": "Baseline methods",
-         "subtitle": "target ±2 SD, each at its operating point",
+         "subtitle": "target ±2 SD, each at its recommended strength",
          "metric": "pitch",
          "metric_label": "mean pitch",
          "metric_unit": "",
@@ -529,7 +529,7 @@
           2
          ],
          "title": "EBT: guidance strength × target",
-         "subtitle": "rows: guidance strength λ · columns: target, in corpus SD from the unguided level",
+         "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "pitch",
          "metric_label": "mean pitch",
          "metric_unit": ""
@@ -582,7 +582,12 @@
            "method": "pplm",
            "model": "llama",
            "sub": "Llama · summed regressor gradients",
-           "strength": "16"
+           "strength": "16",
+           "strengths": [
+            "8",
+            "16",
+            "32"
+           ]
           }
          ]
         },
@@ -603,7 +608,7 @@
           2
          ],
          "title": "EBT: guidance strength × target",
-         "subtitle": "rows: guidance strength λ · columns: target size, applied to both attributes",
+         "subtitle": "rows: guidance strength, low to high · columns: target size, applied to both attributes",
          "metric": "velocity",
          "metric_label": "metric",
          "metric_unit": ""
@@ -643,7 +648,12 @@
            "method": "pplm",
            "model": "llama",
            "sub": "Llama · summed regressor gradients",
-           "strength": "16"
+           "strength": "16",
+           "strengths": [
+            "8",
+            "16",
+            "32"
+           ]
           }
          ]
         },
@@ -664,7 +674,7 @@
           2
          ],
          "title": "EBT: guidance strength × target",
-         "subtitle": "rows: guidance strength λ · columns: target size, applied to both attributes",
+         "subtitle": "rows: guidance strength, low to high · columns: target size, applied to both attributes",
          "metric": "velocity",
          "metric_label": "metric",
          "metric_unit": ""
@@ -709,7 +719,12 @@
            "method": "pplm",
            "model": "llama",
            "sub": "Llama · summed regressor gradients",
-           "strength": "16"
+           "strength": "16",
+           "strengths": [
+            "8",
+            "16",
+            "32"
+           ]
           }
          ]
         },
@@ -730,7 +745,7 @@
           2
          ],
          "title": "EBT: guidance strength × target",
-         "subtitle": "rows: guidance strength λ · columns: target size, applied to both attributes",
+         "subtitle": "rows: guidance strength, low to high · columns: target size, applied to both attributes",
          "metric": "velocity",
          "metric_label": "metric",
          "metric_unit": ""
@@ -745,7 +760,7 @@
    "id": "limits",
    "kicker": "04",
    "title": "Pushing Too Hard",
-   "intro": "Guidance strength is a trade-off. Past the operating point, strong EBT guidance flattens the model's choice among attribute values: the target is reached by scattering near-random notes. Harsh dissonance (share of simultaneous note pairs a semitone, major seventh or tritone apart) rises to the level of uniformly random notes, about 0.25.",
+   "intro": "Guidance strength is a trade-off. Past the recommended strength, strong EBT guidance flattens the model's choice among attribute values: the target is reached by scattering near-random notes. Harsh dissonance (share of simultaneous note pairs a semitone, major seventh or tritone apart) rises to the level of uniformly random notes, about 0.25.",
    "tabs": [
     {
      "label": "REMI",
@@ -780,8 +795,8 @@
          "attribute": "pitch_register",
          "sd": 2,
          "strength": "0.02",
-         "label": "λ = 0.02",
-         "tag": "operating point"
+         "label": "normal strength",
+         "tag": "recommended"
         },
         {
          "kind": "guided",
@@ -790,7 +805,7 @@
          "attribute": "pitch_register",
          "sd": 2,
          "strength": "0.16",
-         "label": "λ = 0.16",
+         "label": "8× stronger",
          "tag": "too strong"
         }
        ]
@@ -830,8 +845,8 @@
          "attribute": "pitch_register",
          "sd": 2,
          "strength": "0.01",
-         "label": "λ = 0.01",
-         "tag": "operating point"
+         "label": "normal strength",
+         "tag": "recommended"
         },
         {
          "kind": "guided",
@@ -840,7 +855,7 @@
          "attribute": "pitch_register",
          "sd": 2,
          "strength": "0.08",
-         "label": "λ = 0.08",
+         "label": "8× stronger",
          "tag": "too strong"
         }
        ]

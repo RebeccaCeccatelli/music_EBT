@@ -139,7 +139,8 @@ a:hover { text-decoration: underline; }
 .steer-cell { display: grid; min-width: 0; }
 /* Strength switch on rows with several strengths (PPLM 8 / 16 / 32). */
 .strength-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
-.strength-switch .sw-label { font: 500 11px var(--mono); color: var(--faint); margin-right: 2px; }
+.strength-switch .sw-label { flex-basis: 100%; font: 500 11px var(--mono); color: var(--faint); }
+.strength-switch .st-btn { white-space: nowrap; }
 .strength-switch .st-btn { font: 600 11.5px var(--mono); color: var(--muted); background: transparent;
   border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; cursor: pointer; }
 .strength-switch .st-btn:hover { color: var(--text); border-color: rgba(255,255,255,.25); }
