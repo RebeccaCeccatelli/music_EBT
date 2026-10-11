@@ -45,6 +45,7 @@ BIN = Path(sys.executable).parent
 
 AR = LOGS / "ar_guidance"
 LM = LOGS / "listen_midi"
+CG = LOGS / "compose_guidance"
 
 # Per tokenizer: where each run's MIDI lives. EBT dirs are lists because
 # Anticipation's coarse and fine lambda grids are separate jobs.
@@ -67,6 +68,13 @@ RUNS = {
             ("best_of_n", "gpt2"): AR / "gpt2_best_of_n_20261005_154305_24940380/midi",
             ("best_of_n", "llama"): AR / "llama_best_of_n_20261005_153108_24940376/midi",
             ("pplm", "llama"): AR / "llama_pplm_20261008_070421_25261493/midi",
+        },
+        # Two attributes at once (velocity + duration), attribute_control/compose_guidance_sweep.py.
+        "compose": {  # (method, model) -> run dir
+            ("ebt", "ebt"): CG / "ebt_r3_20261009_160737_25416469/midi",
+            ("tilt", "llama"): CG / "llama_tilt_20261009_193352_25416471/midi",
+            ("best_of_n", "llama"): CG / "llama_best_of_n_20261009_200504_25416473/midi",
+            ("pplm", "llama"): CG / "llama_pplm_20261009_185349_25416470/midi",
         },
     },
     "ant": {  # control-free Anticipation prompts (commit 1802c3f)
@@ -131,6 +139,15 @@ def resolve(spec):
         return runs["ground_truth"] / f"p{pid}_ground_truth.mid"
     if kind == "unguided":
         return runs["unguided"][spec["model"]] / f"p{pid}_r{spec.get('draw', 0)}_generated.mid"
+    if kind in ("compose", "compose_unguided"):
+        run = runs["compose"].get((spec["method"], spec["model"]))
+        if run is None:
+            return None
+        if kind == "compose_unguided":   # each sweep's own baseline: targets are relative to it
+            return run / "baseline" / f"p{pid}_r0_generated.mid"
+        prefix = "r3" if spec["method"] == "ebt" else spec["method"]
+        # Files are duplicated under each attribute's folder; c<velocity>_<duration> in SD.
+        return run / "velocity" / f"p{pid}_{prefix}{spec['strength']}_c{spec['combo']}_generated.mid"
     attr, sd = spec["attribute"], spec["sd"]
     if spec["method"] == "ebt":
         return ebt_path(spec["tok"], attr, pid, sd, spec["strength"])
@@ -145,7 +162,7 @@ def clip_id(spec):
         spec = PLACEHOLDER
     parts = [spec["tok"], spec["kind"], spec.get("method"), spec.get("model"),
              spec.get("attribute"), str(spec["prompt"]), spec.get("strength"),
-             None if spec.get("sd") is None else f"{spec['sd']:+g}",
+             None if spec.get("sd") is None else f"{spec['sd']:+g}", spec.get("combo"),
              None if not spec.get("draw") else f"r{spec['draw']}"]
     return "_".join(p for p in parts if p).replace(".", "p").replace("+", "u").replace("-", "d")
 
@@ -322,6 +339,20 @@ def expand_block(b):
                               "strength": lam, "sd": sd, "row": lam, "col": f"{sd:+g}",
                               "operating": lam == OPERATING.get(b["tok"], {}).get(b.get("attribute")),
                               "placeholder": ph})
+    elif t == "compose":
+        # Rendered as a steer table: rows = methods, columns = unguided + target sizes.
+        sv, sdur = b["directions"]   # +1 / -1 for velocity and duration
+        for row in b["rows"]:
+            base = {"method": row["method"], "model": row["model"], "row": row["label"],
+                    "row_sub": row.get("sub", ""), "tag": row.get("tag")}
+            clips.append({**ctx, **base, "kind": "compose_unguided", "col": "unguided", "default": False})
+            for st in row.get("strengths", [row["strength"]]):
+                for size in b["sizes"]:
+                    clips.append({**ctx, **base, "kind": "compose", "strength": st, "col": f"s{size}",
+                                  "combo": f"{sv * size:+d}_{sdur * size:+d}",
+                                  "default": st == row["strength"]})
+        b = {**b, "type": "steer",
+             "cols": [["unguided", "unguided"]] + [[f"s{x}", f"{x} SD each"] for x in b["sizes"]]}
     else:
         raise ValueError(t)
     return {**{k: v for k, v in b.items() if k not in ("rows",)}, "clips": clips}
