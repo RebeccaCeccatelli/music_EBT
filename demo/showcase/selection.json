@@ -551,211 +551,295 @@
    "id": "combined",
    "kicker": "03",
    "title": "Combined Control",
-   "intro": "Several attributes steered at once: the EBT simply adds one regressor energy per attribute; the baselines combine the regressors' gradients (PPLM) or the distances (best-of-N). Same layout as single-attribute control.",
+   "intro": "Two attributes steered at once, loudness and note length, in all four direction combinations (REMI). The EBT simply adds one regressor energy per attribute; PPLM sums the two regressors' gradients, best-of-N the two distances, and tilting chains two tilts. Every tab uses the same prompt, so the unguided versions are identical and the tabs can be compared directly.",
    "tabs": [
     {
-     "label": "REMI",
-     "tabs": [
+     "label": "Louder + longer notes",
+     "sublabel": "loudness ▲ · note length ▲",
+     "blocks": [
       {
-       "label": "Louder + higher",
-       "sublabel": "velocity ↑ · pitch ↑",
-       "blocks": [
+       "type": "compose",
+       "tok": "remi",
+       "prompt": 4563,
+       "directions": [
+        1,
+        1
+       ],
+       "sizes": [
+        1,
+        2
+       ],
+       "title": "All methods, both targets at once",
+       "subtitle": "columns: target size, the same for both attributes · switch: guidance strength",
+       "metrics": [
         {
-         "type": "note",
-         "title": "Skeleton",
-         "text": "Combined-control runs don't exist yet; every clip here is a placeholder."
+         "metric": "velocity",
+         "metric_label": "mean velocity",
+         "metric_unit": "/127"
         },
         {
-         "type": "steer",
-         "tok": "remi",
-         "prompt": 9235,
-         "placeholder": true,
-         "sd": 2,
-         "title": "Baseline methods",
-         "subtitle": "both targets at once, ±2 SD each",
-         "metric": "velocity",
-         "metric_label": "metric",
-         "metric_unit": "",
-         "rows": [
-          {
-           "label": "Best-of-16",
-           "method": "best_of_n",
-           "model": "llama",
-           "strength": "16",
-           "sub": "Llama · keeps the closest of 16 unguided samples"
-          },
-          {
-           "label": "PPLM",
-           "method": "pplm",
-           "model": "llama",
-           "sub": "Llama · summed regressor gradients",
-           "strength": "16",
-           "strengths": [
-            "8",
-            "16",
-            "32"
-           ]
-          }
-         ]
-        },
-        {
-         "type": "intensity",
-         "tok": "remi",
-         "prompt": 9235,
-         "placeholder": true,
-         "lambdas": [
-          "low",
-          "mid",
-          "high"
-         ],
-         "sds": [
-          -2,
-          -1,
-          1,
-          2
-         ],
-         "title": "EBT: guidance strength × target",
-         "subtitle": "rows: guidance strength, low to high · columns: target size, applied to both attributes",
-         "metric": "velocity",
-         "metric_label": "metric",
-         "metric_unit": ""
+         "metric": "note_beats",
+         "metric_label": "mean note length",
+         "metric_unit": " beats"
         }
-       ]
-      },
-      {
-       "label": "Legato + lower",
-       "sublabel": "duration ↑ · pitch ↓",
-       "blocks": [
+       ],
+       "rows": [
         {
-         "type": "note",
-         "title": "Skeleton",
-         "text": "Combined-control runs don't exist yet; every clip here is a placeholder."
+         "label": "EBT (ours)",
+         "method": "ebt",
+         "model": "ebt",
+         "strength": "0.03",
+         "strengths": [
+          "0.01",
+          "0.03",
+          "0.05"
+         ],
+         "sub": "adds one regressor energy per attribute"
         },
         {
-         "type": "steer",
-         "tok": "remi",
-         "prompt": 9235,
-         "placeholder": true,
-         "sd": 2,
-         "title": "Baseline methods",
-         "subtitle": "both targets at once, ±2 SD each",
-         "metric": "velocity",
-         "metric_label": "metric",
-         "metric_unit": "",
-         "rows": [
-          {
-           "label": "Best-of-16",
-           "method": "best_of_n",
-           "model": "llama",
-           "strength": "16",
-           "sub": "Llama · keeps the closest of 16 unguided samples"
-          },
-          {
-           "label": "PPLM",
-           "method": "pplm",
-           "model": "llama",
-           "sub": "Llama · summed regressor gradients",
-           "strength": "16",
-           "strengths": [
-            "8",
-            "16",
-            "32"
-           ]
-          }
-         ]
+         "label": "Tilt",
+         "method": "tilt",
+         "model": "llama",
+         "strength": "1",
+         "sub": "Llama · two chained tilts on the attributes' own tokens (oracle reference)"
         },
         {
-         "type": "intensity",
-         "tok": "remi",
-         "prompt": 9235,
-         "placeholder": true,
-         "lambdas": [
-          "low",
-          "mid",
-          "high"
+         "label": "Best-of-16",
+         "method": "best_of_n",
+         "model": "llama",
+         "strength": "16",
+         "sub": "Llama · keeps the sample closest to both targets"
+        },
+        {
+         "label": "PPLM",
+         "method": "pplm",
+         "model": "llama",
+         "strength": "16",
+         "strengths": [
+          "8",
+          "16",
+          "32"
          ],
-         "sds": [
-          -2,
-          -1,
-          1,
-          2
-         ],
-         "title": "EBT: guidance strength × target",
-         "subtitle": "rows: guidance strength, low to high · columns: target size, applied to both attributes",
-         "metric": "velocity",
-         "metric_label": "metric",
-         "metric_unit": ""
+         "sub": "Llama · summed regressor gradients"
         }
        ]
       }
      ]
     },
     {
-     "label": "Anticipation",
-     "tabs": [
+     "label": "Louder + shorter notes",
+     "sublabel": "loudness ▲ · note length ▼",
+     "blocks": [
       {
-       "label": "Legato + higher",
-       "sublabel": "duration ↑ · pitch ↑",
-       "blocks": [
+       "type": "compose",
+       "tok": "remi",
+       "prompt": 4563,
+       "directions": [
+        1,
+        -1
+       ],
+       "sizes": [
+        1,
+        2
+       ],
+       "title": "All methods, both targets at once",
+       "subtitle": "columns: target size, the same for both attributes · switch: guidance strength",
+       "metrics": [
         {
-         "type": "note",
-         "title": "Skeleton",
-         "text": "Combined-control runs don't exist yet; every clip here is a placeholder."
+         "metric": "velocity",
+         "metric_label": "mean velocity",
+         "metric_unit": "/127"
         },
         {
-         "type": "steer",
-         "tok": "ant",
-         "prompt": 9235,
-         "placeholder": true,
-         "sd": 2,
-         "title": "Baseline methods",
-         "subtitle": "both targets at once, ±2 SD each",
-         "metric": "velocity",
-         "metric_label": "metric",
-         "metric_unit": "",
-         "rows": [
-          {
-           "label": "Best-of-16",
-           "method": "best_of_n",
-           "model": "llama",
-           "strength": "16",
-           "sub": "Llama · keeps the closest of 16 unguided samples"
-          },
-          {
-           "label": "PPLM",
-           "method": "pplm",
-           "model": "llama",
-           "sub": "Llama · summed regressor gradients",
-           "strength": "16",
-           "strengths": [
-            "8",
-            "16",
-            "32"
-           ]
-          }
-         ]
+         "metric": "note_beats",
+         "metric_label": "mean note length",
+         "metric_unit": " beats"
+        }
+       ],
+       "rows": [
+        {
+         "label": "EBT (ours)",
+         "method": "ebt",
+         "model": "ebt",
+         "strength": "0.03",
+         "strengths": [
+          "0.01",
+          "0.03",
+          "0.05"
+         ],
+         "sub": "adds one regressor energy per attribute"
         },
         {
-         "type": "intensity",
-         "tok": "ant",
-         "prompt": 9235,
-         "placeholder": true,
-         "lambdas": [
-          "low",
-          "mid",
-          "high"
+         "label": "Tilt",
+         "method": "tilt",
+         "model": "llama",
+         "strength": "1",
+         "sub": "Llama · two chained tilts on the attributes' own tokens (oracle reference)"
+        },
+        {
+         "label": "Best-of-16",
+         "method": "best_of_n",
+         "model": "llama",
+         "strength": "16",
+         "sub": "Llama · keeps the sample closest to both targets"
+        },
+        {
+         "label": "PPLM",
+         "method": "pplm",
+         "model": "llama",
+         "strength": "16",
+         "strengths": [
+          "8",
+          "16",
+          "32"
          ],
-         "sds": [
-          -2,
-          -1,
-          1,
-          2
-         ],
-         "title": "EBT: guidance strength × target",
-         "subtitle": "rows: guidance strength, low to high · columns: target size, applied to both attributes",
+         "sub": "Llama · summed regressor gradients"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "label": "Softer + longer notes",
+     "sublabel": "loudness ▼ · note length ▲",
+     "blocks": [
+      {
+       "type": "compose",
+       "tok": "remi",
+       "prompt": 4563,
+       "directions": [
+        -1,
+        1
+       ],
+       "sizes": [
+        1,
+        2
+       ],
+       "title": "All methods, both targets at once",
+       "subtitle": "columns: target size, the same for both attributes · switch: guidance strength",
+       "metrics": [
+        {
          "metric": "velocity",
-         "metric_label": "metric",
-         "metric_unit": ""
+         "metric_label": "mean velocity",
+         "metric_unit": "/127"
+        },
+        {
+         "metric": "note_beats",
+         "metric_label": "mean note length",
+         "metric_unit": " beats"
+        }
+       ],
+       "rows": [
+        {
+         "label": "EBT (ours)",
+         "method": "ebt",
+         "model": "ebt",
+         "strength": "0.03",
+         "strengths": [
+          "0.01",
+          "0.03",
+          "0.05"
+         ],
+         "sub": "adds one regressor energy per attribute"
+        },
+        {
+         "label": "Tilt",
+         "method": "tilt",
+         "model": "llama",
+         "strength": "1",
+         "sub": "Llama · two chained tilts on the attributes' own tokens (oracle reference)"
+        },
+        {
+         "label": "Best-of-16",
+         "method": "best_of_n",
+         "model": "llama",
+         "strength": "16",
+         "sub": "Llama · keeps the sample closest to both targets"
+        },
+        {
+         "label": "PPLM",
+         "method": "pplm",
+         "model": "llama",
+         "strength": "16",
+         "strengths": [
+          "8",
+          "16",
+          "32"
+         ],
+         "sub": "Llama · summed regressor gradients"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "label": "Softer + shorter notes",
+     "sublabel": "loudness ▼ · note length ▼",
+     "blocks": [
+      {
+       "type": "compose",
+       "tok": "remi",
+       "prompt": 4563,
+       "directions": [
+        -1,
+        -1
+       ],
+       "sizes": [
+        1,
+        2
+       ],
+       "title": "All methods, both targets at once",
+       "subtitle": "columns: target size, the same for both attributes · switch: guidance strength",
+       "metrics": [
+        {
+         "metric": "velocity",
+         "metric_label": "mean velocity",
+         "metric_unit": "/127"
+        },
+        {
+         "metric": "note_beats",
+         "metric_label": "mean note length",
+         "metric_unit": " beats"
+        }
+       ],
+       "rows": [
+        {
+         "label": "EBT (ours)",
+         "method": "ebt",
+         "model": "ebt",
+         "strength": "0.03",
+         "strengths": [
+          "0.01",
+          "0.03",
+          "0.05"
+         ],
+         "sub": "adds one regressor energy per attribute"
+        },
+        {
+         "label": "Tilt",
+         "method": "tilt",
+         "model": "llama",
+         "strength": "1",
+         "sub": "Llama · two chained tilts on the attributes' own tokens (oracle reference)"
+        },
+        {
+         "label": "Best-of-16",
+         "method": "best_of_n",
+         "model": "llama",
+         "strength": "16",
+         "sub": "Llama · keeps the sample closest to both targets"
+        },
+        {
+         "label": "PPLM",
+         "method": "pplm",
+         "model": "llama",
+         "strength": "16",
+         "strengths": [
+          "8",
+          "16",
+          "32"
+         ],
+         "sub": "Llama · summed regressor gradients"
         }
        ]
       }

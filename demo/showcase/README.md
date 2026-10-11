@@ -22,11 +22,13 @@ attribute/combination tab → blocks):
 2. Single-Attribute Control: REMI / Anticipation → velocity, duration,
    pitch register. A `steer` block (tilt, best-of-16, PPLM on Llama:
    down / unguided / up) and an `intensity` block (EBT: λ rows × target columns).
-3. Combined Control: same skeleton, all placeholders for now.
+3. Combined Control: REMI loudness + note length, one tab per direction
+   combination (4), all on one prompt; a `compose` block (rows = EBT / tilt /
+   best-of-16 / PPLM, columns = unguided, 1 SD, 2 SD each). Runs: `RUNS["remi"]["compose"]`.
 4. Pushing Too Hard: EBT pitch register at operating vs high λ, per tokenizer.
 
 Block types: `clips` (explicit list), `steer` (`rows` of method/model/strength;
-an optional `strengths` list adds a strength switch to that row, e.g. PPLM 8 / 16 / 32),
+an optional `strengths` list puts a low / medium / high switch inside each steered card, e.g. PPLM 8 / 16 / 32),
 `intensity` (`lambdas` × `sds`), `note` (text card). Clip specs:
 `kind` = ground_truth | unguided (`model`) | guided (`method`, `model`,
 `attribute`, `sd`, `strength`; for EBT the strength is λ). Strengths are
