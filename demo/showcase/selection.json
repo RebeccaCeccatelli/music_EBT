@@ -179,7 +179,14 @@
    "id": "single",
    "kicker": "02",
    "title": "Single-Attribute Control",
-   "intro": "With a small regressor that predicts a musical attribute, generation can be steered toward a target without retraining. First the standard methods for autoregressive models, then the EBT, where the regressor's error is added to the energy it already minimises and a guidance strength sets how hard it pushes. Targets are given in standard deviations of the corpus, relative to the prompt's own unguided level.",
+   "intro": "With a small regressor that predicts a musical attribute, generation can be steered toward a target without retraining. First the standard methods for autoregressive models, then the EBT, where the regressor's error is added to the energy it already minimises and a guidance strength sets how hard it pushes. Targets are given in standard deviations (SD) of the corpus, relative to the prompt's own unguided level.",
+   "blocks": [
+    {
+     "type": "note",
+     "title": "What does “SD” mean?",
+     "text": "SD stands for standard deviation: how much a musical attribute (loudness, note length, pitch) usually varies from one piece to another in the music the models were trained on. Each target is measured from where the model would land without guidance on that prompt: +1 SD asks for a moderate change, about as large as the usual spread between pieces, and +2 SD for a large, clearly audible one; −1 and −2 SD ask for the same in the opposite direction. For example, 1 SD is about 17 steps of loudness on MIDI's 0–127 scale, or about 9 semitones (a bit less than an octave) of average pitch."
+    }
+   ],
    "tabs": [
     {
      "label": "REMI",
