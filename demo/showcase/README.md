@@ -25,7 +25,8 @@ attribute/combination tab → blocks):
 3. Combined Control: same skeleton, all placeholders for now.
 4. Pushing Too Hard: EBT pitch register at operating vs high λ, per tokenizer.
 
-Block types: `clips` (explicit list), `steer` (`rows` of method/model/strength),
+Block types: `clips` (explicit list), `steer` (`rows` of method/model/strength;
+an optional `strengths` list adds a strength switch to that row, e.g. PPLM 8 / 16 / 32),
 `intensity` (`lambdas` × `sds`), `note` (text card). Clip specs:
 `kind` = ground_truth | unguided (`model`) | guided (`method`, `model`,
 `attribute`, `sd`, `strength`; for EBT the strength is λ). Strengths are

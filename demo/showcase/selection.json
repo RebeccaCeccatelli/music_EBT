@@ -219,7 +219,12 @@
            "method": "pplm",
            "model": "llama",
            "sub": "Llama · one regressor-gradient step on the logits",
-           "strength": "16"
+           "strength": "16",
+           "strengths": [
+            "8",
+            "16",
+            "32"
+           ]
           }
          ]
         },
@@ -282,7 +287,12 @@
            "method": "pplm",
            "model": "llama",
            "sub": "Llama · one regressor-gradient step on the logits",
-           "strength": "16"
+           "strength": "16",
+           "strengths": [
+            "8",
+            "16",
+            "32"
+           ]
           }
          ]
         },
@@ -345,7 +355,12 @@
            "method": "pplm",
            "model": "llama",
            "sub": "Llama · one regressor-gradient step on the logits",
-           "strength": "32"
+           "strength": "32",
+           "strengths": [
+            "8",
+            "16",
+            "32"
+           ]
           }
          ]
         },
@@ -421,9 +436,13 @@
            "label": "PPLM",
            "method": "pplm",
            "model": "llama",
-           "sub": "Llama · run in progress, placeholder audio",
+           "sub": "Llama · one regressor-gradient step on the logits",
            "strength": "16",
-           "placeholder": true
+           "strengths": [
+            "8",
+            "16",
+            "32"
+           ]
           }
          ]
         },
@@ -483,9 +502,13 @@
            "label": "PPLM",
            "method": "pplm",
            "model": "llama",
-           "sub": "Llama · run in progress, placeholder audio",
-           "strength": "32",
-           "placeholder": true
+           "sub": "Llama · one regressor-gradient step on the logits",
+           "strength": "16",
+           "strengths": [
+            "8",
+            "16",
+            "32"
+           ]
           }
          ]
         },

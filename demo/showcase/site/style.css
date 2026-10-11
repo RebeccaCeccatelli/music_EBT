@@ -136,6 +136,14 @@ a:hover { text-decoration: underline; }
 .steer .rowhead { display: flex; flex-direction: column; justify-content: center; gap: 6px; font-weight: 650; }
 .steer .rowhead small { font: 500 11.5px var(--font); color: var(--faint); }
 .steer .clip { padding: 12px; }
+.steer-cell { display: grid; min-width: 0; }
+/* Strength switch on rows with several strengths (PPLM 8 / 16 / 32). */
+.strength-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
+.strength-switch .sw-label { font: 500 11px var(--mono); color: var(--faint); margin-right: 2px; }
+.strength-switch .st-btn { font: 600 11.5px var(--mono); color: var(--muted); background: transparent;
+  border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; cursor: pointer; }
+.strength-switch .st-btn:hover { color: var(--text); border-color: rgba(255,255,255,.25); }
+.strength-switch .st-btn.on { color: #fff; background: var(--accent); border-color: var(--accent); }
 .steer .clip.col-down { box-shadow: inset 0 2px 0 rgba(90,169,255,.55); }
 .steer .clip.col-up { box-shadow: inset 0 2px 0 rgba(255,138,92,.6); }
 .steer .clip.playing { box-shadow: 0 0 0 1px rgba(139,124,255,.35), 0 12px 40px -12px rgba(139,124,255,.45); }
