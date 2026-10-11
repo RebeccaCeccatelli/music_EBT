@@ -184,7 +184,7 @@
     {
      "type": "note",
      "title": "What does “SD” mean?",
-     "text": "SD stands for standard deviation: how much a musical attribute (loudness, note length, pitch) usually varies from one piece to another in the music the models were trained on. Each target is measured from where the model would land without guidance on that prompt: +1 SD asks for a moderate change, about as large as the usual spread between pieces, and +2 SD for a large, clearly audible one; −1 and −2 SD ask for the same in the opposite direction. For example, 1 SD is about 17 steps of loudness on MIDI's 0–127 scale, or about 9 semitones (a bit less than an octave) of average pitch."
+     "text": "SD (standard deviation) is how much loudness, note length or pitch usually varies between pieces. +1 SD asks for a moderate change from the unguided version, +2 SD for a large one; minus means the opposite direction."
     }
    ],
    "tabs": [
