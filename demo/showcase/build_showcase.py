@@ -448,6 +448,9 @@ class Builder:
         if "blocks" in n:
             out["blocks"] = []
             for b in n["blocks"]:
+                if b["type"] == "group":  # several blocks in one shaded card
+                    out["blocks"].append(self.node(b))
+                    continue
                 b = expand_block(b)
                 if b.get("prompt") is not None and b.get("tok") and not b.get("placeholder"):
                     b = {"prompt_name": prompt_name(b["tok"], b["prompt"]), **b}

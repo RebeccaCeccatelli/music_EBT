@@ -77,6 +77,9 @@ a:hover { text-decoration: underline; }
 .example-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 16px; }
 .example h3 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -0.01em; }
 .example .pid { font: 12px var(--mono); color: var(--faint); }
+.example.nested { margin: 0; padding: 0; background: none; border: 0; border-radius: 0; backdrop-filter: none; }
+.example.nested + .example.nested { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border); }
+.example.nested h3 { font-size: 16px; }
 
 .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 

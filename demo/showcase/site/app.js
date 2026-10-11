@@ -386,7 +386,19 @@
     return card;
   }
 
-  const BLOCKS = { clips: clipsBlock, steer: steerBlock, intensity: intensityBlock, note: noteBlock };
+  // Several blocks in one shaded card, e.g. all the baselines of a tab.
+  function groupBlock(b) {
+    const card = blockCard(b);
+    card.classList.add("group");
+    for (const c of b.blocks || []) {
+      const el = BLOCKS[c.type](c);
+      el.classList.add("nested");
+      card.append(el);
+    }
+    return card;
+  }
+
+  const BLOCKS = { clips: clipsBlock, steer: steerBlock, intensity: intensityBlock, note: noteBlock, group: groupBlock };
 
   // ----------------------------------------------------------------- tabs
   // Above each block title: which tabs it belongs to, and whether it is a baseline or ours.
