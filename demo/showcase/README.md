@@ -30,7 +30,7 @@ attribute/combination tab → blocks):
 
 Block types: `clips` (explicit list), `steer` (`rows` of method/model/strength;
 an optional `strengths` list puts a low / medium / high switch inside each steered card, e.g. PPLM 8 / 16 / 32),
-`intensity` (`lambdas` × `sds`), `note` (text card). Clip specs:
+`intensity` (`lambdas` × `sds`), `note` (text card). Optional `role` (`baseline`/`ours`) adds a badge; every block also shows its tab path (e.g. REMI · Velocity) above the title. Clip specs:
 `kind` = ground_truth | unguided (`model`) | guided (`method`, `model`,
 `attribute`, `sd`, `strength`; for EBT the strength is λ). Strengths are
 written as in the file names (`pplm16`, `tilt1`, `best_of_n16`, `r30.02`).
