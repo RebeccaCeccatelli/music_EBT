@@ -330,15 +330,17 @@ def expand_block(b):
                 clips.append({**ctx, **spec, "row": row["label"], "row_sub": row.get("sub", ""),
                               "col": col, "default": default, "placeholder": ph})
     elif t == "intensity":
+        # Strength rows x target columns for one method (EBT by default; PPLM uses the same grid).
         ph = b.get("placeholder")
-        clips.append({**ctx, "kind": "unguided", "model": "ebt", "row": "unguided",
+        method, model = b.get("method", "ebt"), b.get("model", "ebt")
+        rec = b.get("recommended") or OPERATING.get(b["tok"], {}).get(b.get("attribute"))
+        clips.append({**ctx, "kind": "unguided", "model": model, "row": "unguided",
                       "col": "unguided", "placeholder": ph})
         for lam in b["lambdas"]:
             for sd in b["sds"]:
-                clips.append({**ctx, "kind": "guided", "method": "ebt", "model": "ebt",
+                clips.append({**ctx, "kind": "guided", "method": method, "model": model,
                               "strength": lam, "sd": sd, "row": lam, "col": f"{sd:+g}",
-                              "operating": lam == OPERATING.get(b["tok"], {}).get(b.get("attribute")),
-                              "placeholder": ph})
+                              "operating": lam == rec, "placeholder": ph})
     elif t == "compose":
         # Rendered as a steer table: rows = methods, columns = unguided + target sizes.
         sv, sdur = b["directions"]   # +1 / -1 for velocity and duration
