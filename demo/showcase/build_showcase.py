@@ -83,6 +83,7 @@ RUNS = {
         "ar": {
             ("best_of_n", "gpt2"): AR / "gpt2_best_of_n_20261008_154914_25296309/midi",
             ("best_of_n", "llama"): AR / "llama_best_of_n_20261008_155455_25296310/midi",
+            ("pplm", "llama"): AR / "llama_pplm_20261009_113147_25404826/midi",
         },
     },
 }
@@ -302,11 +303,15 @@ def expand_block(b):
         for row in b["rows"]:
             ph = row.get("placeholder") or b.get("placeholder")
             un = {"kind": "unguided", "model": row["model"]}
-            g = {"kind": "guided", "method": row["method"], "model": row["model"],
-                 "strength": row["strength"]}
-            for col, spec in (("down", _with(g, sd=-sd)), ("unguided", un), ("up", _with(g, sd=sd))):
+            # "strengths" adds a switch on the page; "strength" is the one shown first.
+            cells = [("unguided", un, False)]
+            for st in row.get("strengths", [row["strength"]]):
+                g = {"kind": "guided", "method": row["method"], "model": row["model"], "strength": st}
+                cells += [("down", _with(g, sd=-sd), st == row["strength"]),
+                          ("up", _with(g, sd=sd), st == row["strength"])]
+            for col, spec, default in cells:
                 clips.append({**ctx, **spec, "row": row["label"], "row_sub": row.get("sub", ""),
-                              "col": col, "placeholder": ph})
+                              "col": col, "default": default, "placeholder": ph})
     elif t == "intensity":
         ph = b.get("placeholder")
         clips.append({**ctx, "kind": "unguided", "model": "ebt", "row": "unguided",
@@ -401,7 +406,7 @@ class Builder:
             }
         self.used.add(f"{cid}.mp3")
         keep = {k: v for k, v in spec.items()
-                if k in ("label", "tag", "row", "row_sub", "col", "operating", "placeholder", "sd", "strength")
+                if k in ("label", "tag", "row", "row_sub", "col", "operating", "default", "placeholder", "sd", "strength")
                 and v not in (None, False)}
         return {"id": cid, **keep, **self.cache[cid]}
 

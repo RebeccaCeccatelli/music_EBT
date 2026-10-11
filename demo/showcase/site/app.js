@@ -243,20 +243,69 @@
 
     const rows = [...new Set(b.clips.map((c) => c.row))];
     const values = {};
+    let scale = null;
+    const redrawScale = () => {
+      if (!b.metric || !Object.keys(values).length) return;
+      const next = scaleBlock(b, values);
+      if (scale) scale.replaceWith(next); else card.append(next);
+      scale = next;
+    };
     for (const row of rows) {
-      const rc = Object.fromEntries(b.clips.filter((c) => c.row === row).map((c) => [c.col, c]));
-      table.append(h("div", "rowhead", `${row}<small>${rc.unguided.row_sub || ""}</small>`));
+      const rowClips = b.clips.filter((c) => c.row === row);
+      const ref = rowClips.find((c) => c.col === "unguided");
+      // A row with several strengths (e.g. PPLM 8 / 16 / 32) gets a switch; all
+      // versions are laid out in place and only the selected one is shown.
+      const strengths = [...new Set(rowClips.filter((c) => c !== ref).map((c) => c.strength))];
+      const head = h("div", "rowhead", `${row}<small>${ref.row_sub || ""}</small>`);
+      table.append(head);
+      const byStrength = {};
       for (const [k] of COLS) {
-        table.append(makeClip(rc[k], range, {
-          label: { down: "Down", unguided: "Unguided", up: "Up" }[k],
-          col: k,
-          metricHTML: b.metric ? metricCell(b, rc[k], rc.unguided) : null,
-        }));
+        const cell = h("div", "steer-cell");
+        for (const c of k === "unguided" ? [ref] : rowClips.filter((x) => x.col === k)) {
+          const el = makeClip(c, range, {
+            label: { down: "Down", unguided: "Unguided", up: "Up" }[k],
+            col: k,
+            metricHTML: b.metric ? metricCell(b, c, ref) : null,
+          });
+          if (k !== "unguided") {
+            (byStrength[c.strength] ||= []).push(el);
+            if (!c.default) el.style.display = "none";
+          }
+          cell.append(el);
+        }
+        table.append(cell);
       }
-      if (!rc.unguided.placeholder) values[row] = Object.fromEntries(COLS.map(([k]) => [k, rc[k].metrics[b.metric]]));
+      const val = (st) => Object.fromEntries(COLS.map(([k]) => {
+        const c = k === "unguided" ? ref : rowClips.find((x) => x.col === k && x.strength === st);
+        return [k, c && !c.placeholder ? c.metrics[b.metric] : null];
+      }));
+      const first = (rowClips.find((c) => c.default && c !== ref) || {}).strength;
+      if (!ref.placeholder) values[row] = val(first);
+      if (strengths.length > 1) {
+        const sw = h("div", "strength-switch");
+        sw.append(h("span", "sw-label", "strength"));
+        for (const st of strengths) {
+          const btn = h("button", "st-btn" + (st === first ? " on" : ""), st);
+          btn.type = "button";
+          btn.addEventListener("click", () => {
+            sw.querySelectorAll(".st-btn").forEach((x) => x.classList.toggle("on", x === btn));
+            for (const [k, els] of Object.entries(byStrength)) {
+              for (const el of els) {
+                const show = k === st;
+                if (!show && current && current.el === el) player.pause();
+                el.style.display = show ? "" : "none";
+              }
+            }
+            requestAnimationFrame(() => clips.forEach((c) => { if (byStrength[st].includes(c.el)) drawBase(c); }));
+            if (!ref.placeholder) { values[row] = val(st); redrawScale(); }
+          });
+          sw.append(btn);
+        }
+        head.append(sw);
+      }
     }
     card.append(table);
-    if (b.metric && Object.keys(values).length) card.append(scaleBlock(b, values));
+    redrawScale();
     return card;
   }
 
