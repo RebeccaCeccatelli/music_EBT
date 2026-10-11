@@ -203,6 +203,9 @@
   }
 
   // --------------------------------------------------------------- blocks
+  // Plain-language names for an ordered set of strengths; the exact value stays in a tooltip.
+  const strengthNames = (n) => n === 3 ? ["low", "medium", "high"] : n === 2 ? ["low", "high"]
+    : Array.from({ length: n }, (_, i) => `level ${i + 1}`);
   const fmtSd = (sd) => `${sd > 0 ? "+" : "−"}${Math.abs(sd)} SD`;
 
   function blockCard(b, sub) {
@@ -284,9 +287,11 @@
       if (strengths.length > 1) {
         const sw = h("div", "strength-switch");
         sw.append(h("span", "sw-label", "strength"));
-        for (const st of strengths) {
-          const btn = h("button", "st-btn" + (st === first ? " on" : ""), st);
+        const names = strengthNames(strengths.length);
+        strengths.forEach((st, i) => {
+          const btn = h("button", "st-btn" + (st === first ? " on" : ""), names[i]);
           btn.type = "button";
+          btn.title = `${ref.row} strength ${st}`;
           btn.addEventListener("click", () => {
             sw.querySelectorAll(".st-btn").forEach((x) => x.classList.toggle("on", x === btn));
             for (const [k, els] of Object.entries(byStrength)) {
@@ -300,7 +305,7 @@
             if (!ref.placeholder) { values[row] = val(st); redrawScale(); }
           });
           sw.append(btn);
-        }
+        });
         head.append(sw);
       }
     }
@@ -318,7 +323,7 @@
     const table = h("div", "intensity");
     table.style.setProperty("--cols", sds.length);
 
-    table.append(h("div", "colhead", "λ"));
+    table.append(h("div", "colhead", "strength"));
     for (const sd of sds) table.append(h("div", "colhead " + (sd > 0 ? "up" : "down"), (sd > 0 ? "▲ " : "▼ ") + fmtSd(sd)));
 
     // Reference row: the unguided continuation every cell is compared to.
@@ -334,10 +339,13 @@
     const r0 = ref.metrics[b.metric];
     const devs = b.clips.filter((c) => c !== ref && c.metrics[b.metric] != null).map((c) => Math.abs(c.metrics[b.metric] - r0));
     const maxDev = Math.max(...devs, 1e-9);
-    for (const lam of lambdas) {
+    const lamNames = strengthNames(lambdas.length);
+    lambdas.forEach((lam, li) => {
       const cells = b.clips.filter((c) => c.strength === lam);
       const op = cells.some((c) => c.operating);
-      table.append(h("div", "rowhead lam", `λ = ${lam}${op ? '<small class="op">operating point</small>' : ""}`));
+      const head = h("div", "rowhead lam", `${lamNames[li]}${op ? '<small class="op">recommended</small>' : ""}`);
+      head.title = `λ = ${lam}`;
+      table.append(head);
       for (const sd of sds) {
         const c = cells.find((x) => x.sd === sd);
         const el = makeClip(c, range, {
@@ -353,7 +361,7 @@
         }
         table.append(el);
       }
-    }
+    });
     const scroll = h("div", "intensity-scroll");
     scroll.append(table);
     card.append(scroll);
