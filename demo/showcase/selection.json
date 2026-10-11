@@ -184,7 +184,7 @@
     {
      "type": "note",
      "title": "What do “SD” and “strength” mean?",
-     "text": "<span class=\"nl\"><b>SD (the target)</b> = <i>where</i> you ask the music to go: “a bit louder” (+1 SD) or “much louder” (+2 SD); minus means the opposite direction. SD stands for standard deviation, how much loudness, note length or pitch usually varies between pieces.</span><span class=\"nl\"><b>Strength</b> (low / medium / high) = <i>how hard</i> the model is pushed to get there: how insistently you ask, not what you ask for.</span><span class=\"nl\">Think of a conductor: the SD is what they ask the orchestra for (“a little louder”), the strength is how insistently they gesture. Insist too much and the players overdo it, which is what “Pushing Too Hard” shows.</span>"
+     "text": "<span class=\"nl\"><b>SD (the target)</b> = <i>where</i> you ask the music to go: “a bit louder” (+1 SD) or “much louder” (+2 SD); minus means the opposite direction. SD stands for standard deviation, how much loudness, note length or pitch usually varies between pieces.</span><span class=\"nl\"><b>Strength</b> (low / medium / high) = <i>how hard</i> the model is pushed to get there: how insistently you ask, not what you ask for.</span><span class=\"nl\">Think of throwing a ball at a target: the SD is where you aim, the strength is how hard you throw. Too soft and it falls short; too hard and it flies past and goes wild, which is what “Pushing Too Hard” shows.</span>"
     }
    ],
    "tabs": [
