@@ -220,20 +220,33 @@
            "model": "llama",
            "strength": "16",
            "sub": "Llama · keeps the closest of 16 unguided samples"
-          },
-          {
-           "label": "PPLM",
-           "method": "pplm",
-           "model": "llama",
-           "sub": "Llama · one regressor-gradient step on the logits",
-           "strength": "16",
-           "strengths": [
-            "8",
-            "16",
-            "32"
-           ]
           }
          ]
+        },
+        {
+         "type": "intensity",
+         "tok": "remi",
+         "prompt": 9235,
+         "attribute": "velocity",
+         "method": "pplm",
+         "model": "llama",
+         "lambdas": [
+          "8",
+          "16",
+          "32"
+         ],
+         "recommended": "16",
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "PPLM (Llama): guidance strength × target",
+         "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
+         "metric": "velocity",
+         "metric_label": "mean velocity",
+         "metric_unit": "/127"
         },
         {
          "type": "intensity",
@@ -251,7 +264,7 @@
           1,
           2
          ],
-         "title": "EBT: guidance strength × target",
+         "title": "EBT (ours): guidance strength × target",
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "velocity",
          "metric_label": "mean velocity",
@@ -288,20 +301,33 @@
            "model": "llama",
            "strength": "16",
            "sub": "Llama · keeps the closest of 16 unguided samples"
-          },
-          {
-           "label": "PPLM",
-           "method": "pplm",
-           "model": "llama",
-           "sub": "Llama · one regressor-gradient step on the logits",
-           "strength": "16",
-           "strengths": [
-            "8",
-            "16",
-            "32"
-           ]
           }
          ]
+        },
+        {
+         "type": "intensity",
+         "tok": "remi",
+         "prompt": 8484,
+         "attribute": "duration",
+         "method": "pplm",
+         "model": "llama",
+         "lambdas": [
+          "8",
+          "16",
+          "32"
+         ],
+         "recommended": "16",
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "PPLM (Llama): guidance strength × target",
+         "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
+         "metric": "note_beats",
+         "metric_label": "mean note length",
+         "metric_unit": " beats"
         },
         {
          "type": "intensity",
@@ -319,7 +345,7 @@
           1,
           2
          ],
-         "title": "EBT: guidance strength × target",
+         "title": "EBT (ours): guidance strength × target",
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "note_beats",
          "metric_label": "mean note length",
@@ -356,20 +382,33 @@
            "model": "llama",
            "strength": "16",
            "sub": "Llama · keeps the closest of 16 unguided samples"
-          },
-          {
-           "label": "PPLM",
-           "method": "pplm",
-           "model": "llama",
-           "sub": "Llama · one regressor-gradient step on the logits",
-           "strength": "32",
-           "strengths": [
-            "8",
-            "16",
-            "32"
-           ]
           }
          ]
+        },
+        {
+         "type": "intensity",
+         "tok": "remi",
+         "prompt": 4563,
+         "attribute": "pitch_register",
+         "method": "pplm",
+         "model": "llama",
+         "lambdas": [
+          "8",
+          "16",
+          "32"
+         ],
+         "recommended": "32",
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "PPLM (Llama): guidance strength × target",
+         "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
+         "metric": "pitch",
+         "metric_label": "mean pitch",
+         "metric_unit": ""
         },
         {
          "type": "intensity",
@@ -387,7 +426,7 @@
           1,
           2
          ],
-         "title": "EBT: guidance strength × target",
+         "title": "EBT (ours): guidance strength × target",
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "pitch",
          "metric_label": "mean pitch",
@@ -438,20 +477,33 @@
            "model": "llama",
            "strength": "16",
            "sub": "Llama · keeps the closest of 16 unguided samples"
-          },
-          {
-           "label": "PPLM",
-           "method": "pplm",
-           "model": "llama",
-           "sub": "Llama · one regressor-gradient step on the logits",
-           "strength": "16",
-           "strengths": [
-            "8",
-            "16",
-            "32"
-           ]
           }
          ]
+        },
+        {
+         "type": "intensity",
+         "tok": "ant",
+         "prompt": 428653,
+         "attribute": "duration",
+         "method": "pplm",
+         "model": "llama",
+         "lambdas": [
+          "8",
+          "16",
+          "32"
+         ],
+         "recommended": "16",
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "PPLM (Llama): guidance strength × target",
+         "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
+         "metric": "note_beats",
+         "metric_label": "mean note length",
+         "metric_unit": " beats"
         },
         {
          "type": "intensity",
@@ -469,7 +521,7 @@
           1,
           2
          ],
-         "title": "EBT: guidance strength × target",
+         "title": "EBT (ours): guidance strength × target",
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "note_beats",
          "metric_label": "mean note length",
@@ -504,20 +556,33 @@
            "model": "llama",
            "strength": "16",
            "sub": "Llama · keeps the closest of 16 unguided samples"
-          },
-          {
-           "label": "PPLM",
-           "method": "pplm",
-           "model": "llama",
-           "sub": "Llama · one regressor-gradient step on the logits",
-           "strength": "16",
-           "strengths": [
-            "8",
-            "16",
-            "32"
-           ]
           }
          ]
+        },
+        {
+         "type": "intensity",
+         "tok": "ant",
+         "prompt": 428653,
+         "attribute": "pitch_register",
+         "method": "pplm",
+         "model": "llama",
+         "lambdas": [
+          "8",
+          "16",
+          "32"
+         ],
+         "recommended": "16",
+         "sds": [
+          -2,
+          -1,
+          1,
+          2
+         ],
+         "title": "PPLM (Llama): guidance strength × target",
+         "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
+         "metric": "pitch",
+         "metric_label": "mean pitch",
+         "metric_unit": ""
         },
         {
          "type": "intensity",
@@ -535,7 +600,7 @@
           1,
           2
          ],
-         "title": "EBT: guidance strength × target",
+         "title": "EBT (ours): guidance strength × target",
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "pitch",
          "metric_label": "mean pitch",

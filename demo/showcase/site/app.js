@@ -248,14 +248,6 @@
     for (const [k, lab] of COLS) table.append(h("div", "colhead " + k, lab));
 
     const rows = [...new Set(b.clips.map((c) => c.row))];
-    const values = {};
-    let scale = null;
-    const redrawScale = () => {
-      if (!b.metric || !Object.keys(values).length) return;
-      const next = scaleBlock(b, values);
-      if (scale) scale.replaceWith(next); else card.append(next);
-      scale = next;
-    };
     for (const row of rows) {
       const rowClips = b.clips.filter((c) => c.row === row);
       const ref = rowClips.find((c) => c.col === "unguided");
@@ -266,10 +258,6 @@
       const first = (rowClips.find((c) => c.default && c !== ref) || {}).strength;
       const sel = {};   // column -> chosen strength
       table.append(h("div", "rowhead", `${row}<small>${ref.row_sub || ""}</small>`));
-      const val = () => Object.fromEntries(COLS.map(([k]) => {
-        const c = k === "unguided" ? ref : rowClips.find((x) => x.col === k && x.strength === sel[k]);
-        return [k, c && !c.placeholder && b.metric ? c.metrics[b.metric] : null];
-      }));
       for (const [k, lab] of COLS) {
         const cell = h("div", "steer-cell");
         const versions = {};   // strength -> card element
@@ -295,7 +283,6 @@
               el.querySelectorAll(".st-btn").forEach((btn) => btn.classList.toggle("on", btn.dataset.st === st));
             }
             requestAnimationFrame(() => clips.forEach((c) => { if (c.el === versions[st]) drawBase(c); }));
-            if (!ref.placeholder) { values[row] = val(); redrawScale(); }
           };
           // Each version carries the same switch, so it stays put while the card swaps.
           for (const el of Object.values(versions)) {
@@ -323,10 +310,8 @@
         ghost.setAttribute("aria-hidden", "true");
         refEl.querySelector(".clip-top").after(ghost);
       }
-      if (!ref.placeholder) values[row] = val();
     }
     card.append(table);
-    redrawScale();
     return card;
   }
 
@@ -339,18 +324,29 @@
     const table = h("div", "intensity");
     table.style.setProperty("--cols", sds.length);
 
-    table.append(h("div", "colhead", "strength"));
-    for (const sd of sds) table.append(h("div", "colhead " + (sd > 0 ? "up" : "down"), (sd > 0 ? "▲ " : "▼ ") + fmtSd(sd)));
+    const who = b.method === "pplm" ? "PPLM (Llama)" : "the EBT";
 
-    // Reference row: the unguided continuation every cell is compared to.
+    // Reference first: the unguided continuation every cell is compared to.
     table.append(h("div", "rowhead", `unguided<small>reference</small>`));
     table.append(makeClip(ref, range, {
       label: "Unguided",
       metricHTML: b.metric ? metricCell(b, ref, null) : null,
     }));
-    const hint = h("div", "ref-hint", "Every cell below continues the same prompt with the EBT. Moving right asks for a bigger change (the target, in SD); moving down pushes harder to get there (the strength).");
+    const hint = h("div", "ref-hint", `Every cell below continues the same prompt with ${who}. Moving away from the centre asks for a bigger change (the target, in SD); moving down pushes harder to get there (the strength).`);
     hint.style.gridColumn = `span ${sds.length - 1}`;
     table.append(hint);
+
+    // Direction groups over the target columns, then the column heads.
+    const nDown = sds.filter((sd) => sd < 0).length;
+    table.append(h("div", "colgroup-spacer"));
+    for (const [cls, n, lab] of [["down", nDown, "▼ push down"], ["up", sds.length - nDown, "▲ push up"]]) {
+      if (!n) continue;
+      const g = h("div", "colgroup " + cls, lab);
+      g.style.gridColumn = `span ${n}`;
+      table.append(g);
+    }
+    table.append(h("div", "colhead first", "strength"));
+    for (const sd of sds) table.append(h("div", "colhead " + (sd > 0 ? "up" : "down"), fmtSd(sd)));
 
     const r0 = ref.metrics[b.metric];
     const devs = b.clips.filter((c) => c !== ref && c.metrics[b.metric] != null).map((c) => Math.abs(c.metrics[b.metric] - r0));
@@ -360,7 +356,7 @@
       const cells = b.clips.filter((c) => c.strength === lam);
       const op = cells.some((c) => c.operating);
       const head = h("div", "rowhead lam", `${lamNames[li]}${op ? '<small class="op">recommended</small>' : ""}`);
-      head.title = `λ = ${lam}`;
+      head.title = b.method === "pplm" ? `PPLM strength ${lam}` : `λ = ${lam}`;
       table.append(head);
       for (const sd of sds) {
         const c = cells.find((x) => x.sd === sd);
@@ -382,38 +378,6 @@
     scroll.append(table);
     card.append(scroll);
     return card;
-  }
-
-  function scaleBlock(ex, values) {
-    const all = Object.values(values).flatMap((o) => Object.values(o)).filter((v) => v != null);
-    const lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo) * 0.08 || 1;
-    const pos = (v) => ((v - (lo - pad)) / (hi - lo + 2 * pad)) * 100;
-    const wrap = h("div", "scale");
-    for (const [row, v] of Object.entries(values)) {
-      const r = h("div", "scale-row");
-      r.append(h("div", "lab", row));
-      const track = h("div", "track");
-      for (const [k, color] of [["down", "rgba(90,169,255,.45)"], ["up", "rgba(255,138,92,.5)"]]) {
-        if (v[k] == null || v.unguided == null) continue;
-        const s = h("div", "span");
-        s.style.left = pos(Math.min(v[k], v.unguided)) + "%";
-        s.style.width = Math.abs(pos(v.unguided) - pos(v[k])) + "%";
-        s.style.background = color;
-        track.append(s);
-      }
-      for (const k of ["down", "unguided", "up"]) {
-        if (v[k] == null) continue;
-        const d = h("div", "dot " + k); d.style.left = pos(v[k]) + "%";
-        d.title = `${k}: ${v[k]}`;
-        track.append(d);
-      }
-      r.append(track);
-      wrap.append(r);
-    }
-    wrap.append(h("p", "scale-caption", `measured ${ex.metric_label} of the continuation: ` +
-      `<span style="color:var(--down)">●</span> pushed down · <span style="color:var(--text)">●</span> unguided · ` +
-      `<span style="color:var(--up)">●</span> pushed up`));
-    return wrap;
   }
 
   function noteBlock(b) {

@@ -20,8 +20,9 @@ Page structure (`selection.json` is a tree: section → tokenizer tab →
 attribute/combination tab → blocks):
 1. Unguided Generation: REMI / Anticipation; original vs EBT, Llama, GPT-2.
 2. Single-Attribute Control: REMI / Anticipation → velocity, duration,
-   pitch register. A `steer` block (tilt, best-of-16, PPLM on Llama:
-   down / unguided / up) and an `intensity` block (EBT: λ rows × target columns).
+   pitch register. A `steer` block (tilt, best-of-16 on Llama: down / unguided / up)
+   and two `intensity` grids (PPLM, then EBT: strength rows × target columns,
+   unguided reference on top; `method`/`model`/`recommended` pick the system).
 3. Combined Control: REMI loudness + note length, one tab per direction
    combination (4), all on one prompt; a `compose` block (rows = EBT / tilt /
    best-of-16 / PPLM, columns = unguided, 1 SD, 2 SD each). Runs: `RUNS["remi"]["compose"]`.
