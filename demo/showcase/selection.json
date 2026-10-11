@@ -179,7 +179,7 @@
    "id": "single",
    "kicker": "02",
    "title": "Single-Attribute Control",
-   "intro": "With a small regressor that predicts a musical attribute, generation can be steered toward a target without retraining. First the standard methods for autoregressive models, then the EBT, where the regressor's error is added to the energy it already minimises and a guidance strength sets how hard it pushes. Targets are given in standard deviations (SD) of the corpus, relative to the prompt's own unguided level.",
+   "intro": "With a small regressor that predicts a musical attribute, generation can be steered toward a target without retraining. Each tab compares the baselines for autoregressive models (Tilt, Best-of-16 and PPLM, all on Llama) with the EBT, where the regressor's error is added to the energy it already minimises and a guidance strength sets how hard it pushes. Targets are given in standard deviations (SD) of the corpus, relative to the prompt's own unguided level.",
    "blocks": [
     {
      "type": "note",
@@ -201,7 +201,7 @@
          "prompt": 9235,
          "attribute": "velocity",
          "sd": 2,
-         "title": "Baseline methods",
+         "title": "Tilt and Best-of-16",
          "subtitle": "target ±2 SD, each at its recommended strength",
          "metric": "velocity",
          "metric_label": "mean velocity",
@@ -221,7 +221,8 @@
            "strength": "16",
            "sub": "Llama · keeps the closest of 16 unguided samples"
           }
-         ]
+         ],
+         "role": "baseline"
         },
         {
          "type": "intensity",
@@ -246,7 +247,8 @@
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "velocity",
          "metric_label": "mean velocity",
-         "metric_unit": "/127"
+         "metric_unit": "/127",
+         "role": "baseline"
         },
         {
          "type": "intensity",
@@ -264,11 +266,12 @@
           1,
           2
          ],
-         "title": "EBT (ours): guidance strength × target",
+         "title": "EBT: guidance strength × target",
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "velocity",
          "metric_label": "mean velocity",
-         "metric_unit": "/127"
+         "metric_unit": "/127",
+         "role": "ours"
         }
        ]
       },
@@ -282,7 +285,7 @@
          "prompt": 8484,
          "attribute": "duration",
          "sd": 2,
-         "title": "Baseline methods",
+         "title": "Tilt and Best-of-16",
          "subtitle": "target ±2 SD, each at its recommended strength",
          "metric": "note_beats",
          "metric_label": "mean note length",
@@ -302,7 +305,8 @@
            "strength": "16",
            "sub": "Llama · keeps the closest of 16 unguided samples"
           }
-         ]
+         ],
+         "role": "baseline"
         },
         {
          "type": "intensity",
@@ -327,7 +331,8 @@
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "note_beats",
          "metric_label": "mean note length",
-         "metric_unit": " beats"
+         "metric_unit": " beats",
+         "role": "baseline"
         },
         {
          "type": "intensity",
@@ -345,11 +350,12 @@
           1,
           2
          ],
-         "title": "EBT (ours): guidance strength × target",
+         "title": "EBT: guidance strength × target",
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "note_beats",
          "metric_label": "mean note length",
-         "metric_unit": " beats"
+         "metric_unit": " beats",
+         "role": "ours"
         }
        ]
       },
@@ -363,7 +369,7 @@
          "prompt": 4563,
          "attribute": "pitch_register",
          "sd": 2,
-         "title": "Baseline methods",
+         "title": "Tilt and Best-of-16",
          "subtitle": "target ±2 SD, each at its recommended strength",
          "metric": "pitch",
          "metric_label": "mean pitch",
@@ -383,7 +389,8 @@
            "strength": "16",
            "sub": "Llama · keeps the closest of 16 unguided samples"
           }
-         ]
+         ],
+         "role": "baseline"
         },
         {
          "type": "intensity",
@@ -408,7 +415,8 @@
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "pitch",
          "metric_label": "mean pitch",
-         "metric_unit": ""
+         "metric_unit": "",
+         "role": "baseline"
         },
         {
          "type": "intensity",
@@ -426,11 +434,12 @@
           1,
           2
          ],
-         "title": "EBT (ours): guidance strength × target",
+         "title": "EBT: guidance strength × target",
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "pitch",
          "metric_label": "mean pitch",
-         "metric_unit": ""
+         "metric_unit": "",
+         "role": "ours"
         }
        ]
       }
@@ -465,7 +474,7 @@
          "prompt": 428653,
          "attribute": "duration",
          "sd": 2,
-         "title": "Baseline methods",
+         "title": "Best-of-16",
          "subtitle": "target ±2 SD, each at its recommended strength",
          "metric": "note_beats",
          "metric_label": "mean note length",
@@ -478,7 +487,8 @@
            "strength": "16",
            "sub": "Llama · keeps the closest of 16 unguided samples"
           }
-         ]
+         ],
+         "role": "baseline"
         },
         {
          "type": "intensity",
@@ -503,7 +513,8 @@
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "note_beats",
          "metric_label": "mean note length",
-         "metric_unit": " beats"
+         "metric_unit": " beats",
+         "role": "baseline"
         },
         {
          "type": "intensity",
@@ -521,11 +532,12 @@
           1,
           2
          ],
-         "title": "EBT (ours): guidance strength × target",
+         "title": "EBT: guidance strength × target",
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "note_beats",
          "metric_label": "mean note length",
-         "metric_unit": " beats"
+         "metric_unit": " beats",
+         "role": "ours"
         }
        ]
       },
@@ -544,7 +556,7 @@
          "prompt": 428653,
          "attribute": "pitch_register",
          "sd": 2,
-         "title": "Baseline methods",
+         "title": "Best-of-16",
          "subtitle": "target ±2 SD, each at its recommended strength",
          "metric": "pitch",
          "metric_label": "mean pitch",
@@ -557,7 +569,8 @@
            "strength": "16",
            "sub": "Llama · keeps the closest of 16 unguided samples"
           }
-         ]
+         ],
+         "role": "baseline"
         },
         {
          "type": "intensity",
@@ -582,7 +595,8 @@
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "pitch",
          "metric_label": "mean pitch",
-         "metric_unit": ""
+         "metric_unit": "",
+         "role": "baseline"
         },
         {
          "type": "intensity",
@@ -600,11 +614,12 @@
           1,
           2
          ],
-         "title": "EBT (ours): guidance strength × target",
+         "title": "EBT: guidance strength × target",
          "subtitle": "rows: guidance strength, low to high · columns: target, in corpus SD from the unguided level",
          "metric": "pitch",
          "metric_label": "mean pitch",
-         "metric_unit": ""
+         "metric_unit": "",
+         "role": "ours"
         }
        ]
       }

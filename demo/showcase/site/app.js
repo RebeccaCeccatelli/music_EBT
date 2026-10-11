@@ -389,15 +389,26 @@
   const BLOCKS = { clips: clipsBlock, steer: steerBlock, intensity: intensityBlock, note: noteBlock };
 
   // ----------------------------------------------------------------- tabs
-  function renderNode(node, depth) {
+  // Above each block title: which tabs it belongs to, and whether it is a baseline or ours.
+  function withContext(el, b, path) {
+    const titles = el.querySelector(".titles");
+    if (!titles || (!path.length && !b.role)) return el;
+    const line = h("div", "context");
+    if (b.role) line.append(h("span", "role " + b.role, b.role === "ours" ? "ours" : "baseline"));
+    if (path.length) line.append(h("span", "crumb", path.join(" · ")));
+    titles.prepend(line);
+    return el;
+  }
+
+  function renderNode(node, depth, path = []) {
     const frag = h("div", "node depth-" + depth);
     if (node.intro && depth > 0) frag.append(h("p", "intro", node.intro));
-    for (const b of node.blocks || []) frag.append(BLOCKS[b.type](b));
+    for (const b of node.blocks || []) frag.append(withContext(BLOCKS[b.type](b), b, path));
     if (node.tabs && node.tabs.length) {
       const bar = h("div", "tabs " + (depth === 0 ? "tabs-main" : "tabs-sub"));
       bar.setAttribute("role", "tablist");
       const panels = node.tabs.map((t) => {
-        const p = renderNode(t, depth + 1);
+        const p = renderNode(t, depth + 1, [...path, t.label]);
         p.setAttribute("role", "tabpanel");
         return p;
       });
