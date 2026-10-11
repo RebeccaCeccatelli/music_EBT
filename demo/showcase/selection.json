@@ -183,8 +183,8 @@
    "blocks": [
     {
      "type": "note",
-     "title": "What does “SD” mean?",
-     "text": "SD (standard deviation) is how much loudness, note length or pitch usually varies between pieces. +1 SD asks for a moderate change from the unguided version, +2 SD for a large one; minus means the opposite direction."
+     "title": "What do “SD” and “strength” mean?",
+     "text": "<span class=\"nl\"><b>SD (the target)</b> = <i>where</i> you ask the music to go: “a bit louder” (+1 SD) or “much louder” (+2 SD); minus means the opposite direction. SD stands for standard deviation, how much loudness, note length or pitch usually varies between pieces.</span><span class=\"nl\"><b>Strength</b> (low / medium / high) = <i>how hard</i> the model is pushed to get there: how insistently you ask, not what you ask for.</span><span class=\"nl\">Think of a conductor: the SD is what they ask the orchestra for (“a little louder”), the strength is how insistently they gesture. Insist too much and the players overdo it, which is what “Pushing Too Hard” shows.</span>"
     }
    ],
    "tabs": [

@@ -332,7 +332,7 @@
       label: "Unguided",
       metricHTML: b.metric ? metricCell(b, ref, null) : null,
     }));
-    const hint = h("div", "ref-hint", "Every cell below continues the same prompt with the EBT. Moving right pushes harder toward a bigger target; moving down raises the guidance strength.");
+    const hint = h("div", "ref-hint", "Every cell below continues the same prompt with the EBT. Moving right asks for a bigger change (the target, in SD); moving down pushes harder to get there (the strength).");
     hint.style.gridColumn = `span ${sds.length - 1}`;
     table.append(hint);
 
