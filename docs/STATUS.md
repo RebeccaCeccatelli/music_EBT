@@ -1,6 +1,6 @@
 # Project status
 
-_Last updated: 2026-10-19._ Living snapshot of where music-EBT stands; the
+_Last updated: 2026-11-04._ Living snapshot of where music-EBT stands; the
 day-by-day history is in [diary/](diary/README.md), citable results in
 [thesis_findings/](thesis_findings/README.md).
 
@@ -36,6 +36,10 @@ Scratch: ~39 GB used by checkpoints after the 2026-10-05 cleanup.
 | ✅ 25938052 | Confirmed: logged Ant val uses different slices (EBT first 4,288, baselines first 8,576); on the same slice Llama −0.044. Was: Ant EBT vs Llama-ebtrecipe on the training-validation slice (first 8,576 seqs), to explain the logged-vs-eval gap | Ant s1 88,800 |
 | ✅ 26151843 | Ctx-matched: REMI GPT-2 0.683 < EBT 0.696 ≈ Llama 0.700; Ant Llama 1.056 < GPT-2 1.070 < EBT 1.102 | both |
 | ✅ 26152811 | `SET=antcurve` done: s1 88,800 best EBT (1.102); same-recipe Llama 1.056 / GPT-2 1.070; tokmatched Llama 1.136 | Ant |
+| 27917681–82 | Ant Llama-ebtrecipe regressors (duration, pitch_register), resubmitted on preemptable, ~12 h (26348318/19 timed out) | Ant 88,500 (Llama) |
+| 27917679–80 | REMI unguided gen Llama/GPT-2 ebtrecipe (26348856/57 crashed on json bug, fixed) | — |
+| 27917761–62 | REMI Llama-ebtrecipe PPLM: tune + test prompts (~30 min each) | REMI 33,196 (Llama) |
+| 27917683–85 | EBT tune sweeps REMI duration, Ant duration fine, Ant pitch_register fine (quota failures) | REMI 33,732 · Ant 88,800 |
 | 26348315–19 | Regressors for Llama-ebtrecipe: REMI velocity/duration/pitch_register, Ant duration/pitch_register → then PPLM | REMI 33,196 · Ant 88,500 (Llama) |
 | 26348856–70 | EBT-recipe baselines: unguided gen (4), REMI tilt + best-of-N (4), Ant best-of-N (2) for the fair survey | — |
 | 26348915–21 | EBT tuning sweeps on held-out prompts (REMI 3, Ant 4) | REMI 33,732 · Ant 88,800 |

@@ -470,7 +470,6 @@ def main():
     if args.prompt_indices_file:
         # Draw from a candidate pool instead of the whole split (e.g. AUTOREGRESS-only
         # Anticipation windows, whose prompts and ground truth contain no controls).
-        import json
         with open(args.prompt_indices_file) as f:
             pool = json.load(f)
         sample_indices = rng.sample(pool, min(num_samples, len(pool)))
