@@ -6,11 +6,14 @@
 ### SLURM CONFIGURATION ###
 #SBATCH --nodes=1
 #SBATCH --gpus=l40s:1  # L40S only: this torch build (2.4+cu121) has no kernels for the RTX Pro 6000 nodes
+#SBATCH --exclude=node3006  # bad GPU: "CUDA unknown error" at init (2026-10-12); in the header so auto-resubmits keep it
+#SBATCH --mail-type=FAIL
+#SBATCH --mail-user=rebeccaceccatelli@gmail.com
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
-#SBATCH --time=24:00:00
+#SBATCH --time=06:00:00  # mit_normal_gpu MaxTime; the script resubmits itself
 #SBATCH --mem=80GB
-#SBATCH --partition=mit_preemptable
+#SBATCH --partition=mit_normal_gpu,mit_preemptable  # normal_gpu: max 6 h, 2 GPUs/user, not preempted
 #SBATCH --account=mit_general
 #SBATCH --qos=normal
 #SBATCH --signal=TERM@120
@@ -116,10 +119,18 @@ case "${TOKENIZER_TYPE}" in
     *)                          TOK_SLUG=$(echo "${TOKENIZER_TYPE}" | tr '[:upper:]' '[:lower:]') ;;
 esac
 PEAK_LR="${lr[${SLURM_ARRAY_TASK_ID}]}"
-BASE_RUN_NAME="baseline-hf-gpt2-small-${TOK_SLUG}"
+# RUN_TAG: separate lineage name (e.g. RUN_TAG=ebtrecipe). Auto-resume and the
+# resubmit guard match on BASE_RUN_NAME, so a tagged run never resumes from the
+# untagged 100k-step checkpoints.
+BASE_RUN_NAME="baseline-hf-gpt2-small-${TOK_SLUG}${RUN_TAG:+-${RUN_TAG}}"
 FULL_RUN_NAME="${BASE_RUN_NAME}-job${SLURM_JOB_ID:-local}"
 scontrol update JobId="${SLURM_JOB_ID}" Name="${FULL_RUN_NAME}" 2>/dev/null || true
-MAX_STEPS=100000
+# MAX_STEPS: stop early while the LR schedule still runs over
+# --max_scheduling_steps 100000, so the run passes through the same states as the full one.
+MAX_STEPS="${MAX_STEPS:-100000}"
+# CONTEXT_LENGTH: training context (default 1024, as in the AMT paper). 512 with
+# the EBT's batch/steps gives the EBT-recipe baselines (RUN_TAG=ebtrecipe).
+CONTEXT_LENGTH="${CONTEXT_LENGTH:-1024}"
 
 # Auto-resume from the highest-step checkpoint of any previous run with the
 # same base name — selected by the step number embedded in the checkpoint
@@ -160,7 +171,7 @@ python train_model.py \
 --model_size "${MODEL_SIZE}" \
 --tokenizer_type "${TOKENIZER_TYPE}" \
 --normalize_initial_condition \
---context_length 1024 \
+--context_length "${CONTEXT_LENGTH}" \
 --gpus "1" \
 --peak_learning_rate "${PEAK_LR}" \
 --batch_size_per_device "${BATCH_SIZE}" \
@@ -168,7 +179,7 @@ python train_model.py \
 --gradient_clip_val 1.0 \
 --weight_decay 0.05 \
 --min_lr_scale 10 \
---max_steps 100000 \
+--max_steps "${MAX_STEPS}" \
 --max_scheduling_steps 100000 \
 --warm_up_steps 10000 \
 --dataset_name "${DATASET_NAME}" \

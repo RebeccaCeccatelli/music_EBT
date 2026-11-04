@@ -1,6 +1,6 @@
 # Project status
 
-_Last updated: 2026-10-09._ Living snapshot of where music-EBT stands; the
+_Last updated: 2026-10-19._ Living snapshot of where music-EBT stands; the
 day-by-day history is in [diary/](diary/README.md), citable results in
 [thesis_findings/](thesis_findings/README.md).
 
@@ -17,7 +17,7 @@ by the lowest `valid_loss` in its filename** (e.g. 0.1895, 0.1941, 0.3335,
 |---|---|---|
 | EBT small-REMI s1 | step 33,732 · val 0.7150 (job23868523) | 34,268 latest; 19,496 + 10,584 (old regressor pairings) |
 | EBT small-Ant-AT s1 | step 88,800 · val 0.9903 (job22827009) | 99,900 final; 55,500 (old regressor pairing) |
-| EBT small-Ant-AT stab+ | step 42,900 · val 1.0209 | 44,800 latest |
+| EBT small-Ant-AT stab+ | step 42,900 · val 1.0209 | 44,700; 44,800 is corrupted (do not load) |
 | GPT-2 small-REMI | step 99,660 · val 0.4756 | latest |
 | Llama small-REMI | step 99,660 · val 0.5239 | latest |
 | GPT-2 small-Ant-AT | step 98,900 · val 0.7557 | latest |
@@ -28,7 +28,20 @@ Scratch: ~39 GB used by checkpoints after the 2026-10-05 cleanup.
 ## Running jobs
 | Job | What | Paired EBT ckpt |
 |---|---|---|
+| ✅ 25810908 | Llama REMI EBT-recipe: done 2026-10-14 (33,732; best val 0.7203 @ 33,196) | REMI 33,732 |
+| ✅ 25810909 | Llama Ant EBT-recipe: done 2026-10-15 (88,800; best val 0.9878 @ 88,500) | Ant s1 88,800 |
+| ✅ 25810910 | GPT-2 REMI EBT-recipe: done 2026-10-15 (33,732; best val 0.6972) | REMI 33,732 |
+| ✅ 25810911 | GPT-2 Ant EBT-recipe: done 2026-10-15 (88,800; best val 0.9971 @ 87,900, first-8,576 slice) | Ant s1 88,800 |
+| ✅ 25908528 | Context-matched per-window eval, EBT vs Llama-ebtrecipe: REMI tie (+0.004 loss), Ant Llama better (−0.046) | both |
+| ✅ 25938052 | Confirmed: logged Ant val uses different slices (EBT first 4,288, baselines first 8,576); on the same slice Llama −0.044. Was: Ant EBT vs Llama-ebtrecipe on the training-validation slice (first 8,576 seqs), to explain the logged-vs-eval gap | Ant s1 88,800 |
+| ✅ 26151843 | Ctx-matched: REMI GPT-2 0.683 < EBT 0.696 ≈ Llama 0.700; Ant Llama 1.056 < GPT-2 1.070 < EBT 1.102 | both |
+| ✅ 26152811 | `SET=antcurve` done: s1 88,800 best EBT (1.102); same-recipe Llama 1.056 / GPT-2 1.070; tokmatched Llama 1.136 | Ant |
+| 26348315–19 | Regressors for Llama-ebtrecipe: REMI velocity/duration/pitch_register, Ant duration/pitch_register → then PPLM | REMI 33,196 · Ant 88,500 (Llama) |
+| 26348856–70 | EBT-recipe baselines: unguided gen (4), REMI tilt + best-of-N (4), Ant best-of-N (2) for the fair survey | — |
+| 26348915–21 | EBT tuning sweeps on held-out prompts (REMI 3, Ant 4) | REMI 33,732 · Ant 88,800 |
+| 26348925–30 | EBT-recipe baseline tuning sweeps (tilt, best-of-N) on held-out prompts | — |
 
+Resubmitted 2026-10-14 after node3006 (bad GPU) killed the previous chain; scripts now exclude it.
 
 Outputs: `~/orcd/scratch/rebcecca/music_EBT_logs/attr_control/<attr>_regressor_<tok>_<timestamp>/best.pt`;
 music-quality refs in `.../music_EBT_logs/music_quality/reference_<tok>_256tok/`.

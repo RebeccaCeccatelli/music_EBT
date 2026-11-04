@@ -242,7 +242,19 @@ def main(args):
         trainer = set_trainer(args, wandb_logger, checkpoint_callback)
         resume_training_ckpt = None if args.resume_training_ckpt == "" else args.resume_training_ckpt
         trainer.fit(model_trainer, ckpt_path=resume_training_ckpt)
-        
+        # ModelCheckpoint only saves on validation / epoch boundaries, so a stop
+        # at max_steps mid-epoch would drop the final steps. Save them here, with
+        # the step in the usual "step=step=N" form the job scripts' auto-resume
+        # and completion checks parse.
+        if 0 < trainer.max_steps <= trainer.global_step and trainer.is_global_zero:
+            final = os.path.join(checkpoint_callback.dirpath,
+                                 f"epoch=epoch={trainer.current_epoch}-step=step={trainer.global_step}-final.ckpt")
+            saved = any(f"step=step={trainer.global_step}-" in f for f in os.listdir(checkpoint_callback.dirpath))
+            if not saved:
+                trainer.save_checkpoint(final)
+                trainer.save_checkpoint(os.path.join(checkpoint_callback.dirpath, "last.ckpt"))
+                print(f"Saved final checkpoint at max_steps: {final}")
+
         if args.run_testing_after_training:
             args.only_test_model_ckpt = checkpoint_callback.best_model_path
             best_model = ModelTrainer.load_from_checkpoint(

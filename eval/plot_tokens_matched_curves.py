@@ -28,6 +28,7 @@ Usage:
 """
 
 import argparse
+import json
 import math
 import statistics as st
 from pathlib import Path
@@ -45,11 +46,13 @@ MODELS = {
         'EBT':   ('ebt-symb-small-remi-s1-job',              'mus_symb_ebt_pretrain',      256 * 512),
         'GPT-2': ('baseline-hf-gpt2-small-remi-job',         'mus_symb_baseline_pretrain', 256 * 1024),
         'Llama': ('baseline-llama-small-remi-job',           'mus_symb_baseline_pretrain', 256 * 1024),
+        'Llama (token-matched)': ('baseline-llama-small-remi-tokmatched-job', 'mus_symb_baseline_pretrain', 256 * 1024),
     },
     'Anticipation-AT': {
         'EBT':   ('ebt-symb-small-ant-at-full-s1-job',       'mus_symb_ebt_pretrain',      64 * 512),
         'GPT-2': ('baseline-hf-gpt2-small-ant-at-full-job',  'mus_symb_baseline_pretrain', 128 * 1024),
         'Llama': ('baseline-llama-small-ant-at-full-job',    'mus_symb_baseline_pretrain', 128 * 1024),
+        'Llama (token-matched)': ('baseline-llama-small-ant-at-full-tokmatched-job', 'mus_symb_baseline_pretrain', 128 * 1024),
     },
 }
 
@@ -101,10 +104,18 @@ def loss_at(tokens: np.ndarray, vals: np.ndarray, budget: float) -> float:
     return float('nan') if budget > tokens.max() else float(np.interp(budget, tokens, vals))
 
 
+def flops_key(name: str, tok: str) -> str:
+    """Entry in eval/train_flops.py's output: same architecture → same FLOPs/token."""
+    return f"{name.split(' (')[0]}-{tok}"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out_dir', default='docs/figures/tokens_matched')
+    ap.add_argument('--flops_json', default=None,
+                    help='eval/train_flops.py output; adds loss-vs-training-FLOPs figures and tables')
     args = ap.parse_args()
+    flops = json.loads(Path(args.flops_json).read_text()) if args.flops_json else None
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -148,11 +159,40 @@ def main():
               f"(EBT stopped at {ebt_end / 1e9:.2f}B tokens)")
         for label, f in (('loss', lambda x: x), ('perplexity = exp(loss)', math.exp)):
             print(f"  {label}")
-            print(f"{'model':8s}" + ''.join(f"{b / 1e9:>9.1f}B" for b in budgets) + f"{'final':>10s}")
+            print(f"{'model':22s}" + ''.join(f"{b / 1e9:>9.1f}B" for b in budgets) + f"{'final':>10s}")
             for name, (tokens, vals, steps) in curves.items():
-                print(f"{name:8s}" + ''.join(f"{f(loss_at(tokens, vals, b)):10.4f}" for b in budgets)
+                print(f"{name:22s}" + ''.join(f"{f(loss_at(tokens, vals, b)):10.4f}" for b in budgets)
                       + f"{f(vals[-1]):10.4f}  (step {steps[-1]:,}, {tokens[-1] / 1e9:.1f}B)")
         print(f"→ {path}")
+
+        if flops:
+            fpt = {name: flops[flops_key(name, tok)]['train_flops_per_token'] for name in curves}
+            fig, ax = plt.subplots(figsize=(7, 4.2))
+            for name, (tokens, vals, _) in curves.items():
+                ax.plot(tokens * fpt[name], vals, label=name, lw=1.4)
+            ebt_flops = ebt_end * fpt['EBT']
+            ax.axvline(ebt_flops, color='grey', ls=':', lw=1)
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.set_xlabel('training compute (FLOPs, log; measured per token)')
+            ax.set_ylabel('validation loss (log; EBT: final MCMC step)')
+            ax.set_title(f'{tok}: validation loss vs training compute')
+            ax.legend()
+            ax.grid(True, which='both', alpha=0.25)
+            fig.tight_layout()
+            fpath = out / f"val_loss_vs_flops_{tok.lower().replace('-', '_')}.png"
+            fig.savefig(fpath, dpi=150)
+            plt.close(fig)
+            print(f"\n{tok} — training FLOPs per token: "
+                  + ', '.join(f"{n} {v:.3g}" for n, v in fpt.items() if '(' not in n)
+                  + f" (EBT / Llama = {fpt['EBT'] / fpt['Llama']:.1f}×)")
+            print(f"{tok} — validation loss at matched training compute "
+                  f"(EBT stopped at {ebt_flops:.3g} FLOPs)")
+            fbudgets = [ebt_flops / 4, ebt_flops / 2, ebt_flops]
+            print(f"{'model':22s}" + ''.join(f"{b:>11.3g}" for b in fbudgets))
+            for name, (tokens, vals, _) in curves.items():
+                print(f"{name:22s}" + ''.join(f"{loss_at(tokens * fpt[name], vals, b):11.4f}" for b in fbudgets))
+            print(f"→ {fpath}")
     print("\nCaveats: baselines use context 1024 vs EBT 512 (longer context lowers loss by itself);"
           "\nper-token loss is not comparable across tokenizers — compare within a table only.")
 

@@ -116,6 +116,11 @@ case "${CHECKPOINT}" in
     *baseline-llama*)    MODEL_SLUG="llama-${MODEL_SLUG}" ;;
     *baseline-hf-gpt2*)  MODEL_SLUG="gpt2-${MODEL_SLUG}" ;;
 esac
+# Retrained baselines (RUN_TAG ebtrecipe / tokmatched) also carry the tag, so they don't mix with the 100k ones.
+case "${CHECKPOINT}" in
+    *-ebtrecipe-job*)   MODEL_SLUG="${MODEL_SLUG/-/-ebtrecipe-}" ;;
+    *-tokmatched-job*)  MODEL_SLUG="${MODEL_SLUG/-/-tokmatched-}" ;;
+esac
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)_${SLURM_JOB_ID}
 OUTPUT_DIR="${SCRATCH_LOGS_DIR}/attr_control/${ATTRIBUTE}_regressor_${MODEL_SLUG}_${TIMESTAMP}"

@@ -17,13 +17,22 @@ hardware (1x NVIDIA L40S per job).
 
 | Run | Model | Tokenizer | Context len | Batch/device × accum = effective | Final step | Final valid_loss | wandb state |
 |---|---|---|---|---|---|---|---|
-| EBT REMI (s1) | `ebt` | REMI | 512 | 4 × 64 = 256 | 19,006 | 0.7519 | crashed* |
-| EBT Anticipation, original (s1) | `ebt` | Anticipation-Arrival-Time | 512 | 4 × 16 = 64 | 99,014 | 1.0215 | finished |
+| EBT REMI (s1) | `ebt` | REMI | 512 | 4 × 64 = 256 | 34,268 (**used: 33,732**, val 0.7150) | 0.7164 | crashed* |
+| EBT Anticipation, original (s1) | `ebt` | Anticipation-Arrival-Time | 512 | 4 × 16 = 64 | 99,999 (**used: 88,800**, val 0.9903) | 1.0215 | finished |
 | EBT Anticipation, stabilized | `ebt` | Anticipation-Arrival-Time | 512 | 2 × 32 = 64 | 33,006 | 1.0593 | crashed* |
 | Llama baseline, REMI | `baseline_llama_transformer` | REMI | 1024 | 16 × 16 = 256 | 99,373 | 0.5239 | crashed* |
 | GPT-2 baseline, REMI | `baseline_hf_gpt2_transformer` | REMI | 1024 | 16 × 16 = 256 | 99,144 | 0.4756 | crashed* |
 | Llama baseline, Anticipation | `baseline_llama_transformer` | Anticipation-Arrival-Time | 1024 | 8 × 16 = 128 | 99,019 | 0.7735 | finished |
 | GPT-2 baseline, Anticipation | `baseline_hf_gpt2_transformer` | Anticipation-Arrival-Time | 1024 | 8 × 16 = 128 | 99,019 | 0.7577 | finished |
+| Llama token-matched, REMI | `baseline_llama_transformer` (`RUN_TAG=tokmatched`) | REMI | 1024 | 16 × 16 = 256 | 16,866 (`…-final.ckpt`) | 0.6115 @ 16,580 | finished |
+| Llama token-matched, Anticipation | `baseline_llama_transformer` (`RUN_TAG=tokmatched`) | Anticipation-Arrival-Time | 1024 | 8 × 16 = 128 | 22,200 | 0.9166 | finished |
+
+**Anticipation val losses in this table are not comparable across runs** (diary 2026-10-15/17): training
+validation scores only the first 1072 × batch-size sequences (EBT 4,288, stabilized 2,144, baselines
+8,576). Comparable numbers on 1000 shared random windows (ctx 512, last MCMC step):
+`thesis_findings/2026-10-05_tokens_matched_validation_loss.md` (correction) and
+`context_matched_loss/ant-at-full-antcurve.json`. The stabilized run's checkpoints reach 44,800 (corrupted;
+44,700 is the last loadable), not 33,006.
 
 \* "crashed" here means the wandb run object for that specific resumed segment
 ended non-gracefully (e.g. hit its SLURM wallclock limit, mid-resubmit) — see
@@ -47,6 +56,10 @@ above (EBT Anticipation original, and both Anticipation baselines) — treat
 their final valid_loss as an under-trained snapshot, not a converged result,
 when citing or comparing against REMI's numbers.
 
+Token-matched Llama runs (2026-10-09/11): same recipe and LR schedule (over 100k steps) as the
+100k baselines, stopped at the EBT's tokens seen (REMI 4.4B, Anticipation 2.9B), so their final
+learning rate is still ~0.96–0.99× peak (see "LR schedule position" below).
+
 ## EBT-specific settings (all three EBT runs)
 
 EBT's own MCMC-refinement hyperparameters, not applicable to the Llama/GPT-2
@@ -63,15 +76,24 @@ baselines:
 | `mcmc_step_size_lr_multiplier` | **20** | **2** | **2** |
 | `mcmc_step_size_max` | 2.0 | 2.0 | 2.0 |
 | `clamp_futures_grad` | on | on | on |
-| `langevin_dynamics_noise` | 0.01 | *(not set)* | 0.01 |
-| `randomize_mcmc_step_size_scale` | 2.0 | *(not set)* | 2.0 |
-| `mcmc_replay_buffer` | on | *(not set)* | on |
-| `mcmc_replay_buffer_size` | 32 | *(not set)* | 32 |
+| `langevin_dynamics_noise` | *(not set)* | *(not set)* | 0.01 |
+| `randomize_mcmc_step_size_scale` | *(not set)* | *(not set)* | 2.0 |
+| `mcmc_replay_buffer` | *(not set)* | *(not set)* | on |
+| `mcmc_replay_buffer_size` | *(not set)* | *(not set)* | 32 |
 
 **The "stabilized" Anticipation lineage is exactly what its name says**: a
 deliberate rerun of Anticipation pretraining with three additions the
 original lineage never had — Langevin dynamics noise, randomized MCMC
-step-size scale, and a replay buffer — matching REMI's own configuration.
+step-size scale, and a replay buffer.
+
+**Correction (2026-10-11).** This table used to list those three settings as
+on for REMI. They are **off** in the REMI lineage actually used (wandb run
+`8wffvj5k`, checkpoint step 33,732; checked in the launch args and in the
+checkpoint's stored hparams: noise 0.0, scale 1, replay buffer False), as in
+the Anticipation checkpoint used (original lineage, step 88,800). The REMI
+runs that did set them (`1biqvt1o`, `99ixmjf4`, 2026-08-28) never got past
+step 0. So **neither EBT model used in the thesis has the stabilization
+settings**; only the unused "stabilized" Anticipation lineage does.
 This was the fix explored in the batch-size/step-size probe investigation
 (`docs/thesis_findings/`, "Open threads" in the vocab-normalization finding)
 for Anticipation's higher gradient norms and less stable MCMC steps. The
@@ -103,6 +125,33 @@ Randomizing it forces the refinement process to work across a *spread* of
 step sizes instead of overfitting to one specific value, the same idea
 behind stochastic learning-rate schedules elsewhere, applied here to the
 inner MCMC loop rather than the outer training loop.
+
+## Why the baselines use context 1024
+
+The baseline scripts were set up to follow the Anticipatory Music Transformer (AMT) setup: 100k
+steps, context 1024, warmup 10k (notes in `baseline_hf_gpt2_transformer.sh`). EBT stays at 512
+because of the memory cost of its MCMC training (graph kept through the refinement steps; the
+Anticipation EBT runs out of memory at batch 8 even in evaluation). Comparisons are therefore made
+at context 512 (`eval/context_matched_loss.py`), and the EBT-recipe baselines (`RUN_TAG=ebtrecipe`,
+2026-10-11) are trained at 512 with the EBT's batch and step count.
+
+## LR schedule position at the checkpoints used
+
+Every run uses warmup 10k + cosine over `max_scheduling_steps=100000` to
+peak/10, regardless of where it stopped. The learning rate at each used
+checkpoint is therefore different:
+
+| Checkpoint | LR / peak |
+|---|---|
+| EBT REMI, step 33,732 | 0.85 |
+| Llama token-matched REMI, step 16,866 | 0.99 |
+| EBT Anticipation, step 88,800 | 0.13 |
+| Llama token-matched Anticipation, step 22,200 | 0.96 |
+| Llama / GPT-2 100k baselines | 0.10 |
+
+A run that has been annealed usually ends at a lower loss than the same run stopped at a high LR,
+so at matched tokens the Anticipation comparison favours EBT (annealed) over the token-matched
+Llama (not annealed). On REMI both stopped at a high LR.
 
 ## Effective batch size note
 

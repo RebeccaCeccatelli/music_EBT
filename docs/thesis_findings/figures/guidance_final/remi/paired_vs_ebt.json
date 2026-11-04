@@ -1,0 +1,422 @@
+[
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.8541666666666667,
+    "acc_other": 0.6770833333333334,
+    "diff": -0.17708333333333334,
+    "ci95": [
+      -0.36458333333333337,
+      -0.02083333333333333
+    ],
+    "p_signflip": 0.109375,
+    "prompts_other_better": 2,
+    "prompts_tied": 9,
+    "prompts_ref_better": 5,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "gpt2/best_of_n",
+    "other_strength": "16",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.8541666666666667,
+    "acc_other": 0.6666666666666667,
+    "diff": -0.1875,
+    "ci95": [
+      -0.2604166666666667,
+      -0.11458333333333334
+    ],
+    "p_signflip": 0.0009765625,
+    "prompts_other_better": 0,
+    "prompts_tied": 5,
+    "prompts_ref_better": 11,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "gpt2/tilt",
+    "other_strength": "1.0",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.8541666666666667,
+    "acc_other": 0.65625,
+    "diff": -0.19791666666666669,
+    "ci95": [
+      -0.3541666666666667,
+      -0.0625
+    ],
+    "p_signflip": 0.03125,
+    "prompts_other_better": 1,
+    "prompts_tied": 9,
+    "prompts_ref_better": 6,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "llama/best_of_n",
+    "other_strength": "16",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.8541666666666667,
+    "acc_other": 0.84375,
+    "diff": -0.010416666666666675,
+    "ci95": [
+      -0.06250000000000001,
+      0.04166666666666666
+    ],
+    "p_signflip": 1.0,
+    "prompts_other_better": 2,
+    "prompts_tied": 12,
+    "prompts_ref_better": 2,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "llama/pplm",
+    "other_strength": "16.0",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.8541666666666667,
+    "acc_other": 0.6875,
+    "diff": -0.16666666666666669,
+    "ci95": [
+      -0.23958333333333334,
+      -0.08333333333333334
+    ],
+    "p_signflip": 0.00372314453125,
+    "prompts_other_better": 2,
+    "prompts_tied": 1,
+    "prompts_ref_better": 13,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "llama/tilt",
+    "other_strength": "1.0",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.8541666666666667,
+    "acc_other": 0.5104166666666666,
+    "diff": -0.34375,
+    "ci95": [
+      -0.5208333333333334,
+      -0.17708333333333334
+    ],
+    "p_signflip": 0.00244140625,
+    "prompts_other_better": 2,
+    "prompts_tied": 4,
+    "prompts_ref_better": 10,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "gpt2/best_of_n",
+    "other_strength": "4",
+    "kind": "N=4"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.8541666666666667,
+    "acc_other": 0.5625,
+    "diff": -0.2916666666666667,
+    "ci95": [
+      -0.46875,
+      -0.125
+    ],
+    "p_signflip": 0.0078125,
+    "prompts_other_better": 1,
+    "prompts_tied": 7,
+    "prompts_ref_better": 8,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "llama/best_of_n",
+    "other_strength": "4",
+    "kind": "N=4"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.7916666666666666,
+    "acc_other": 0.7395833333333334,
+    "diff": -0.05208333333333333,
+    "ci95": [
+      -0.2708333333333333,
+      0.13541666666666666
+    ],
+    "p_signflip": 0.70703125,
+    "prompts_other_better": 6,
+    "prompts_tied": 7,
+    "prompts_ref_better": 3,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "gpt2/best_of_n",
+    "other_strength": "16",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.7916666666666666,
+    "acc_other": 0.8854166666666667,
+    "diff": 0.09375,
+    "ci95": [
+      0.020833333333333336,
+      0.17708333333333337
+    ],
+    "p_signflip": 0.078125,
+    "prompts_other_better": 6,
+    "prompts_tied": 9,
+    "prompts_ref_better": 1,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "gpt2/tilt",
+    "other_strength": "1.0",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.7916666666666666,
+    "acc_other": 0.71875,
+    "diff": -0.07291666666666666,
+    "ci95": [
+      -0.26041666666666663,
+      0.09375
+    ],
+    "p_signflip": 0.52734375,
+    "prompts_other_better": 5,
+    "prompts_tied": 7,
+    "prompts_ref_better": 4,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "llama/best_of_n",
+    "other_strength": "16",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.7916666666666666,
+    "acc_other": 0.8541666666666666,
+    "diff": 0.0625,
+    "ci95": [
+      -0.03125000000000001,
+      0.15625
+    ],
+    "p_signflip": 0.328125,
+    "prompts_other_better": 5,
+    "prompts_tied": 9,
+    "prompts_ref_better": 2,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "llama/pplm",
+    "other_strength": "32.0",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.7916666666666666,
+    "acc_other": 0.84375,
+    "diff": 0.05208333333333334,
+    "ci95": [
+      -0.0625,
+      0.16666666666666669
+    ],
+    "p_signflip": 0.513671875,
+    "prompts_other_better": 6,
+    "prompts_tied": 6,
+    "prompts_ref_better": 4,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "llama/tilt",
+    "other_strength": "1.0",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.7916666666666666,
+    "acc_other": 0.5625,
+    "diff": -0.22916666666666666,
+    "ci95": [
+      -0.42708333333333337,
+      -0.04166666666666666
+    ],
+    "p_signflip": 0.0517578125,
+    "prompts_other_better": 3,
+    "prompts_tied": 5,
+    "prompts_ref_better": 8,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "gpt2/best_of_n",
+    "other_strength": "4",
+    "kind": "N=4"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.7916666666666666,
+    "acc_other": 0.5520833333333334,
+    "diff": -0.23958333333333331,
+    "ci95": [
+      -0.4479166666666667,
+      -0.041666666666666664
+    ],
+    "p_signflip": 0.0517578125,
+    "prompts_other_better": 4,
+    "prompts_tied": 4,
+    "prompts_ref_better": 8,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.02",
+    "other": "llama/best_of_n",
+    "other_strength": "4",
+    "kind": "N=4"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.96875,
+    "acc_other": 0.6875,
+    "diff": -0.28125,
+    "ci95": [
+      -0.53125,
+      -0.0625
+    ],
+    "p_signflip": 0.0625,
+    "prompts_other_better": 1,
+    "prompts_tied": 10,
+    "prompts_ref_better": 5,
+    "attribute": "velocity",
+    "ref": "ebt/r3",
+    "ref_strength": "0.03",
+    "other": "gpt2/best_of_n",
+    "other_strength": "16",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.96875,
+    "acc_other": 0.96875,
+    "diff": 6.938893903907228e-18,
+    "ci95": [
+      -0.04166666666666666,
+      0.05208333333333334
+    ],
+    "p_signflip": 1.0,
+    "prompts_other_better": 1,
+    "prompts_tied": 13,
+    "prompts_ref_better": 2,
+    "attribute": "velocity",
+    "ref": "ebt/r3",
+    "ref_strength": "0.03",
+    "other": "gpt2/tilt",
+    "other_strength": "1.0",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.96875,
+    "acc_other": 0.65625,
+    "diff": -0.3125,
+    "ci95": [
+      -0.5625,
+      -0.125
+    ],
+    "p_signflip": 0.0625,
+    "prompts_other_better": 0,
+    "prompts_tied": 11,
+    "prompts_ref_better": 5,
+    "attribute": "velocity",
+    "ref": "ebt/r3",
+    "ref_strength": "0.03",
+    "other": "llama/best_of_n",
+    "other_strength": "16",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.96875,
+    "acc_other": 1.0,
+    "diff": 0.03125,
+    "ci95": [
+      0.0,
+      0.09375
+    ],
+    "p_signflip": 1.0,
+    "prompts_other_better": 1,
+    "prompts_tied": 15,
+    "prompts_ref_better": 0,
+    "attribute": "velocity",
+    "ref": "ebt/r3",
+    "ref_strength": "0.03",
+    "other": "llama/pplm",
+    "other_strength": "16.0",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.96875,
+    "acc_other": 0.9895833333333334,
+    "diff": 0.020833333333333336,
+    "ci95": [
+      -0.031249999999999993,
+      0.09375
+    ],
+    "p_signflip": 1.0,
+    "prompts_other_better": 1,
+    "prompts_tied": 14,
+    "prompts_ref_better": 1,
+    "attribute": "velocity",
+    "ref": "ebt/r3",
+    "ref_strength": "0.03",
+    "other": "llama/tilt",
+    "other_strength": "1.0",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.96875,
+    "acc_other": 0.53125,
+    "diff": -0.4375,
+    "ci95": [
+      -0.65625,
+      -0.25
+    ],
+    "p_signflip": 0.00390625,
+    "prompts_other_better": 0,
+    "prompts_tied": 7,
+    "prompts_ref_better": 9,
+    "attribute": "velocity",
+    "ref": "ebt/r3",
+    "ref_strength": "0.03",
+    "other": "gpt2/best_of_n",
+    "other_strength": "4",
+    "kind": "N=4"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.96875,
+    "acc_other": 0.53125,
+    "diff": -0.4375,
+    "ci95": [
+      -0.65625,
+      -0.21875
+    ],
+    "p_signflip": 0.00390625,
+    "prompts_other_better": 0,
+    "prompts_tied": 7,
+    "prompts_ref_better": 9,
+    "attribute": "velocity",
+    "ref": "ebt/r3",
+    "ref_strength": "0.03",
+    "other": "llama/best_of_n",
+    "other_strength": "4",
+    "kind": "N=4"
+  }
+]

@@ -91,3 +91,13 @@ REMI 0.6993 → 0.6964, Ant 1.1098 → 1.1024 (≤ 0.7%).
   aren't referenced by any surviving checkpoint dir.
 - EBT REMI between ~2.5–3B tokens spans the resubmission/branching period
   (see `2026-09-25_validation_loss_curves.md`), hence the noise.
+
+## Correction (2026-10-17): Anticipation logged validation losses are not comparable
+Anticipation training validation is unshuffled with `limit_val_batches=1072`, so each run logs on the first
+1072 × batch-size sequences (EBT 4,288, stab+ 2,144, baselines 8,576, of 1.86 M; REMI runs use the full set
+and are unaffected). The Anticipation table and the "EBT learns faster early, then plateaus" bullet above
+compare different slices and should not be cited. Re-scored on 1000 shared random windows (job 26152811,
+`context_matched_loss/ant-at-full-antcurve.json`, diary 2026-10-17): at EBT's 2.9B tokens EBT 1.102 vs
+token-matched Llama 1.136 (EBT ahead), but vs the same-recipe baselines Llama 1.056 / GPT-2 1.070 (EBT behind);
+at ~1.4–1.6B tokens stabilized EBT 1.130 ≈ Llama 1.126 ≈ GPT-2 1.141. The early (≤1.2B) EBT points can't be
+re-scored: those checkpoints were deleted on 2026-10-05.
