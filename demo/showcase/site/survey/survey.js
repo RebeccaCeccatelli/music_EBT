@@ -40,16 +40,24 @@
 
   // ------------------------------------------------------------- sampling
   // Round-robin over groups so each participant covers many conditions.
+  // Trials sharing a `ukey` (same prompt, or same prompt + attribute + direction) are never
+  // given to the same participant twice.
   function sampleGrouped(trials, keyFn, n, r) {
     const groups = {};
     for (const [i, t] of trials.entries()) (groups[keyFn(t)] ||= []).push(i);
     const keys = shuffle(Object.keys(groups), r);
     const queues = Object.fromEntries(keys.map((k) => [k, shuffle(groups[k], r)]));
-    const out = [];
+    const out = [], seen = new Set();
     while (out.length < n && keys.some((k) => queues[k].length)) {
       for (const k of keys) {
         if (out.length >= n) break;
-        if (queues[k].length) out.push(queues[k].pop());
+        while (queues[k].length) {
+          const i = queues[k].pop(), u = trials[i].ukey;
+          if (u && seen.has(u)) continue;
+          if (u) seen.add(u);
+          out.push(i);
+          break;
+        }
       }
     }
     return out;

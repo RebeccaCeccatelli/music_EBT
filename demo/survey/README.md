@@ -11,7 +11,17 @@ to the same sheet; they carry `"lang": "it"` and show as `v4 (it)` in the
 stored with the English values, so the analysis treats both languages alike.
 `it/survey.js` is a translated copy of `survey.js`: mirror any logic change.
 
-## Design
+## v5 (2026-11-06): curated by the author
+Built with `demo/survey/build_survey_v5.py` (`sbatch job_scripts/mus/demo/build_survey_v5.sh`) from the clips
+picked by ear in the picker pages (snapshot `music_EBT_logs/survey/picks_v5/`). Baselines are the EBT-recipe
+Llama / GPT-2. Part 1: picked sets (original + EBT / Llama / GPT-2). Part 2: every picked steered clip (any
+strength or target size) vs its system's own unguided reference, scored on direction. Part 3: per prompt,
+attribute and direction, the picked clips of each system (2–4 versions). This is a qualitative study of
+curated examples, not a controlled method comparison (the v4 design below). Trials sharing a `ukey` (same
+prompt, or same prompt + attribute + direction) are never given to one participant twice. Key:
+`music_EBT_logs/survey/key_v5.json` (keep `key.json` for v4 responses).
+
+## Design (v4)
 - **Part 1 · Unguided:** 4 blinded continuations of one prompt (EBT, Llama,
   GPT-2, and the human original as a hidden anchor), shown as Version A–D
   in random order. Listeners pick the most and the least musical.
@@ -28,8 +38,9 @@ stored with the English values, so the analysis treats both languages alike.
 - **Attention checks:** Part 1 includes a near-random EBT clip (λ far past the
   operating point), which should be picked as least musical. Part 2 includes a
   reference compared with itself, which should get "no difference".
-- Systems: REMI has EBT, Llama PPLM, Llama tilt and Llama best-of-16;
-  Anticipation has EBT and Llama best-of-16 (add Ant PPLM to `SYSTEMS` once it exists).
+- Systems (v5, EBT-recipe baselines): REMI has EBT, Llama PPLM, Llama tilt, Llama best-of-N,
+  GPT-2 tilt and GPT-2 best-of-N; Anticipation has EBT, Llama PPLM, Llama best-of-N and GPT-2
+  best-of-N (tilt is REMI-only). GPT-2 added 2026-11-06 at the user's request, for every attribute.
 - Each participant gets a random subset (`PLAN` in `build_survey.py`):
   6 + 1 unguided, 12 + 1 change, 5 compare. That is ~25 trials, ~20 min.
   The sampling is round-robin over tokenizer × attribute × system.
