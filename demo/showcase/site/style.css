@@ -262,9 +262,9 @@ a:hover { text-decoration: underline; }
 /* --------------------------------------------- ladder (curated picks) */
 .ladder-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px 4px; }
 .ladder {
-  display: grid; column-gap: 12px; row-gap: 10px; align-items: start;
-  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
-  min-width: calc(var(--cols) * 175px);
+  display: grid; column-gap: 14px; row-gap: 12px; align-items: start;
+  grid-template-columns: 150px minmax(0, 1fr) minmax(0, .85fr) minmax(0, 1fr);
+  min-width: 720px;
 }
 .ladder .colhead {
   display: flex; flex-direction: column; align-items: center; gap: 2px; align-self: end;
@@ -275,21 +275,36 @@ a:hover { text-decoration: underline; }
 .ladder .colhead.down { color: var(--down); border-color: rgba(90,169,255,.45); }
 .ladder .colhead.up { color: var(--up); border-color: rgba(255,138,92,.5); }
 .ladder .colhead.ref { color: var(--text); }
-.lad-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.lad-entry { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.lad-sys { font: 650 12.5px var(--font); color: var(--muted); padding-left: 2px; }
-.lad-sys.ours { color: #d6d0ff; }
-.lad-col.ref .clip { outline: 1px dashed rgba(255,255,255,.28); outline-offset: -1px; }
+.ladder .rowhead { display: flex; flex-direction: column; justify-content: center; gap: 4px; align-self: center;
+  font-weight: 650; font-size: 14px; }
+.ladder .rowhead.ours { color: #d6d0ff; }
+.ladder .rowhead small { font: 500 11px var(--font); color: var(--faint); }
+.lad-ref { align-self: stretch; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  padding: 8px; border-radius: 14px; background: rgba(255,255,255,.025); border: 1px dashed rgba(255,255,255,.14); }
+.lad-ref-note { margin: 0; font-size: 12px; color: var(--faint); line-height: 1.45; }
+.lad-cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lad-cell.none { align-self: center; align-items: center; }
+.lad-none { font-size: 12px; color: var(--faint); font-style: italic; }
 /* Cards stay inside their column: everything wraps instead of spilling into the next one. */
 .ladder .clip { padding: 10px; gap: 8px; min-width: 0; overflow: hidden; }
 .ladder .clip-top { flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
 .ladder .clip-label { font: 600 12.5px var(--mono); min-width: 0; overflow-wrap: anywhere; }
 .ladder .clip .play { width: 30px; height: 30px; }
 .ladder .tag { font-size: 9.5px; padding: 2px 7px; }
-.ladder .roll { height: 74px; }
+.ladder .roll { height: 80px; }
 .ladder .clip-foot { flex-wrap: wrap; gap: 2px 8px; }
 .ladder .metric { white-space: normal; text-align: left; font-size: 11px; line-height: 1.5; }
 .ladder .strength-switch { margin: 0; }
+.lad-box { display: flex; flex-direction: column; min-width: 0; border-radius: var(--radius); overflow: hidden;
+  border: 1px solid var(--border); background: rgba(0,0,0,.25); }
+.lad-box.down { border-color: rgba(90,169,255,.4); }
+.lad-box.up { border-color: rgba(255,138,92,.45); }
+.lad-ctrl { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px;
+  background: rgba(255,255,255,.035); border-bottom: 1px solid rgba(255,255,255,.08); }
+.lad-box .clip { border: 0; border-radius: 0; }
+.lad-box .clip.playing { box-shadow: inset 0 0 0 1px rgba(139,124,255,.7); }
+.ladder .strength-switch { gap: 4px; }
+.ladder .strength-switch .sw-label { margin-right: 2px; white-space: nowrap; }
 .ladder .strength-switch .st-btn { font-size: 11px; padding: 2px 7px; }
 .meter { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }
 .meter i { width: 5px; height: 10px; border-radius: 1px; background: rgba(255,255,255,.15); }

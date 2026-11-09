@@ -381,79 +381,117 @@
     return card;
   }
 
-  // Curated picks for one prompt: one column per target SD, from left (▼) to right (▲), with the
-  // unguided reference in the middle. Each column stacks only the clips that exist (EBT first, then the
-  // baselines), so there are no empty slots. Several strengths of one system at one SD share an entry
-  // with a selector.
+  // Curated picks for one prompt. Rows = techniques (EBT, PPLM, Tilt, Best-of-N); columns = ▼ down,
+  // unguided, ▲ up. The one unguided reference (the EBT's) sits in the middle and spans all rows.
+  // Each down/up cell holds all of that technique's picks in that direction, with selectors for the
+  // target (SD) and the strength (λ / baseline strength) when there is more than one choice.
   function ladderBlock(b) {
     const card = blockCard(b);
-    const range = exampleRange(b);
+    // Pitch axis shared by the whole card (so higher/lower stays visible); time axis per clip, so each
+    // roll fills its box instead of ending early when another clip in the card is longer.
+    const shared = exampleRange(b);
+    const rangeOf = (c) => ({ ...shared, tMax: exampleRange({ clips: [c] }).tMax });
     const ref = b.clips.find((c) => c.col === "ref");
-    const sds = [...new Set(b.clips.filter((c) => c.col !== "ref").map((c) => c.sd))].sort((x, y) => x - y);
-    const cols = [...sds.filter((s) => s < 0), "ref", ...sds.filter((s) => s > 0)];
-    const maxSd = Math.max(...sds.map(Math.abs), 1);
-    const systems = [...new Set(b.clips.map((c) => c.row))];   // already in display order (EBT first)
+    const picks = b.clips.filter((c) => c.col !== "ref");
+    const maxSd = Math.max(...picks.map((c) => Math.abs(c.sd)), 1);
+    const rows = [...new Set(picks.map((c) => c.row))];   // display order (EBT first)
     const table = h("div", "ladder");
-    table.style.setProperty("--cols", cols.length);
 
-    for (const k of cols) {
-      table.append(k === "ref"
-        ? h("div", "colhead ref", "unguided<small>reference</small>")
-        : h("div", "colhead " + (k < 0 ? "down" : "up"),
-            `${k < 0 ? "▼" : "▲"} ${fmtSd(k)}<small>${k < 0 ? b.down : b.up}</small>`));
-    }
+    const place = (el, row, col) => { el.style.gridRow = row; el.style.gridColumn = col; return el; };
+    table.append(place(h("div", "corner"), 1, 1));
+    table.append(place(h("div", "colhead down", `▼ ${b.down}`), 1, 2));
+    table.append(place(h("div", "colhead ref", "unguided<small>reference</small>"), 1, 3));
+    table.append(place(h("div", "colhead up", `▲ ${b.up}`), 1, 4));
+
+    const refCell = place(h("div", "lad-ref"), `2 / span ${rows.length}`, 3);
+    if (ref) refCell.append(makeClip(ref, rangeOf(ref), {
+      label: "Unguided", metricHTML: b.metric ? metricCell(b, ref, null) : null,
+    }));
+    refCell.append(h("p", "lad-ref-note", "The EBT's unguided continuation: listen to it first, then compare each row."));
+    table.append(refCell);
 
     const meter = (c) => c.levels > 1
-      ? ` <span class="meter" title="strength ${c.level} of ${c.levels} used for this system in this tab">` +
+      ? ` <span class="meter" title="strength ${c.level} of ${c.levels} used for this technique in this tab">` +
         Array.from({ length: c.levels }, (_, i) => `<i class="${i < c.level ? "on" : ""}"></i>`).join("") + "</span>"
       : "";
+    const sdText = (sd) => `${sd > 0 ? "+" : "−"}${Math.abs(sd)} SD`;
+    // Strength buttons show only the number; the row label names the scale once (so 3 fit on one line).
+    const strengthName = (c) => c.label.replace(/^(λ|strength|best of) /, "");
+    const strengthScale = (c) => c.label.startsWith("λ") ? "strength λ" : c.label.startsWith("best of") ? "N" : "strength";
 
-    for (const k of cols) {
-      const col = h("div", "lad-col" + (k === "ref" ? " ref" : ""));
-      for (const sys of systems) {
-        const here = b.clips.filter((c) => c.row === sys &&
-          (k === "ref" ? c.col === "ref" : c.col !== "ref" && c.sd === k))
-          .sort((x, y) => parseFloat(x.strength) - parseFloat(y.strength));
-        if (!here.length) continue;
-        const entry = h("div", "lad-entry");
-        const head = h("div", "lad-sys " + (here[0].tag === "ours" || k === "ref" ? "ours" : "base"), sys);
-        head.title = here[0].row_sub || "";
-        entry.append(head);
-        const versions = here.map((c, i) => {
-          const el = makeClip(c, range, {
-            label: k === "ref" ? "Unguided" : c.label + meter(c),
-            col: k === "ref" ? null : (k < 0 ? "down" : "up"),
-            metricHTML: b.metric ? metricCell(b, c, ref && c.row === ref.row && c !== ref ? ref : null) : null,
-          });
-          if (k !== "ref") {   // deeper tint = bigger target
-            el.style.setProperty("--int", (Math.abs(k) / maxSd).toFixed(3));
-            el.classList.add(k > 0 ? "tint-up" : "tint-down");
-          }
-          if (i) el.style.display = "none";
-          return el;
-        });
-        if (here.length > 1) {
-          const sw = h("div", "strength-switch");
-          here.forEach((c, i) => {
-            const btn = h("button", "st-btn" + (i ? "" : " on"), c.label);
-            btn.type = "button";
-            btn.addEventListener("click", () => {
-              versions.forEach((el, j) => {
-                if (j !== i && current && current.el === el) player.pause();
-                el.style.display = j === i ? "" : "none";
-              });
-              sw.querySelectorAll(".st-btn").forEach((x, j) => x.classList.toggle("on", j === i));
-              requestAnimationFrame(() => clips.forEach((x) => { if (x.el === versions[i]) drawBase(x); }));
-            });
-            sw.append(btn);
-          });
-          entry.append(sw);
+    rows.forEach((row, ri) => {
+      const rc = picks.filter((c) => c.row === row);
+      const ours = rc[0].tag === "ours";
+      table.append(place(h("div", "rowhead" + (ours ? " ours" : ""), `${row}<small>${rc[0].row_sub || ""}</small>`), ri + 2, 1));
+      for (const [dir, col] of [[-1, 2], [1, 4]]) {
+        const cell = place(h("div", "lad-cell " + (dir < 0 ? "down" : "up")), ri + 2, col);
+        const here = rc.filter((c) => Math.sign(c.sd) === dir)
+          .sort((x, y) => Math.abs(x.sd) - Math.abs(y.sd) || parseFloat(x.strength) - parseFloat(y.strength));
+        if (!here.length) {
+          cell.classList.add("none");
+          cell.append(h("span", "lad-none", "nothing to show for this technique in this direction"));
+          table.append(cell);
+          continue;
         }
-        entry.append(...versions);
-        col.append(entry);
+        // target buttons run outward: −2 −1 −0.5 on the softer side, +0.5 +1 +2 on the louder side
+        const sds = [...new Set(here.map((c) => c.sd))].sort((x, y) => x - y);
+        const els = new Map();
+        for (const c of here) {
+          const el = makeClip(c, rangeOf(c), {
+            label: `${dir < 0 ? "▼" : "▲"} ${sdText(c.sd)} · ${c.label}${meter(c)}`,
+            col: dir < 0 ? "down" : "up",
+            metricHTML: b.metric ? metricCell(b, c, ours && ref ? ref : null) : null,
+          });
+          el.style.setProperty("--int", (Math.abs(c.sd) / maxSd).toFixed(3));
+          el.classList.add(dir > 0 ? "tint-up" : "tint-down");
+          el.style.display = "none";
+          els.set(c, el);
+        }
+        let selSd = dir < 0 ? sds[0] : sds[sds.length - 1];   // start at the biggest target: the clearest change
+        let selSt = null;
+        const sdBar = h("div", "strength-switch");
+        const stBar = h("div", "strength-switch");
+        const show = () => {
+          const opts = here.filter((c) => c.sd === selSd);
+          if (!opts.some((c) => c.strength === selSt)) selSt = opts[0].strength;
+          for (const [c, el] of els) {
+            const on = c.sd === selSd && c.strength === selSt;
+            if (!on && current && current.el === el) player.pause();
+            el.style.display = on ? "" : "none";
+          }
+          sdBar.querySelectorAll(".st-btn").forEach((x) => x.classList.toggle("on", Number(x.dataset.v) === selSd));
+          stBar.replaceChildren(h("span", "sw-label", strengthScale(opts[0])));
+          stBar.style.display = opts.length > 1 ? "" : "none";
+          for (const c of opts) {
+            const btn = h("button", "st-btn" + (c.strength === selSt ? " on" : ""), strengthName(c));
+            btn.type = "button";
+            btn.addEventListener("click", () => { selSt = c.strength; show(); });
+            stBar.append(btn);
+          }
+          requestAnimationFrame(() => clips.forEach((x) => { if (x.el.style.display !== "none" && [...els.values()].includes(x.el)) drawBase(x); }));
+        };
+        // controls and clips share one framed box, so the selectors clearly belong to this cell only
+        const box = h("div", "lad-box " + (dir < 0 ? "down" : "up"));
+        const ctrl = h("div", "lad-ctrl");
+        if (sds.length > 1) {
+          sdBar.append(h("span", "sw-label", "target"));
+          for (const sd of sds) {
+            const btn = h("button", "st-btn", sdText(sd));
+            btn.type = "button";
+            btn.dataset.v = sd;
+            btn.addEventListener("click", () => { selSd = sd; show(); });
+            sdBar.append(btn);
+          }
+          ctrl.append(sdBar);
+        }
+        ctrl.append(stBar);
+        if (here.length > 1) box.append(ctrl);   // several targets and/or several strengths to choose from
+        box.append(...els.values());
+        cell.append(box);
+        show();
+        table.append(cell);
       }
-      table.append(col);
-    }
+    });
     const scroll = h("div", "ladder-scroll");
     scroll.append(table);
     card.append(scroll);

@@ -35,7 +35,7 @@ SYSTEMS = {  # system -> (block title, subtitle, model, method)
     "gpt2_bon": ("Best-of-N · GPT-2", "keeps the closest of N unguided samples", "GPT-2", "best_of_n"),
 }
 ATTR = {  # attribute -> (tab label, sublabel, metric key, metric label, unit, down word, up word)
-    "velocity": ("Velocity", "loudness", "velocity", "mean velocity", "/127", "softer", "louder"),
+    "velocity": ("Velocity", "piano ↔ forte", "velocity", "mean velocity", "/127", "softer", "louder"),
     "duration": ("Duration", "staccato ↔ legato", "note_beats", "mean note length (beats)", "", "shorter", "longer"),
     "pitch_register": ("Pitch register", "low ↔ high", "pitch", "mean pitch", "", "lower", "higher"),
 }
@@ -119,7 +119,7 @@ def main():
              "subtitle": instruments(tok, pid, opts[0]),
              "clips": [clip_spec(m, clips[m], *label[clips[m]["system"]]) for m in opts]}
         if seen[(tok, pid)] > 1:
-            b["subtitle"] += " · same prompt, another set of picked continuations"
+            b["subtitle"] += " · same prompt, another set of selected continuations"
         ung[t["tok"]].append(b)
 
     # ------------------------------------------------------------------ steered
@@ -152,8 +152,8 @@ def main():
         assert specs and specs[0]["col"] == "ref", (tok, attr, pid)  # the reference lives in the EBT row
         return {"type": "ladder", "tok": tok, "prompt": pid, "title": name(tok, pid),
                 "prompt_name": instruments(tok, pid) or f"prompt {pid}",
-                "subtitle": f"left: ▼ {down}, right: ▲ {up}, further out = bigger target (SD) · "
-                            f"the EBT's unguided sample in the middle is the reference for all clips",
+                "subtitle": f"one row per technique: ▼ {down} on the left, ▲ {up} on the right; choose the target "
+                            f"(SD) and strength in each cell · the EBT's unguided sample in the middle is the reference",
                 "metric": key, "metric_label": mlabel, "metric_unit": unit, "down": down, "up": up,
                 "clips": specs}
 
@@ -188,32 +188,42 @@ def main():
         "(same data, context length and number of training tokens). The REMI and Anticipation tabs are two "
         "tokenizations (see the ? next to Tokenization). The EBT generates each "
         "token by minimising a learned energy with a few gradient steps; Llama and GPT-2 are standard next-token "
-        "predictors. Every continuation here was picked by ear.")
+        "predictors. Every continuation here was selected by ear.")
     single = secs["single"]
     single["tabs"] = single_tabs
     for b in single.get("blocks", []):   # the SD / strength explainer: strengths are now shown as numbers
         if b.get("type") == "note" and "<b>Strength</b>" in b.get("text", ""):
             b["collapsible"] = True   # a "learn more" card, closed until clicked
-            b["title"] = "What do “SD” and “strength” mean?"
+            b["title"] = "What do “target” and “strength” mean?"
             b["teaser"] = "How far each clip is pushed, and how hard"
+            b["text"] = (
+                '<span class="nl"><b>Target</b> = <i>where</i> you ask the music to go: “a bit louder” (+1 SD) or '
+                '“much louder” (+2 SD); minus means the opposite direction. Targets are measured in SD (standard '
+                'deviations): how much loudness, note length or pitch usually varies between pieces.</span>'
+                '<span class="nl"><b>Strength</b> = <i>how hard</i> the model is pushed to get there: how '
+                'insistently you ask, not what you ask for. For the EBT the strength is called λ; for the baselines '
+                'it is their own setting (PPLM and Tilt: a strength value; Best-of-N: the number of samples N).</span>'
+                '<span class="nl">Think of throwing a ball: the target is where you aim, the strength is how hard '
+                'you throw. Too soft and it falls short; too hard and it flies past and goes wild, which is what '
+                '“Pushing Too Hard” shows.</span>')
             b["text"] = b["text"].replace(
                 "<b>Strength</b> (low / medium / high)",
                 "<b>Strength</b> (λ for the EBT; a strength or N for the baselines)")
     single["intro"] = (
         "With a small regressor that predicts a musical attribute, generation can be steered toward a target "
         "without retraining. For the EBT, the regressor's error is added to the energy it already minimises, and "
-        "λ sets how hard it pushes. The baselines steer Llama and GPT-2 (same training recipe as the EBT) with "
+        "its strength, λ, sets how hard it pushes. The baselines steer Llama and GPT-2 (same training recipe as the EBT) with "
         "PPLM, Tilt or Best-of-N. Targets are given in standard deviations (SD) of the corpus, relative to each "
-        "system's own unguided level. Every steered version here was picked by ear, at whatever strength and "
+        "system's own unguided level. Every steered version here was selected by ear, at whatever strength and "
         "target sounded best, so several versions of one system can appear. In each card, the EBT's unguided "
         "sample is the one reference to listen against.")
     sel["meta"]["disclaimer"] = (
-        "These are selected examples. In Unguided Generation and Single-Attribute Control, every clip was picked "
+        "These are selected examples. In Unguided Generation and Single-Attribute Control, every clip was selected "
         "by ear by the author from the final evaluation outputs (the same pool as the listening study): they show "
         "what each system does at its best, not on average. The baselines there are Llama and GPT-2 trained with "
         "the same recipe as the EBT. Combined Control and Pushing Too Hard are not curated: every system gets the "
         "same prompt and its first sample, with the earlier Llama baselines. Leading silence is trimmed in the "
-        "picked clips. The aggregate results are in the thesis.")
+        "selected clips. The aggregate results are in the thesis.")
     # Tokenization: label the REMI / Anticipation tabs everywhere, and explain it once in plain words.
     for sec in sel["sections"]:
         tabs = sec.get("tabs", [])
