@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clip Library</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="title">
+    <h1>Clip Library</h1>
+    <p id="summary" class="muted"></p>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="unguided">Unguided</button>
+    <button data-tab="guided">Guided</button>
+    <button data-tab="collection">Collection <span id="starCount" class="badge">0</span></button>
+  </nav>
+</header>
+
+<section class="controls" id="controls"></section>
+
+<main id="main"></main>
+
+<footer class="player" id="player" hidden>
+  <button id="pPlay" class="pbtn" aria-label="Play or pause">▶</button>
+  <div class="pinfo">
+    <div id="pTitle" class="ptitle"></div>
+    <div class="pbar" id="pBar"><div class="pprompt" id="pPrompt"></div><div class="pfill" id="pFill"></div></div>
+  </div>
+  <span id="pTime" class="ptime muted">0:00</span>
+  <button id="pStar" class="star" aria-label="Add to collection">☆</button>
+</footer>
+
+<script src="catalog.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
