@@ -959,7 +959,7 @@
    "id": "single",
    "kicker": "02",
    "title": "Single-Attribute Control",
-   "intro": "With a small regressor that predicts a musical attribute, generation can be steered toward a target without retraining. For the EBT, the regressor's error is added to the energy it already minimises, and λ sets how hard it pushes. The baselines steer Llama and GPT-2 (same training recipe as the EBT) with PPLM, Tilt or Best-of-N. Targets are given in standard deviations (SD) of the corpus, relative to each system's own unguided level. Every steered version here was picked by ear, at whatever strength and target sounded best, so several versions of one system can appear.",
+   "intro": "With a small regressor that predicts a musical attribute, generation can be steered toward a target without retraining. For the EBT, the regressor's error is added to the energy it already minimises, and λ sets how hard it pushes. The baselines steer Llama and GPT-2 (same training recipe as the EBT) with PPLM, Tilt or Best-of-N. Targets are given in standard deviations (SD) of the corpus, relative to each system's own unguided level. Every steered version here was picked by ear, at whatever strength and target sounded best, so several versions of one system can appear. In each card, the EBT's unguided sample is the one reference to listen against.",
    "blocks": [
     {
      "type": "note",
@@ -978,7 +978,7 @@
         {
          "type": "group",
          "title": "Flute, guitar, drums & bass",
-         "subtitle": "prompt 3107 · each row: that system's own unguided sample, then its picked versions (▲ louder, ▼ softer); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 3107 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ louder, ▼ softer); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -994,7 +994,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_velocity_3107_unguided_a5850d",
              "midi": "attr_control/listen_midi/25280946/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -1043,20 +1043,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_duration_3107_unguided_66dcc8",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_velocity_3107_steered_32_u2_6782cf",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/velocity/p3107_velocity_pplm32_d+2_generated.mid",
              "label": "▲ louder · +2 SD · strength 32",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1068,13 +1062,6 @@
            "metric_label": "mean velocity",
            "metric_unit": "/127",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_llama_tilt_duration_3107_unguided_06785d",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_llama_tilt_velocity_3107_steered_1_d1_bea333",
@@ -1091,7 +1078,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1105,20 +1093,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_bon_duration_3107_unguided_da2555",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_bon_velocity_3107_steered_16_u0p5_809d12",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/velocity/p3107_velocity_best_of_n16_d+0.5_generated.mid",
              "label": "▲ louder · +0.5 SD · best of 16",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1130,13 +1112,6 @@
            "metric_label": "mean velocity",
            "metric_unit": "/127",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_tilt_duration_3107_unguided_2bb38b",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_tilt_velocity_3107_steered_1_d0p5_b2ef5d",
@@ -1153,7 +1128,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1167,27 +1143,21 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_gpt2_bon_duration_3107_unguided_0ec3b7",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_gpt2_bon_velocity_3107_steered_8_u2_3732fc",
              "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_20261019/midi/velocity/p3107_velocity_best_of_n8_d+2_generated.mid",
              "label": "▲ louder · +2 SD · best of 8",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Drums only",
-         "subtitle": "prompt 7157 · each row: that system's own unguided sample, then its picked versions (▲ louder, ▼ softer); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 7157 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ louder, ▼ softer); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -1203,7 +1173,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_velocity_7157_unguided_f26f7f",
              "midi": "attr_control/listen_midi/25280946/baseline/p7157_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -1268,20 +1238,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_7157_unguided_29a456",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p7157_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_velocity_7157_steered_32_u1_35b1d6",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/velocity/p7157_velocity_pplm32_d+1_generated.mid",
              "label": "▲ louder · +1 SD · strength 32",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1293,13 +1257,6 @@
            "metric_label": "mean velocity",
            "metric_unit": "/127",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_llama_tilt_velocity_7157_unguided_b8c7d4",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p7157_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_llama_tilt_velocity_7157_steered_1_d2_6e3b5d",
@@ -1324,7 +1281,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1338,20 +1296,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_bon_velocity_7157_unguided_7d971e",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/baseline/p7157_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_bon_velocity_7157_steered_16_u1_ecf7ae",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/velocity/p7157_velocity_best_of_n16_d+1_generated.mid",
              "label": "▲ louder · +1 SD · best of 16",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1363,13 +1315,6 @@
            "metric_label": "mean velocity",
            "metric_unit": "/127",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_tilt_velocity_7157_unguided_895261",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p7157_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_tilt_velocity_7157_steered_1_d2_8fd142",
@@ -1386,14 +1331,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Solo piano",
-         "subtitle": "prompt 13268 · each row: that system's own unguided sample, then its picked versions (▲ louder, ▼ softer); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 13268 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ louder, ▼ softer); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -1409,7 +1355,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_velocity_13268_unguided_24f2c1",
              "midi": "attr_control/listen_midi/25280946/baseline/p13268_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -1450,13 +1396,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_velocity_13268_unguided_082c91",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p13268_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_velocity_13268_steered_32_d2_4ffc03",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/velocity/p13268_velocity_pplm32_d-2_generated.mid",
              "label": "▼ softer · −2 SD · strength 32",
@@ -1487,7 +1426,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1501,20 +1441,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_tilt_velocity_13268_unguided_0b7309",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p13268_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_tilt_velocity_13268_steered_1_u1_8b4ff7",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/velocity/p13268_velocity_tilt1_d+1_generated.mid",
              "label": "▲ louder · +1 SD · strength 1",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1528,20 +1462,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_bon_velocity_13268_unguided_78e6d2",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/baseline/p13268_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_bon_velocity_13268_steered_16_d2_9183bc",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/velocity/p13268_velocity_best_of_n16_d-2_generated.mid",
              "label": "▼ softer · −2 SD · best of 16",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1553,13 +1481,6 @@
            "metric_label": "mean velocity",
            "metric_unit": "/127",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_tilt_velocity_13268_unguided_b47e45",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p13268_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_tilt_velocity_13268_steered_1_d2_5cdc41",
@@ -1576,14 +1497,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Bass, guitar & drums",
-         "subtitle": "prompt 13781 · each row: that system's own unguided sample, then its picked versions (▲ louder, ▼ softer); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 13781 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ louder, ▼ softer); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -1599,7 +1521,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_velocity_13781_unguided_b9277e",
              "midi": "attr_control/listen_midi/25280946/baseline/p13781_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -1648,13 +1570,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_velocity_13781_unguided_e01eb2",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p13781_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_velocity_13781_steered_32_d2_6d9c7f",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/velocity/p13781_velocity_pplm32_d-2_generated.mid",
              "label": "▼ softer · −2 SD · strength 32",
@@ -1685,7 +1600,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1697,13 +1613,6 @@
            "metric_label": "mean velocity",
            "metric_unit": "/127",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_llama_tilt_velocity_13781_unguided_b663ef",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p13781_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_llama_tilt_velocity_13781_steered_1_d2_b3dcca",
@@ -1728,7 +1637,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1740,13 +1650,6 @@
            "metric_label": "mean velocity",
            "metric_unit": "/127",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_llama_bon_velocity_13781_unguided_cff1a7",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/baseline/p13781_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_llama_bon_velocity_13781_steered_16_d2_3f5c3e",
@@ -1763,7 +1666,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1775,13 +1679,6 @@
            "metric_label": "mean velocity",
            "metric_unit": "/127",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_tilt_velocity_13781_unguided_bf7316",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p13781_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_tilt_velocity_13781_steered_1_d1_a664b1",
@@ -1798,14 +1695,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Guitar, drums & bass",
-         "subtitle": "prompt 15617 · each row: that system's own unguided sample, then its picked versions (▲ louder, ▼ softer); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 15617 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ louder, ▼ softer); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -1821,7 +1719,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_velocity_15617_unguided_d30404",
              "midi": "attr_control/listen_midi/25280946/baseline/p15617_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -1854,13 +1752,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_velocity_15617_unguided_0e79b8",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p15617_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_velocity_15617_steered_32_d2_b12f89",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/velocity/p15617_velocity_pplm32_d-2_generated.mid",
              "label": "▼ softer · −2 SD · strength 32",
@@ -1883,7 +1774,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1895,13 +1787,6 @@
            "metric_label": "mean velocity",
            "metric_unit": "/127",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_llama_tilt_velocity_15617_unguided_841fa6",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p15617_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_llama_tilt_velocity_15617_steered_1_d2_0a7cc0",
@@ -1918,7 +1803,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1932,20 +1818,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_bon_velocity_15617_unguided_96c300",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/baseline/p15617_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_bon_velocity_15617_steered_16_u2_80a335",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/velocity/p15617_velocity_best_of_n16_d+2_generated.mid",
              "label": "▲ louder · +2 SD · best of 16",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -1957,13 +1837,6 @@
            "metric_label": "mean velocity",
            "metric_unit": "/127",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_tilt_velocity_15617_unguided_eb4638",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p15617_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_tilt_velocity_15617_steered_1_d2_3adb6e",
@@ -1980,7 +1853,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         }
@@ -1993,7 +1867,7 @@
         {
          "type": "group",
          "title": "Flute, guitar, drums & bass",
-         "subtitle": "prompt 3107 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 3107 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -2009,7 +1883,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_duration_3107_unguided_81938d",
              "midi": "attr_control/listen_midi/25280947/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -2082,13 +1956,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_duration_3107_unguided_66dcc8",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_duration_3107_steered_32_d2_eff080",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/duration/p3107_duration_pplm32_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · strength 32",
@@ -2111,7 +1978,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2125,20 +1993,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_tilt_duration_3107_unguided_06785d",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_tilt_duration_3107_steered_1_u2_4c4d46",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/duration/p3107_duration_tilt1_d+2_generated.mid",
              "label": "▲ longer · +2 SD · strength 1",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2150,13 +2012,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_llama_bon_duration_3107_unguided_da2555",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_llama_bon_duration_3107_steered_8_d2_f69999",
@@ -2173,7 +2028,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2187,20 +2043,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_gpt2_tilt_duration_3107_unguided_2bb38b",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_gpt2_tilt_duration_3107_steered_1_d2_0a08b9",
              "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/duration/p3107_duration_tilt1_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · strength 1",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2212,13 +2062,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_bon_duration_3107_unguided_0ec3b7",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_bon_duration_3107_steered_16_d2_ce36a2",
@@ -2235,14 +2078,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Drums, guitar & bass",
-         "subtitle": "prompt 4563 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 4563 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -2258,7 +2102,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_duration_4563_unguided_f569c5",
              "midi": "attr_control/listen_midi/25280947/baseline/p4563_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -2355,13 +2199,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_duration_4563_unguided_f91766",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p4563_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_duration_4563_steered_32_d2_9597ac",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/duration/p4563_duration_pplm32_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · strength 32",
@@ -2384,7 +2221,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2396,13 +2234,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_llama_bon_duration_4563_unguided_abeb33",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/baseline/p4563_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_llama_bon_duration_4563_steered_8_d2_874369",
@@ -2427,7 +2258,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2439,13 +2271,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_tilt_duration_4563_unguided_b148a3",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p4563_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_tilt_duration_4563_steered_1_d2_429af2",
@@ -2470,7 +2295,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2484,27 +2310,21 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_gpt2_bon_duration_4563_unguided_701de5",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_20261019/midi/baseline/p4563_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_gpt2_bon_duration_4563_steered_16_d2_424126",
              "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_20261019/midi/duration/p4563_duration_best_of_n16_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · best of 16",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Drums, guitar & bass",
-         "subtitle": "prompt 4579 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 4579 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -2520,7 +2340,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_duration_4579_unguided_ad492e",
              "midi": "attr_control/listen_midi/25280947/baseline/p4579_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -2569,13 +2389,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_duration_4579_unguided_2f5881",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p4579_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_duration_4579_steered_32_d2_7e8c0c",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/duration/p4579_duration_pplm32_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · strength 32",
@@ -2598,7 +2411,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2612,20 +2426,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_tilt_duration_4579_unguided_3af1d2",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p4579_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_tilt_duration_4579_steered_1_d2_d42f56",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/duration/p4579_duration_tilt1_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · strength 1",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2639,20 +2447,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_bon_duration_4579_unguided_bc7a1e",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/baseline/p4579_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_bon_duration_4579_steered_8_d2_0ac4ee",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/duration/p4579_duration_best_of_n8_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · best of 8",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2666,20 +2468,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_gpt2_tilt_duration_4579_unguided_898978",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p4579_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_gpt2_tilt_duration_4579_steered_1_u2_d3cac5",
              "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/duration/p4579_duration_tilt1_d+2_generated.mid",
              "label": "▲ longer · +2 SD · strength 1",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2691,13 +2487,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_bon_duration_4579_unguided_3a9e98",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_20261019/midi/baseline/p4579_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_bon_duration_4579_steered_16_d2_3345ed",
@@ -2714,14 +2503,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Drums & bass",
-         "subtitle": "prompt 8484 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 8484 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -2737,7 +2527,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_duration_8484_unguided_d551d7",
              "midi": "attr_control/listen_midi/25280947/baseline/p8484_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -2770,13 +2560,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_duration_8484_unguided_9be5c2",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p8484_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_duration_8484_steered_32_d2_e8d0ac",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/duration/p8484_duration_pplm32_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · strength 32",
@@ -2799,7 +2582,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2813,20 +2597,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_tilt_duration_8484_unguided_3e5e1d",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p8484_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_tilt_duration_8484_steered_1_d2_a818ba",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/duration/p8484_duration_tilt1_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · strength 1",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2840,20 +2618,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_bon_duration_8484_unguided_05b8cc",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/baseline/p8484_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_bon_duration_8484_steered_8_d2_e23bb2",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/duration/p8484_duration_best_of_n8_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · best of 8",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2865,13 +2637,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_bon_duration_8484_unguided_fe692c",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_20261019/midi/baseline/p8484_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_bon_duration_8484_steered_16_d2_aa81f8",
@@ -2888,14 +2653,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Piano, guitar, drums & strings",
-         "subtitle": "prompt 9235 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 9235 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -2911,7 +2677,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_duration_9235_unguided_528607",
              "midi": "attr_control/listen_midi/25280947/baseline/p9235_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -2960,20 +2726,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_duration_9235_unguided_dd0b42",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p9235_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_duration_9235_steered_32_u2_9ab54b",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/duration/p9235_duration_pplm32_d+2_generated.mid",
              "label": "▲ longer · +2 SD · strength 32",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -2987,20 +2747,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_tilt_duration_9235_unguided_43df09",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p9235_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_tilt_duration_9235_steered_1_d2_dd5c65",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/duration/p9235_duration_tilt1_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · strength 1",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3012,13 +2766,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_tilt_duration_9235_unguided_9a5257",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p9235_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_tilt_duration_9235_steered_1_d1_7c252a",
@@ -3035,7 +2782,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3047,13 +2795,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_bon_duration_9235_unguided_cec755",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_20261019/midi/baseline/p9235_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_bon_duration_9235_steered_16_d2_a25b0a",
@@ -3070,14 +2811,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Solo piano",
-         "subtitle": "prompt 13268 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 13268 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -3093,7 +2835,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_duration_13268_unguided_934810",
              "midi": "attr_control/listen_midi/25280947/baseline/p13268_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -3133,7 +2875,7 @@
         {
          "type": "group",
          "title": "Flute, guitar, drums & bass",
-         "subtitle": "prompt 3107 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 3107 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -3149,7 +2891,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_pitch_register_3107_unguided_df8321",
              "midi": "attr_control/listen_midi/25280948/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -3190,13 +2932,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_duration_3107_unguided_66dcc8",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_pitch_register_3107_steered_16_d2_7fa3b8",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/pitch_register/p3107_pitch_register_pplm16_d-2_generated.mid",
              "label": "▼ lower · −2 SD · strength 16",
@@ -3211,7 +2946,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3225,20 +2961,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_tilt_duration_3107_unguided_06785d",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_tilt_pitch_register_3107_steered_0p75_u0p5_995206",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/pitch_register/p3107_pitch_register_tilt0.75_d+0.5_generated.mid",
              "label": "▲ higher · +0.5 SD · strength 0.75",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3252,20 +2982,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_bon_duration_3107_unguided_da2555",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_bon_pitch_register_3107_steered_16_u2_220809",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/pitch_register/p3107_pitch_register_best_of_n16_d+2_generated.mid",
              "label": "▲ higher · +2 SD · best of 16",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3277,13 +3001,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_tilt_duration_3107_unguided_2bb38b",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_tilt_pitch_register_3107_steered_0p75_d2_7e1314",
@@ -3300,7 +3017,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3312,13 +3030,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_bon_duration_3107_unguided_0ec3b7",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_20261019/midi/baseline/p3107_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_bon_pitch_register_3107_steered_16_d2_ad44aa",
@@ -3343,14 +3054,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Drums, guitar & bass",
-         "subtitle": "prompt 4563 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 4563 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -3366,7 +3078,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_pitch_register_4563_unguided_7829e6",
              "midi": "attr_control/listen_midi/25280948/baseline/p4563_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -3431,13 +3143,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_duration_4563_unguided_f91766",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p4563_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_pitch_register_4563_steered_16_d1_81c9c2",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/pitch_register/p4563_pitch_register_pplm16_d-1_generated.mid",
              "label": "▼ lower · −1 SD · strength 16",
@@ -3452,7 +3157,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3466,20 +3172,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_tilt_pitch_register_4563_unguided_71f158",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p4563_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_tilt_pitch_register_4563_steered_0p75_d2_7a4127",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/pitch_register/p4563_pitch_register_tilt0.75_d-2_generated.mid",
              "label": "▼ lower · −2 SD · strength 0.75",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3493,20 +3193,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_bon_duration_4563_unguided_abeb33",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/baseline/p4563_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_bon_pitch_register_4563_steered_16_d2_5e5746",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_20261019/midi/pitch_register/p4563_pitch_register_best_of_n16_d-2_generated.mid",
              "label": "▼ lower · −2 SD · best of 16",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3520,20 +3214,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_gpt2_tilt_duration_4563_unguided_b148a3",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p4563_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_gpt2_tilt_pitch_register_4563_steered_0p75_d0p5_1afc9c",
              "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/pitch_register/p4563_pitch_register_tilt0.75_d-0.5_generated.mid",
              "label": "▼ lower · −0.5 SD · strength 0.75",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3545,13 +3233,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_bon_duration_4563_unguided_701de5",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_20261019/midi/baseline/p4563_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_bon_pitch_register_4563_steered_16_d0p5_df51c1",
@@ -3568,14 +3249,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Drums, guitar & bass",
-         "subtitle": "prompt 4579 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 4579 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -3591,7 +3273,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_pitch_register_4579_unguided_531cc7",
              "midi": "attr_control/listen_midi/25280948/baseline/p4579_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -3632,20 +3314,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_remi_llama_pplm_duration_4579_unguided_2f5881",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/baseline/p4579_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_remi_llama_pplm_pitch_register_4579_steered_16_u0p5_1089ef",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_20261104/midi/pitch_register/p4579_pitch_register_pplm16_d+0.5_generated.mid",
              "label": "▲ higher · +0.5 SD · strength 16",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3657,13 +3333,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_llama_tilt_duration_4579_unguided_3af1d2",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_tilt_20261019/midi/baseline/p4579_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_llama_tilt_pitch_register_4579_steered_0p75_d2_c50444",
@@ -3680,7 +3349,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3692,13 +3362,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_tilt_duration_4579_unguided_898978",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_tilt_20261019/midi/baseline/p4579_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_tilt_pitch_register_4579_steered_0p75_d1_171716",
@@ -3715,7 +3378,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -3727,13 +3391,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_remi_gpt2_bon_duration_4579_unguided_3a9e98",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_20261019/midi/baseline/p4579_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_remi_gpt2_bon_pitch_register_4579_steered_16_d2_158549",
@@ -3758,14 +3415,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Drums & bass",
-         "subtitle": "prompt 8484 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 8484 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -3781,7 +3439,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_pitch_register_8484_unguided_1a6fe9",
              "midi": "attr_control/listen_midi/25280948/baseline/p8484_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -3831,7 +3489,7 @@
         {
          "type": "group",
          "title": "Piano, guitar, drums & strings",
-         "subtitle": "prompt 9235 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 9235 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -3847,7 +3505,7 @@
              "kind": "file",
              "id": "cur_remi_ebt_pitch_register_9235_unguided_13d82e",
              "midi": "attr_control/listen_midi/25280948/baseline/p9235_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -3916,7 +3574,7 @@
         {
          "type": "group",
          "title": "Trumpet, drums & bass",
-         "subtitle": "prompt 428653 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 428653 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -3932,7 +3590,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_duration_428653_unguided_dadf70",
              "midi": "attr_control/listen_midi/25296307/baseline/p428653_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -3973,13 +3631,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_pplm_duration_428653_unguided_e11ca1",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/baseline/p428653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_pplm_duration_428653_steered_16_d1_6f6669",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/duration/p428653_duration_pplm16_d-1_generated.mid",
              "label": "▼ shorter · −1 SD · strength 16",
@@ -3994,7 +3645,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4008,20 +3660,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_bon_duration_428653_unguided_5d200f",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p428653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_bon_duration_428653_steered_8_u1_06039e",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/duration/p428653_duration_best_of_n8_d+1_generated.mid",
              "label": "▲ longer · +1 SD · best of 8",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4033,13 +3679,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_gpt2_bon_duration_428653_unguided_3e6315",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p428653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_gpt2_bon_duration_428653_steered_8_d1_9b7056",
@@ -4056,14 +3695,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Piano, drums, guitar & bass",
-         "subtitle": "prompt 429204 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 429204 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -4079,7 +3719,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_duration_429204_unguided_5eb966",
              "midi": "attr_control/listen_midi/25296307/baseline/p429204_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -4136,20 +3776,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_429204_unguided_4ce17f",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/baseline/p429204_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_pplm_duration_429204_steered_16_d2_712f3b",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/duration/p429204_duration_pplm16_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · strength 16",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4163,20 +3797,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_bon_duration_429204_unguided_0f00a3",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p429204_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_bon_duration_429204_steered_8_u2_7a533e",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/duration/p429204_duration_best_of_n8_d+2_generated.mid",
              "label": "▲ longer · +2 SD · best of 8",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4188,13 +3816,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_gpt2_bon_duration_429204_unguided_2cde78",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p429204_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_gpt2_bon_duration_429204_steered_8_d2_49c49f",
@@ -4211,14 +3832,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Drums, bass, strings & percussion",
-         "subtitle": "prompt 675409 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 675409 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -4234,7 +3856,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_675409_unguided_96dd3b",
              "midi": "attr_control/listen_midi/25296307/baseline/p675409_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -4267,20 +3889,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_pplm_duration_675409_unguided_99922b",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/baseline/p675409_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_pplm_duration_675409_steered_16_d2_5b52ba",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/duration/p675409_duration_pplm16_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · strength 16",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4294,20 +3910,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_675409_unguided_3d3ff4",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p675409_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_bon_duration_675409_steered_8_u1_ae0821",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/duration/p675409_duration_best_of_n8_d+1_generated.mid",
              "label": "▲ longer · +1 SD · best of 8",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4319,13 +3929,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_gpt2_675409_unguided_10f75c",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p675409_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_gpt2_bon_duration_675409_steered_8_d2_f33f19",
@@ -4342,14 +3945,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Piano, drums, guitar & sax",
-         "subtitle": "prompt 880681 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 880681 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -4365,7 +3969,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_duration_880681_unguided_c0da10",
              "midi": "attr_control/listen_midi/25296307/baseline/p880681_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -4414,13 +4018,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_pplm_duration_880681_unguided_ec284a",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/baseline/p880681_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_pplm_duration_880681_steered_16_d2_3214f0",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/duration/p880681_duration_pplm16_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · strength 16",
@@ -4435,7 +4032,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4449,20 +4047,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_bon_duration_880681_unguided_cc01fc",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p880681_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_bon_duration_880681_steered_8_d2_616fc2",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/duration/p880681_duration_best_of_n8_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · best of 8",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4474,13 +4066,6 @@
            "metric_label": "mean note length (beats)",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_gpt2_bon_duration_880681_unguided_9f9674",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p880681_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_gpt2_bon_duration_880681_steered_8_d2_6cd168",
@@ -4497,14 +4082,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Guitar, flute, strings & bass",
-         "subtitle": "prompt 949653 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 949653 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -4520,7 +4106,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_duration_949653_unguided_48acc0",
              "midi": "attr_control/listen_midi/25296307/baseline/p949653_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -4569,20 +4155,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_pplm_duration_949653_unguided_5e2905",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/baseline/p949653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_pplm_duration_949653_steered_16_u0p5_4f0f06",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/duration/p949653_duration_pplm16_d+0.5_generated.mid",
              "label": "▲ longer · +0.5 SD · strength 16",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4596,20 +4176,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_bon_duration_949653_unguided_b78768",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p949653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_bon_duration_949653_steered_8_d2_791fa2",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/duration/p949653_duration_best_of_n8_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · best of 8",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4623,27 +4197,21 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_gpt2_bon_duration_949653_unguided_d5c071",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p949653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_gpt2_bon_duration_949653_steered_8_u2_35b618",
              "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/duration/p949653_duration_best_of_n8_d+2_generated.mid",
              "label": "▲ longer · +2 SD · best of 8",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Piano, guitar, drums & bass",
-         "subtitle": "prompt 1465891 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 1465891 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -4659,7 +4227,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_duration_1465891_unguided_3197d3",
              "midi": "attr_control/listen_midi/25296307/baseline/p1465891_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -4700,13 +4268,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_bon_duration_1465891_unguided_d1ae04",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p1465891_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_bon_duration_1465891_steered_8_d2_4be9db",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/duration/p1465891_duration_best_of_n8_d-2_generated.mid",
              "label": "▼ shorter · −2 SD · best of 8",
@@ -4721,14 +4282,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Harp, choir, strings & drums",
-         "subtitle": "prompt 1550614 · each row: that system's own unguided sample, then its picked versions (▲ longer, ▼ shorter); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 1550614 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ longer, ▼ shorter); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -4744,7 +4306,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_1550614_unguided_9b4b88",
              "midi": "attr_control/listen_midi/25296307/baseline/p1550614_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -4781,7 +4343,7 @@
         {
          "type": "group",
          "title": "Trumpet, drums & bass",
-         "subtitle": "prompt 428653 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 428653 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -4797,7 +4359,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_pitch_register_428653_unguided_75b441",
              "midi": "attr_control/listen_midi/25296308/baseline/p428653_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -4830,20 +4392,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_pplm_duration_428653_unguided_e11ca1",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/baseline/p428653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_pplm_pitch_register_428653_steered_32_d2_519da0",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/pitch_register/p428653_pitch_register_pplm32_d-2_generated.mid",
              "label": "▼ lower · −2 SD · strength 32",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4855,13 +4411,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_llama_bon_duration_428653_unguided_5d200f",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p428653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_llama_bon_pitch_register_428653_steered_8_d2_cd231b",
@@ -4878,7 +4427,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -4890,13 +4440,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_gpt2_bon_duration_428653_unguided_3e6315",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p428653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_gpt2_bon_pitch_register_428653_steered_8_d1_bd41e4",
@@ -4913,14 +4456,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Piano, drums, guitar & bass",
-         "subtitle": "prompt 429204 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 429204 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -4936,7 +4480,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_pitch_register_429204_unguided_b0b5dd",
              "midi": "attr_control/listen_midi/25296308/baseline/p429204_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -5001,13 +4545,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_429204_unguided_4ce17f",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/baseline/p429204_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_pplm_pitch_register_429204_steered_32_d2_a417c9",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/pitch_register/p429204_pitch_register_pplm32_d-2_generated.mid",
              "label": "▼ lower · −2 SD · strength 32",
@@ -5022,7 +4559,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -5034,13 +4572,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_llama_bon_duration_429204_unguided_0f00a3",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p429204_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_llama_bon_pitch_register_429204_steered_8_d1_3b0760",
@@ -5057,7 +4588,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -5069,13 +4601,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_gpt2_bon_duration_429204_unguided_2cde78",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p429204_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_gpt2_bon_pitch_register_429204_steered_8_d2_c7aeb6",
@@ -5092,14 +4617,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Drums, bass, strings & percussion",
-         "subtitle": "prompt 675409 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 675409 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -5115,7 +4641,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_675409_unguided_11f40e",
              "midi": "attr_control/listen_midi/25296308/baseline/p675409_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -5164,13 +4690,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_675409_unguided_3d3ff4",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p675409_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_bon_pitch_register_675409_steered_8_d2_82b28a",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/pitch_register/p675409_pitch_register_best_of_n8_d-2_generated.mid",
              "label": "▼ lower · −2 SD · best of 8",
@@ -5201,7 +4720,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -5213,13 +4733,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_gpt2_675409_unguided_10f75c",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p675409_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_gpt2_bon_pitch_register_675409_steered_8_d2_82fe1a",
@@ -5244,14 +4757,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Strings, violin & cello",
-         "subtitle": "prompt 805046 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 805046 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -5267,7 +4781,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_pitch_register_805046_unguided_9bc0b0",
              "midi": "attr_control/listen_midi/25296308/baseline/p805046_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -5324,20 +4838,14 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_pplm_pitch_register_805046_unguided_0890d3",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/baseline/p805046_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_pplm_pitch_register_805046_steered_32_d2_2cbc34",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/pitch_register/p805046_pitch_register_pplm32_d-2_generated.mid",
              "label": "▼ lower · −2 SD · strength 32",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -5349,13 +4857,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_llama_bon_pitch_register_805046_unguided_72492d",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p805046_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_llama_bon_pitch_register_805046_steered_8_d2_9a26c6",
@@ -5372,7 +4873,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -5384,13 +4886,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_gpt2_bon_pitch_register_805046_unguided_af3381",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p805046_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_gpt2_bon_pitch_register_805046_steered_8_d2_6e53e6",
@@ -5415,14 +4910,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Piano, drums, guitar & sax",
-         "subtitle": "prompt 880681 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 880681 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -5438,7 +4934,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_pitch_register_880681_unguided_35687f",
              "midi": "attr_control/listen_midi/25296308/baseline/p880681_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -5487,13 +4983,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_pplm_duration_880681_unguided_ec284a",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/baseline/p880681_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_pplm_pitch_register_880681_steered_32_d2_834d0b",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/pitch_register/p880681_pitch_register_pplm32_d-2_generated.mid",
              "label": "▼ lower · −2 SD · strength 32",
@@ -5508,7 +4997,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -5520,13 +5010,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_gpt2_bon_duration_880681_unguided_9f9674",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p880681_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_gpt2_bon_pitch_register_880681_steered_8_d0p5_01ac03",
@@ -5543,14 +5026,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Guitar, flute, strings & bass",
-         "subtitle": "prompt 949653 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 949653 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -5566,7 +5050,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_pitch_register_949653_unguided_b245c9",
              "midi": "attr_control/listen_midi/25296308/baseline/p949653_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -5615,13 +5099,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_pplm_duration_949653_unguided_5e2905",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/baseline/p949653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_pplm_pitch_register_949653_steered_32_d2_5694e6",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/pitch_register/p949653_pitch_register_pplm32_d-2_generated.mid",
              "label": "▼ lower · −2 SD · strength 32",
@@ -5636,7 +5113,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -5648,13 +5126,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_llama_bon_duration_949653_unguided_b78768",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p949653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_llama_bon_pitch_register_949653_steered_8_d2_980009",
@@ -5679,7 +5150,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -5691,13 +5163,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_gpt2_bon_duration_949653_unguided_d5c071",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p949653_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_gpt2_bon_pitch_register_949653_steered_8_d2_aa3c6b",
@@ -5722,14 +5187,15 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Piano, guitar, drums & bass",
-         "subtitle": "prompt 1465891 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 1465891 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -5745,7 +5211,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_1465891_unguided_bf1fbe",
              "midi": "attr_control/listen_midi/25296308/baseline/p1465891_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {
@@ -5794,13 +5260,6 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_llama_pplm_pitch_register_1465891_unguided_d5aa6b",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/baseline/p1465891_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_llama_pplm_pitch_register_1465891_steered_32_d1_907c83",
              "midi": "attr_control/ar_guidance/llama-ebtrecipe_pplm_ant_20261105/midi/pitch_register/p1465891_pitch_register_pplm32_d-1_generated.mid",
              "label": "▼ lower · −1 SD · strength 32",
@@ -5815,7 +5274,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -5827,13 +5287,6 @@
            "metric_label": "mean pitch",
            "metric_unit": "",
            "clips": [
-            {
-             "kind": "file",
-             "id": "cur_ant_llama_bon_duration_1465891_unguided_d1ae04",
-             "midi": "attr_control/ar_guidance/llama-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p1465891_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
             {
              "kind": "file",
              "id": "cur_ant_llama_bon_pitch_register_1465891_steered_8_d2_1047af",
@@ -5858,7 +5311,8 @@
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           },
           {
            "type": "clips",
@@ -5872,27 +5326,21 @@
            "clips": [
             {
              "kind": "file",
-             "id": "cur_ant_gpt2_bon_pitch_register_1465891_unguided_c2db6f",
-             "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/baseline/p1465891_r0_generated.mid",
-             "label": "Unguided",
-             "trim": true
-            },
-            {
-             "kind": "file",
              "id": "cur_ant_gpt2_bon_pitch_register_1465891_steered_8_u2_764e95",
              "midi": "attr_control/ar_guidance/gpt2-ebtrecipe_best_of_n_ant_20261019/midi/pitch_register/p1465891_pitch_register_best_of_n8_d+2_generated.mid",
              "label": "▲ higher · +2 SD · best of 8",
              "trim": true,
              "tag": "baseline"
             }
-           ]
+           ],
+           "no_ref": true
           }
          ]
         },
         {
          "type": "group",
          "title": "Piano, drums & bass",
-         "subtitle": "prompt 1489162 · each row: that system's own unguided sample, then its picked versions (▲ higher, ▼ lower); arrows next to the metric compare with that unguided sample",
+         "subtitle": "prompt 1489162 · reference: the EBT's unguided sample (first clip), for every row · then each system's picked versions (▲ higher, ▼ lower); arrows next to the metric (EBT row only) compare with the reference",
          "blocks": [
           {
            "type": "clips",
@@ -5908,7 +5356,7 @@
              "kind": "file",
              "id": "cur_ant_ebt_pitch_register_1489162_unguided_059f56",
              "midi": "attr_control/listen_midi/25296308/baseline/p1489162_r0_generated.mid",
-             "label": "Unguided",
+             "label": "Unguided · reference",
              "trim": true
             },
             {

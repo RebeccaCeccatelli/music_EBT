@@ -224,7 +224,7 @@
     const card = blockCard(b);
     const grid = h("div", "grid");
     const range = exampleRange(b);
-    const ref = b.clips[0];
+    const ref = b.no_ref ? null : b.clips[0];   // no_ref: show metric values without ▲/▼
     const shown = b.metrics || (b.metric ? [b] : []);
     for (const c of b.clips) {
       grid.append(makeClip(c, range, {

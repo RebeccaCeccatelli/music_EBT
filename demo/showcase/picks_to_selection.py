@@ -120,18 +120,27 @@ def main():
             title, sub, _, _ = SYSTEMS[s]
             slot = systems[s]
             picks = sorted(set(slot["picks"]), key=lambda m: (clips[m]["sd"], float(clips[m]["strength"])))
-            specs = [clip_spec(slot["ref"], {**clips[slot["ref"]], "condition": "unguided"}, "Unguided")]
+            # Only the EBT row keeps its unguided sample: it is the one reference for the whole card.
+            # Baseline rows show their metric without arrows (their targets are relative to their own,
+            # different unguided level, so arrows against the EBT's would mislead).
+            specs = ([clip_spec(slot["ref"], {**clips[slot["ref"]], "condition": "unguided"}, "Unguided · reference")]
+                     if s == "ebt" else [])
             for m in picks:
                 c = clips[m]
                 arrow = "▲" if c["sd"] > 0 else "▼"
                 specs.append(clip_spec(m, c, f"{arrow} {up if c['sd'] > 0 else down} · {fmt_sd(c['sd'])} · "
                                              f"{strength_text(s, c['strength'])}",
                                        "ours" if s == "ebt" else "baseline"))
-            rows.append({"type": "clips", "tok": tok, "prompt": pid, "title": title, "subtitle": sub,
-                         "metric": key, "metric_label": mlabel, "metric_unit": unit, "clips": specs})
+            row = {"type": "clips", "tok": tok, "prompt": pid, "title": title, "subtitle": sub,
+                   "metric": key, "metric_label": mlabel, "metric_unit": unit, "clips": specs}
+            if s != "ebt":
+                row["no_ref"] = True
+            rows.append(row)
+        assert rows and rows[0]["title"] == "EBT", (tok, attr, pid)  # the reference lives in the EBT row
         return {"type": "group", "title": name(tok, pid),
-                "subtitle": f"prompt {pid} · each row: that system's own unguided sample, then its picked "
-                            f"versions (▲ {up}, ▼ {down}); arrows next to the metric compare with that unguided sample",
+                "subtitle": f"prompt {pid} · reference: the EBT's unguided sample (first clip), for every row · "
+                            f"then each system's picked versions (▲ {up}, ▼ {down}); arrows next to the metric "
+                            f"(EBT row only) compare with the reference",
                 "blocks": rows}
 
     single_tabs = []
@@ -173,7 +182,8 @@ def main():
         "λ sets how hard it pushes. The baselines steer Llama and GPT-2 (same training recipe as the EBT) with "
         "PPLM, Tilt or Best-of-N. Targets are given in standard deviations (SD) of the corpus, relative to each "
         "system's own unguided level. Every steered version here was picked by ear, at whatever strength and "
-        "target sounded best, so several versions of one system can appear.")
+        "target sounded best, so several versions of one system can appear. In each card, the EBT's unguided "
+        "sample is the one reference to listen against.")
     sel["meta"]["disclaimer"] = (
         "These are selected examples. In Unguided Generation and Single-Attribute Control, every clip was picked "
         "by ear by the author from the final evaluation outputs (the same pool as the listening study): they show "
