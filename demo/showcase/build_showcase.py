@@ -365,9 +365,10 @@ def expand_block(b):
 TAIL = 1.5  # seconds of release kept after the last note ends
 
 
-def _trim_wav(wav, seconds):
+def _trim_wav(wav, seconds, start=0.0):
     """Cut FluidSynth's long reverb/release tail (often several seconds of near
-    silence) at `seconds`, with a 60 ms fade-out."""
+    silence) at `seconds`, with a 60 ms fade-out; optionally drop the first
+    `start` seconds (leading silence)."""
     import wave
 
     import numpy as np
@@ -376,7 +377,8 @@ def _trim_wav(wav, seconds):
         frames = w.readframes(w.getnframes())
     audio = np.frombuffer(frames, dtype=np.int16).reshape(-1, params.nchannels).copy()
     n = min(len(audio), int(seconds * params.framerate))
-    audio = audio[:n]
+    audio = audio[int(start * params.framerate):n]
+    n = len(audio)
     fade = min(n, int(0.06 * params.framerate))
     if fade:
         audio[-fade:] = (audio[-fade:] * np.linspace(1, 0, fade)[:, None]).astype(np.int16)
@@ -385,15 +387,15 @@ def _trim_wav(wav, seconds):
         w.writeframes(audio.tobytes())
 
 
-def render_mp3(midi, mp3):
-    """MIDI -> MP3, trimmed to the last note end + TAIL."""
-    end = max((n[1] for n in _notes(midi)), default=0.0) + TAIL
+def render_mp3(midi, mp3, start=0.0, tail=TAIL):
+    """MIDI -> MP3, trimmed to the last note end + tail (and from `start` s)."""
+    end = max((n[1] for n in _notes(midi)), default=0.0) + tail
     with tempfile.TemporaryDirectory() as tmp:
         wav = Path(tmp) / "x.wav"
         subprocess.run([str(BIN / "fluidsynth"), "-ni", "-q", "-r", "44100", "-g", "0.6",
                         "-F", str(wav), SOUNDFONT, str(midi)],
                        check=True, capture_output=True, timeout=120)
-        _trim_wav(wav, end)
+        _trim_wav(wav, end, start)
         subprocess.run([str(BIN / "lame"), "--quiet", "-V", "4", str(wav), str(mp3)],
                        check=True, timeout=120)
 

@@ -49,6 +49,8 @@ KEY_PATH = SV / "key_v5.json"
 
 PLAN = {"unguided": 6, "change": 12, "compare": 5, "catch_unguided": 1, "catch_change": 1}
 MAX_VERSIONS = 4
+LEAD_IN = 0.15   # s of silence kept before the first note
+TAIL = 1.0      # s of release kept after the last note
 SYSTEM_ORDER = ["ebt", "llama_pplm", "llama_tilt", "llama_bon", "gpt2_tilt", "gpt2_bon"]
 CATCH_LAMBDA = {"remi": "0.16", "ant": "0.32"}
 
@@ -242,12 +244,15 @@ def cmd_build(args):
         h = hid(midi)
         g = stage(midi, info, h)
         mp3 = AUDIO / f"{h}.mp3"
-        if args.force or not mp3.exists():
-            bs.render_mp3(g, mp3)
-        m = bs.metrics(g)
         notes = bs._notes(g)
-        meta[h] = {"prompt_end": m["prompt_end"],
-                   "duration": round(max((n[1] for n in notes), default=0.0), 2),
+        # Leading silence (prompts that start with rests) is cut so the music starts
+        # within LEAD_IN s; all versions of a prompt share it, so they are cut alike.
+        cut = max(0.0, min((n[0] for n in notes), default=0.0) - LEAD_IN)
+        if args.force or not mp3.exists():
+            bs.render_mp3(g, mp3, start=cut, tail=TAIL)
+        m = bs.metrics(g)
+        meta[h] = {"prompt_end": round(m["prompt_end"] - cut, 2),
+                   "duration": round(max((n[1] for n in notes), default=0.0) - cut, 2),
                    "audio": bs.mp3_seconds(mp3)}
         key["clips"][h] = {**{k: v for k, v in info.items() if k != "prompt_midi" and v is not None},
                            "midi": str(Path(midi).relative_to(ROOT)), "metrics": m}

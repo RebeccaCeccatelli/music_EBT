@@ -8,4 +8,4 @@
 #SBATCH --output=/home/rebcecca/orcd/scratch/rebcecca/music_EBT_logs/slurm_%j.out
 # Survey v5 from the author's picks (demo/survey/build_survey_v5.py): render clips, write survey.json + key_v5.json.
 cd /home/rebcecca/music-EBT
-~/.conda/envs/music_EBT/bin/python demo/survey/build_survey_v5.py build --version ${VERSION:-v5}
+~/.conda/envs/music_EBT/bin/python demo/survey/build_survey_v5.py build --version ${VERSION:-v5} ${FORCE:+--force}

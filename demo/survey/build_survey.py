@@ -81,7 +81,7 @@ ATTR_NAME = {
 # Longer explanations shown under the Part 2 / Part 3 questions.
 ATTR_HELP = {
     "velocity": "Piano = soft, gentle playing; forte = loud, strong playing.",
-    "duration": "Staccato = short, detached notes; legato = long, smoothly connected notes.",
+    "duration": "Staccato = short, detached notes; legato = long, smoothly connected notes. If several instruments are playing, judge the average note length you hear overall.",
     "pitch_register": "Low tones = deeper, bass-like notes; high tones = brighter, higher notes.",
 }
 

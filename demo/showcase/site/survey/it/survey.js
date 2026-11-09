@@ -27,7 +27,7 @@
     },
     attr_help: {
       velocity: "Piano = suono delicato e leggero; forte = suono intenso e potente.",
-      duration: "Staccato = note brevi, staccate l'una dall'altra; legato = note lunghe, che si collegano senza stacchi.",
+      duration: "Staccato = note brevi, staccate l'una dall'altra; legato = note lunghe, che si collegano senza stacchi. Se suonano più strumenti, valuta la durata media delle note che percepisci nel complesso.",
       pitch_register: "Suoni gravi = note basse e profonde; suoni acuti = note alte e brillanti.",
     },
   };
@@ -119,8 +119,8 @@
   let lastT = null;
 
   function playCard(card, hash) {
-    if (current && current.hash === hash && !player.paused) { player.pause(); return; }
-    if (!current || current.hash !== hash) {
+    if (current && current.card === card && !player.paused) { player.pause(); return; }
+    if (!current || current.card !== card) {
       if (current) setCard(current.card, false);
       current = { hash, card };
       player.src = `../audio/${hash}.mp3`;
@@ -407,9 +407,11 @@
         const box = h("fieldset", "q");
         box.append(h("legend", null, label));
         const row = h("div", "chips");
+        row.dataset.name = name;
         t.order.forEach((hash, i) => {
           const b = h("button", "chip letter", LETTERS[i]);
           b.type = "button";
+          b.dataset.hash = hash;
           if (answer[name] === hash) b.classList.add("on");
           b.addEventListener("click", () => {
             answer[name] = hash;
@@ -488,8 +490,12 @@
     function update() {
       const pending = [...new Set(hashes)].filter((x) => !heardEnough(x)).length;
       app.querySelectorAll(".scard").forEach((c) => c.classList.toggle("heard-ok", heardEnough(c.dataset.hash)));
-      app.querySelectorAll(".answers .chip").forEach((c) => { c.disabled = pending > 0; });
-      status.textContent = pending ? `${pending === 1 ? "Ti manca ancora una clip" : `Ti mancano ancora ${pending} clip`} da ascoltare per sbloccare le risposte (oppure salta la domanda).` : "";
+      // Most/least: a version chosen in one row cannot be chosen in the other.
+      app.querySelectorAll(".answers .chips[data-name] .chip").forEach((c) => {
+        const other = c.parentNode.dataset.name === "best" ? "worst" : "best";
+        c.disabled = t.order && t.order.length > 2 && answer[other] === c.dataset.hash;
+      });
+      status.textContent = pending ? `${pending === 1 ? "Ti manca ancora una clip" : `Ti mancano ancora ${pending} clip`} da ascoltare prima di andare avanti (puoi già scegliere le risposte), oppure salta la domanda.` : "";
       submit.disabled = pending > 0 || !ready();
     }
     onListen = update;
