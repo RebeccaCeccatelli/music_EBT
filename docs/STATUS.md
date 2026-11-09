@@ -28,6 +28,8 @@ Scratch: ~39 GB used by checkpoints after the 2026-10-05 cleanup.
 ## Running jobs
 | Job | What | Paired EBT ckpt |
 |---|---|---|
+| 28472156–64 | Combined control at per-attribute operating points (new `--strengths a:b`): EBT REMI 0.05:0.055 + Ant 0.005:0.012 (held-out), EBT by-ear pairs, Ant Llama PPLM 16:32 | REMI 33,732 · Ant 88,800 |
+| 28462282–91 | Combined-control rerun on EBT-recipe baselines: REMI vel+dur (5 baseline jobs; EBT 25416469 reused), Ant dur+pitch (EBT ×2 λ halves, Llama PPLM/BoN, GPT-2 BoN) | REMI 33,732 · Ant 88,800 |
 | ✅ 25810908 | Llama REMI EBT-recipe: done 2026-10-14 (33,732; best val 0.7203 @ 33,196) | REMI 33,732 |
 | ✅ 25810909 | Llama Ant EBT-recipe: done 2026-10-15 (88,800; best val 0.9878 @ 88,500) | Ant s1 88,800 |
 | ✅ 25810910 | GPT-2 REMI EBT-recipe: done 2026-10-15 (33,732; best val 0.6972) | REMI 33,732 |
@@ -109,7 +111,7 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
    `eth-mit-master-thesis/build.sh`). Reference PDFs: `papers/` (not tracked).
    2026-11-09: thesis plan in `docs/thesis_plan.md`; novelty addendum in
    `thesis_findings/2026-10-09_novelty_literature_check.md`. To do before
-   writing results: combined-control findings write-up (sweeps 25416469–73).
+   writing results: add the combined-control limitation (no shared gate → no energy summing; see thesis_plan.md) to discussion.tex; combined-control findings write-up (EBT 25416469 + EBT-recipe reruns 28462282–91; the old 25416470–74 used 100k baselines).
 5. Music-quality evaluation (branch `music-quality-eval`, worktree
    `.claude/worktrees/music-quality`): `eval/music_quality.py` scores decoded
    MIDI (scale consistency, sharp dissonance, groove, bar self-similarity, …)

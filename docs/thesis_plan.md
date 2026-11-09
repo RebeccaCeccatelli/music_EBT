@@ -71,13 +71,15 @@ The chapter moves from the general to the specific and ends on the gap TONIC fil
 
 ## Gaps and to-dos
 
-The combined-control write-up is the only gap that blocks a Results section. The rest are checks and writing.
+The combined-control write-up is the only gap that blocks a Results section (results in since 2026-11-09). The rest are checks and writing.
 
-- [ ] Write a `thesis_findings/` entry for combined control from compose sweeps 25416469–73: per-method accuracy and progress toward target, with CIs.
+- [ ] Write a `thesis_findings/` entry for combined control: EBT 25416469 (REMI shared λ), 28462287/88 (Ant shared λ), 28472156/60 (per-attribute held-out operating points), by-ear 28472158/62; EBT-recipe baselines 28462282–91 + Ant PPLM 16:32 28472164. Per-method accuracy and progress toward target, with CIs. (25416470–74 used the 100k baselines: not comparable.)
+- [ ] **Limitations (`discussion.tex`): combined control does not test energy composition.** Guidance is gated by token type, and every attribute pair we combined acts on different steps (REMI: velocity after Pitch, duration after Velocity, pitch_register after Program, density after Duration/Position; Anticipation: duration at triplet slot 1, pitch_register at slot 2; `inference/mus/generate_music.py` `_remi_step_is_relevant` / `_anticipation_step_is_relevant`). So at each step only one regressor energy is active and the summed-energy (R³ "Reduce") case never occurs: the results show two single-attribute controls running side by side (joint accuracy ≈ product of the per-attribute accuracies: REMI 0.94 × 0.81 ≈ 0.75, Ant 0.90 × 0.92 ≈ 0.84), not that EBT energies compose. AR baselines act on the same gated steps, so the comparison is fair but shows no EBT-specific composition advantage. A real test needs attributes sharing a gate (e.g. density + polyphony) or ungated steering with re-tuned λ; not run (deadline). Nuance: attributes still interact through the generated context (Ant duration accuracy 0.90 → 0.80 at the same duration λ when pitch λ drops from 0.012 to 0.005/0.006, diary 2026-11-09). Pair it with a Future Work item in `conclusion.tex`.
 - [ ] Analyse the listening-survey responses, with and without the flagged respondent 686e30f1 (diary 2026-11-09).
 - [ ] Run a quick final check that the forked `anticipation` repo is public and citable (URL, licence, README).
 - [ ] Verify the two unchecked citations: Aria harmony steering (arXiv:2610.15957) and the OpenReview tonal-tension paper.
 - [ ] Add the new references to `references.bib`: MIDI-LLM, MusicAOG, CGRNN, dual-level beam search, and the steering papers above.
+- [ ] Write a short "Training stability" paragraph in Experiments (`sec:exp-models`, TODO comment before "Checkpoint selection"): what went wrong when training the EBTs (early divergence, Anticipation gradient norms) and what fixed it. Contribution 2 in the Introduction promises it.
 - [ ] Fill Future Work in `conclusion.tex`, with each item tied to a limitation in `discussion.tex`.
 - [ ] Use the name TONIC consistently, and never cite post-resume validation readings.
 
