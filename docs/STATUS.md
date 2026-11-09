@@ -1,6 +1,6 @@
 # Project status
 
-_Last updated: 2026-11-04._ Living snapshot of where music-EBT stands; the
+_Last updated: 2026-11-09._ Living snapshot of where music-EBT stands; the
 day-by-day history is in [diary/](diary/README.md), citable results in
 [thesis_findings/](thesis_findings/README.md).
 
@@ -107,6 +107,9 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
    Don't cite post-resume val readings. Thesis source: `eth-mit-master-thesis/` (own git repo,
    ignored here; Overleaf export, ch. 2-4 drafted 2026-10-08; build with
    `eth-mit-master-thesis/build.sh`). Reference PDFs: `papers/` (not tracked).
+   2026-11-09: thesis plan in `docs/thesis_plan.md`; novelty addendum in
+   `thesis_findings/2026-10-09_novelty_literature_check.md`. To do before
+   writing results: combined-control findings write-up (sweeps 25416469–73).
 5. Music-quality evaluation (branch `music-quality-eval`, worktree
    `.claude/worktrees/music-quality`): `eval/music_quality.py` scores decoded
    MIDI (scale consistency, sharp dissonance, groove, bar self-similarity, …)

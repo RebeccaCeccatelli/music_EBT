@@ -97,3 +97,57 @@ Interpretable Attribute Control in Symbolic Music Generation"
 Not in this check: training-time conditioning (FIGARO, MuseMorphose,
 Composer's Assistant 2, MIDI-RWKV attribute tokens, etc.). That is a
 different family, already noted in the diary (2026-09-23).
+
+## Addendum 2026-11-09: GigaMIDI + Anticipation, EBT for music, AR steering techniques
+
+Web searches only (arXiv, Hugging Face, GitHub via search engine); no
+exhaustive GitHub fork scan.
+
+**GigaMIDI + Anticipation: not first, weaken the claim.**
+- **MIDI-LLM** (Wu et al., arXiv:2511.03942, Nov 2025;
+  https://arxiv.org/abs/2511.03942) adopts the AMT MIDI-like tokenization,
+  continues pretraining Llama-3.2-1B on GigaMIDI (~1.4B tokens) and applies
+  anticipation (infilling) augmentation "leveraging the AMT framework".
+  So AMT tokenization has been applied to GigaMIDI before.
+- They release only the model checkpoint and inference code
+  (github.com/slSeanWU/MIDI-LLM). They don't describe GigaMIDI preprocessing
+  or release a modified `anticipation` library, and no public fork of
+  `jthickstun/anticipation` with GigaMIDI support was found.
+- Original AMT (Thickstun et al., arXiv:2306.08620) trains on Lakh MIDI only.
+  GigaMIDI's own tooling is MidiTok/Symusic-based (e.g. MIDI-GPT).
+- **Thesis phrasing:** don't say "first to apply Anticipation to GigaMIDI".
+  Instead: "we release an open-source adaptation of the anticipation
+  library to GigaMIDI (fork), and train arrival-time anticipation models
+  on it from scratch; MIDI-LLM [cite] also uses AMT tokens on GigaMIDI
+  for LLM continued pretraining but does not release the data pipeline."
+  The contribution is the reusable pipeline, the tokenizer comparison
+  (REMI vs Ant-AT) and the corpus analysis.
+
+**EBT for symbolic music: still plausibly new.**
+- No hit applying Energy-Based Transformers (arXiv:2507.02092) to music,
+  MIDI or audio, consistent with the 2026-10-09 citation check.
+- Prior *energy-based* symbolic music exists and must be cited:
+  MusicAOG (arXiv:2401.02678, EBM over hierarchical And-Or graphs,
+  Metropolis-Hastings sampling, per-attribute temperature control) and
+  CGRNN (energy-based recurrent model, 2019). Neither is a Transformer
+  over token sequences with gradient-based refinement. Phrase as "to our
+  knowledge, the first application of Energy-Based Transformers to
+  symbolic music", not "first energy-based music model".
+
+**NLP steering techniques on symbolic music: unchanged conclusion.**
+- Still no published PPLM, expectation/exponential tilt or plain
+  best-of-N reranking with an attribute regressor on symbolic music.
+- New related work to cite (inference-time control of symbolic AR models):
+  - Dual-level beam search for tonal tension (arXiv:2511.19342): token-
+    and bar-level reranking, the closest relative of our best-of-N.
+  - "Inference-time control of tonal tension in symbolic music
+    generation" (OpenReview A5OnFNe23x; content not retrieved, bot wall:
+    check before citing).
+  - Activation steering on Aria for harmony (arXiv:2610.15957, "Harmonic
+    Representations in Symbolic Music Transformers are Localized and
+    Controllable"; title seen in results, page not retrieved).
+  - Genre control via activation steering (arXiv:2506.10225, audio).
+  - Already listed: PID steering (2606.18790), Prokopiou et al.
+    (2605.31295), SMITIN, Amadeus, Ferreira et al. MCTS.
+- Framing stays: the AR methods are transfers of NLP techniques and serve
+  as strong baselines, not contributions.
