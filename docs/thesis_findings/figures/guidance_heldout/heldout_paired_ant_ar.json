@@ -1,0 +1,202 @@
+[
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.78125,
+    "acc_other": 0.9375,
+    "diff": 0.15625,
+    "ci95": [
+      0.04166666666666667,
+      0.27083333333333337
+    ],
+    "p_signflip": 0.033203125,
+    "prompts_other_better": 9,
+    "prompts_tied": 5,
+    "prompts_ref_better": 2,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.005",
+    "other": "gpt2-ebtrecipe/best_of_n",
+    "other_strength": "8",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.78125,
+    "acc_other": 0.96875,
+    "diff": 0.1875,
+    "ci95": [
+      0.09375,
+      0.28125
+    ],
+    "p_signflip": 0.0048828125,
+    "prompts_other_better": 10,
+    "prompts_tied": 5,
+    "prompts_ref_better": 1,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.005",
+    "other": "llama-ebtrecipe/best_of_n",
+    "other_strength": "8",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.78125,
+    "acc_other": 0.9479166666666667,
+    "diff": 0.16666666666666669,
+    "ci95": [
+      0.08333333333333334,
+      0.2604166666666667
+    ],
+    "p_signflip": 0.00390625,
+    "prompts_other_better": 9,
+    "prompts_tied": 7,
+    "prompts_ref_better": 0,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.005",
+    "other": "llama-ebtrecipe/pplm",
+    "other_strength": "16.0",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.78125,
+    "acc_other": 0.875,
+    "diff": 0.09375,
+    "ci95": [
+      -0.03125,
+      0.21875000000000003
+    ],
+    "p_signflip": 0.240234375,
+    "prompts_other_better": 7,
+    "prompts_tied": 5,
+    "prompts_ref_better": 4,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.005",
+    "other": "gpt2-ebtrecipe/best_of_n",
+    "other_strength": "4",
+    "kind": "N=4"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.78125,
+    "acc_other": 0.9375,
+    "diff": 0.15625,
+    "ci95": [
+      0.05208333333333334,
+      0.2604166666666667
+    ],
+    "p_signflip": 0.01953125,
+    "prompts_other_better": 9,
+    "prompts_tied": 5,
+    "prompts_ref_better": 2,
+    "attribute": "duration",
+    "ref": "ebt/r3",
+    "ref_strength": "0.005",
+    "other": "llama-ebtrecipe/best_of_n",
+    "other_strength": "4",
+    "kind": "N=4"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.78125,
+    "acc_other": 0.9375,
+    "diff": 0.15625,
+    "ci95": [
+      0.06249999999999999,
+      0.2604166666666667
+    ],
+    "p_signflip": 0.01953125,
+    "prompts_other_better": 8,
+    "prompts_tied": 7,
+    "prompts_ref_better": 1,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.012",
+    "other": "gpt2-ebtrecipe/best_of_n",
+    "other_strength": "8",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.78125,
+    "acc_other": 0.96875,
+    "diff": 0.1875,
+    "ci95": [
+      0.06249999999999999,
+      0.3125
+    ],
+    "p_signflip": 0.0234375,
+    "prompts_other_better": 8,
+    "prompts_tied": 7,
+    "prompts_ref_better": 1,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.012",
+    "other": "llama-ebtrecipe/best_of_n",
+    "other_strength": "8",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.78125,
+    "acc_other": 0.9270833333333334,
+    "diff": 0.14583333333333334,
+    "ci95": [
+      0.05208333333333334,
+      0.23958333333333334
+    ],
+    "p_signflip": 0.01953125,
+    "prompts_other_better": 8,
+    "prompts_tied": 7,
+    "prompts_ref_better": 1,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.012",
+    "other": "llama-ebtrecipe/pplm",
+    "other_strength": "32.0",
+    "kind": "operating point"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.78125,
+    "acc_other": 0.7708333333333334,
+    "diff": -0.010416666666666657,
+    "ci95": [
+      -0.15625,
+      0.13541666666666666
+    ],
+    "p_signflip": 1.0,
+    "prompts_other_better": 5,
+    "prompts_tied": 5,
+    "prompts_ref_better": 6,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.012",
+    "other": "gpt2-ebtrecipe/best_of_n",
+    "other_strength": "4",
+    "kind": "N=4"
+  },
+  {
+    "n_prompts": 16,
+    "acc_ref": 0.78125,
+    "acc_other": 0.9375,
+    "diff": 0.15625,
+    "ci95": [
+      0.03125,
+      0.28125
+    ],
+    "p_signflip": 0.046875,
+    "prompts_other_better": 7,
+    "prompts_tied": 8,
+    "prompts_ref_better": 1,
+    "attribute": "pitch_register",
+    "ref": "ebt/r3",
+    "ref_strength": "0.012",
+    "other": "llama-ebtrecipe/best_of_n",
+    "other_strength": "4",
+    "kind": "N=4"
+  }
+]
