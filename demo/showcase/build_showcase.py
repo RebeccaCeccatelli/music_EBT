@@ -133,6 +133,8 @@ def resolve(spec):
     """Clip spec -> MIDI path (None if that output doesn't exist)."""
     if spec.get("placeholder"):
         spec = PLACEHOLDER
+    if spec["kind"] == "file":   # explicit MIDI path under music_EBT_logs (curated picks)
+        return LOGS.parent / spec["midi"]
     runs, pid = RUNS[spec["tok"]], spec["prompt"]
     kind = spec["kind"]
     if kind == "ground_truth":
@@ -160,6 +162,8 @@ def resolve(spec):
 def clip_id(spec):
     if spec.get("placeholder"):
         spec = PLACEHOLDER
+    if spec["kind"] == "file":
+        return spec["id"]
     parts = [spec["tok"], spec["kind"], spec.get("method"), spec.get("model"),
              spec.get("attribute"), str(spec["prompt"]), spec.get("strength"),
              None if spec.get("sd") is None else f"{spec['sd']:+g}", spec.get("combo"),
@@ -190,9 +194,9 @@ def prompt_of(path):
     return Path(path + ".noprompt")
 
 
-def split_prompt(gen_path):
+def split_prompt(gen_path, prompt_path=None):
     """Notes of the continuation only (the saved generation includes the prompt)."""
-    prompt_path = prompt_of(gen_path)
+    prompt_path = Path(prompt_path) if prompt_path else prompt_of(gen_path)
     notes = _notes(gen_path)
     if not prompt_path.exists():
         return notes, 0.0
@@ -222,10 +226,10 @@ def dissonance(midi):
     return _QUALITY[csv].get(Path(midi).name.replace("_generated.mid", ""))
 
 
-def metrics(gen_path):
-    cont, prompt_end = split_prompt(gen_path)
+def metrics(gen_path, prompt_path=None):
+    cont, prompt_end = split_prompt(gen_path, prompt_path)
     pitched = [n for n in cont if not n[5]]
-    pp = prompt_of(gen_path)
+    pp = Path(prompt_path) if prompt_path else prompt_of(gen_path)
     ponset = {(b[0], b[1]) for b in _beat_lengths(pp)} if pp.exists() else set()
     lens = [b[2] for b in _beat_lengths(gen_path) if (b[0], b[1]) not in ponset]
     end = max((n[1] for n in cont), default=0.0)
@@ -254,9 +258,9 @@ GM_SPECIAL = {0: "piano", 1: "piano", 2: "electric piano", 3: "piano", 4: "elect
               73: "flute", 70: "bassoon"}
 
 
-def prompt_name(tok, pid):
+def prompt_name(tok, pid, path=None):
     """'Piano, bass & drums': instruments by note count in the original excerpt."""
-    path = RUNS[tok]["ground_truth"] / f"p{pid}_ground_truth.mid"
+    path = Path(path) if path else RUNS[tok]["ground_truth"] / f"p{pid}_ground_truth.mid"
     if not path.exists():
         return f"prompt {pid}"
     counts = {}
@@ -363,6 +367,7 @@ def expand_block(b):
 # ------------------------------------------------------------------- render
 
 TAIL = 1.5  # seconds of release kept after the last note ends
+LEAD_IN, TRIM_TAIL = 0.15, 1.0  # for "trim" clips (curated picks): same cut as the survey
 
 
 def _trim_wav(wav, seconds, start=0.0):
@@ -427,16 +432,29 @@ class Builder:
         if cid not in self.cache:
             midi = Path(path)
             mp3 = SITE / "audio" / f"{cid}.mp3"
-            src = str(midi.relative_to(LOGS)) if midi.is_relative_to(LOGS) else midi.name
+            if midi.is_relative_to(LOGS):
+                src = str(midi.relative_to(LOGS))
+            elif midi.is_relative_to(LOGS.parent):
+                src = str(midi.relative_to(LOGS.parent))
+            else:
+                src = midi.name
+            notes = _notes(midi)
+            # "trim": cut leading silence to LEAD_IN s before the first note (as in the survey);
+            # every version of a prompt starts with the same prompt, so they are cut alike.
+            cut = max(0.0, min((n[0] for n in notes), default=0.0) - LEAD_IN) if spec.get("trim") else 0.0
+            if spec.get("trim"):
+                src += f"|trim{cut:.3f}"
             if self.force or not mp3.exists() or self.sources.get(cid) != src:
                 print(f"  render {cid}")
-                render_mp3(midi, mp3)
+                render_mp3(midi, mp3, start=cut, tail=TRIM_TAIL if spec.get("trim") else TAIL)
             self.sources[cid] = src
-            m = metrics(midi)
+            m = metrics(midi, spec.get("prompt_midi"))
+            if cut:
+                m = {**m, "prompt_end": round(m["prompt_end"] - cut, 2), "seconds": round(m["seconds"] - cut, 1)}
             self.cache[cid] = {
                 "audio": f"audio/{cid}.mp3",
                 "prompt_end": m["prompt_end"],
-                "notes": [[n[0], round(n[1] - n[0], 4), n[2], n[3], int(n[5])] for n in _notes(midi)],
+                "notes": [[round(n[0] - cut, 4), round(n[1] - n[0], 4), n[2], n[3], int(n[5])] for n in notes],
                 "metrics": m,
             }
         self.used.add(f"{cid}.mp3")
