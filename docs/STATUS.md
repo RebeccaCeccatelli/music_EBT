@@ -38,6 +38,7 @@ Scratch: ~39 GB used by checkpoints after the 2026-10-05 cleanup.
 | ✅ 26152811 | `SET=antcurve` done: s1 88,800 best EBT (1.102); same-recipe Llama 1.056 / GPT-2 1.070; tokmatched Llama 1.136 | Ant |
 | 27917681–82 | Ant Llama-ebtrecipe regressors (duration, pitch_register), resubmitted on preemptable, ~12 h (26348318/19 timed out) | Ant 88,500 (Llama) |
 | 27917679–80 | REMI unguided gen Llama/GPT-2 ebtrecipe (26348856/57 crashed on json bug, fixed) | — |
+| ✅ 27972185 | Held-out guidance analysis done → thesis_findings/2026-11-05_heldout_guidance.md | all |
 | 27917761–62 | REMI Llama-ebtrecipe PPLM: tune + test prompts (~30 min each) | REMI 33,196 (Llama) |
 | 27917683–85 | EBT tune sweeps REMI duration, Ant duration fine, Ant pitch_register fine (quota failures) | REMI 33,732 · Ant 88,800 |
 | 26348315–19 | Regressors for Llama-ebtrecipe: REMI velocity/duration/pitch_register, Ant duration/pitch_register → then PPLM | REMI 33,196 · Ant 88,500 (Llama) |
