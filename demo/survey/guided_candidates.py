@@ -8,13 +8,15 @@ Sources: EBT (REMI 33,732 / Ant 88,800) and the EBT-recipe Llama / GPT-2, every 
 (±0.5/1/2 SD) on the 16 test and the 16 held-out tune prompts, plus each run's own unguided
 reference (r0). Output: ~/orcd/scratch/rebcecca/music_EBT_logs/survey/guided/{mp3/,manifest.json}
 
-The picker subset (pack):
-  <attr>         every system at its operating point (chosen on the tune prompts,
-                 music_quality/sweeps/tune_{remi,ant_ar}.json), all 6 targets, test + tune prompts.
-                 REMI EBT pitch also at λ 0.02 (the threshold case, 2026-11-05_heldout_guidance.md).
-  <attr>_lambda  EBT at every λ, ±2 SD, test prompts (how the music changes with strength).
+The single-attribute picker subset (pack), one section per attribute:
+  every system at its operating point (chosen on the tune prompts,
+  music_quality/sweeps/tune_{remi,ant_ar}.json), all 6 targets, test + tune prompts
+  (REMI EBT pitch also at λ 0.02, the threshold case, 2026-11-05_heldout_guidance.md),
+  plus EBT at every λ x all 6 targets on the test prompts (the former λ explorer, merged 2026-11-09).
 Only the operating-point clips are valid survey items: the other strengths have no matched
 counterpart for the other systems.
+Audio is packed as raw MP3 bytes concatenated into data/<tok>-<attr>-<n>.mp3 chunks; index.json gives
+each clip's [chunk, offset, length] (base64 JSON made REMI 276 MB, over the 256 MB artifact cap).
 """
 import argparse
 import base64
@@ -232,52 +234,52 @@ def annotate(clips):
 
 
 def subset(clips, tok):
-    """Picker clips for one tokenizer: operating points (all targets, test + tune) and the EBT λ explorer."""
+    """Picker clips for one tokenizer: operating points (all targets, test + tune) and EBT at every λ (test)."""
     ops = operating_points()
+    ear = json.loads((HERE / "ear_operating_points.json").read_text()).get(tok, {})  # user's by-ear λ
     out = []
     for c in clips:
         if c["tok"] != tok:
             continue
         op = ops.get((tok, c["attr"], c["system"]), set())
-        if c["cond"] == "reference" or c["strength"] in op:
-            out.append({**c, "section": c["attr"], "op": c["strength"] in op})
-        if c["system"] == "ebt" and c["split"] == "test" and (c["cond"] == "reference" or abs(c["sd"]) == 2):
-            out.append({**c, "section": f"{c['attr']}_lambda", "op": c["strength"] in op})
+        if c["cond"] == "reference" or c["strength"] in op or (c["system"] == "ebt" and c["split"] == "test"):
+            out.append({**c, "section": c["attr"], "op": c["strength"] in op,
+                        "ear": c["system"] == "ebt" and c["strength"] in ear.get(c["attr"], [])})
     return out
 
 
-def cmd_pack(args):
+def cmd_pack(args, chunk_bytes=8_000_000):
     man = json.loads((OUT / "manifest.json").read_text())
     clips = subset(man["clips"], args.tok)
     budget = annotate(clips)
     out = Path(args.out)
     (out / "data").mkdir(parents=True, exist_ok=True)
+    for old in (out / "data").glob("*"):
+        old.unlink()
     groups = {}
     for c in clips:
         groups.setdefault(c["section"], []).append(c)
-    index = {"clips": {}, "chunks": {}, "budget": budget, "tok": args.tok}
+    index = {"clips": {}, "chunks": {}, "budget": budget, "tok": args.tok, "format": "mp3-concat"}
     for section, cs in groups.items():
-        part, size, n = {}, 0, 0
+        n, buf = 0, bytearray()
 
         def flush():
-            nonlocal part, size, n
-            if part:
-                name = f"data/{args.tok}-{section}-{n}.json"
-                (out / name).write_text(json.dumps(part))
-                index["chunks"][name] = list(part)
-                part, size, n = {}, 0, n + 1
+            nonlocal n, buf
+            if buf:
+                (out / f"data/{args.tok}-{section}-{n}.mp3").write_bytes(bytes(buf))
+                n, buf = n + 1, bytearray()
         for c in cs:
-            cid = f"{c['section']}~{c['id']}"   # a clip can appear in both views
-            b = base64.b64encode((OUT / "mp3" / f"{c['id']}.mp3").read_bytes()).decode()
-            if size + len(b) > 10_000_000:
+            b = (OUT / "mp3" / f"{c['id']}.mp3").read_bytes()
+            if buf and len(buf) + len(b) > chunk_bytes:
                 flush()
-            part[cid] = b
-            size += len(b)
+            cid = f"{c['section']}~{c['id']}"
             index["clips"][cid] = {k: v for k, v in c.items() if k not in ("id", "table")}
+            index["clips"][cid]["at"] = [f"data/{args.tok}-{section}-{n}.mp3", len(buf), len(b)]
+            buf += b
         flush()
-    (out / "data" / "index.json").write_text(json.dumps(index))
-    total = sum(p.stat().st_size for p in (out / "data").glob("*.json"))
-    print(f"{len(index['clips'])} clips in {len(index['chunks'])} chunks, {total / 1e6:.1f} MB")
+    (out / "data" / "index.json").write_text(json.dumps(index, separators=(",", ":")))
+    files = sorted((out / "data").glob("*"))
+    print(f"{len(index['clips'])} clips in {len(files) - 1} chunks, {sum(p.stat().st_size for p in files) / 1e6:.1f} MB")
 
 
 def cmd_explorer(args):

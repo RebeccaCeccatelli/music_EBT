@@ -1,0 +1,12 @@
+{
+  "_about": "The user's by-ear EBT operating points (λ), set 2026-11-09 from their notes: diary 2026-09-23 (REMI velocity 0.03, pitch 0.02), diary 2026-11-06 (Ant pitch 0.005-0.006), the user on 2026-11-09 (REMI velocity 0.03-0.04), and the survey picks of 2026-11-06 for duration (never written down before). Every grid λ listed is marked in the single-attribute pickers. Listening reference only: the thesis accuracy numbers keep the held-out rule's operating points (music_quality/sweeps/tune_*.json). Baselines: no by-ear values, the held-out rule applies.",
+  "remi": {
+    "velocity": ["0.03", "0.04"],
+    "duration": ["0.02", "0.025"],
+    "pitch_register": ["0.02"]
+  },
+  "ant": {
+    "duration": ["0.005"],
+    "pitch_register": ["0.005", "0.006"]
+  }
+}
