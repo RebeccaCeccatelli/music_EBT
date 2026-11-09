@@ -18,6 +18,46 @@
     return e;
   };
 
+  // Horizontally scrolling grid with a visible hint (label + position bar + right-edge fade),
+  // shown only when the grid is wider than the screen: on a phone, sideways content is not
+  // otherwise obvious. Tapping the bar jumps to that position.
+  function hscroll(content, cls) {
+    const wrap = h("div", "hscroll");
+    const hint = h("div", "hscroll-hint");
+    const label = h("span", "hscroll-label", "Swipe sideways to see more &rarr;");
+    const track = h("div", "hscroll-track");
+    const thumb = h("div", "hscroll-thumb");
+    track.append(thumb);
+    hint.append(label, track);
+    const scroller = h("div", cls);
+    scroller.append(content);
+    wrap.append(hint, scroller);
+    const update = () => {
+      const max = scroller.scrollWidth - scroller.clientWidth;
+      const can = max > 4;
+      wrap.classList.toggle("can-scroll", can);
+      if (!can) return;
+      const frac = scroller.clientWidth / scroller.scrollWidth;
+      const pos = scroller.scrollLeft / max;
+      thumb.style.width = (frac * 100).toFixed(2) + "%";
+      thumb.style.left = (pos * (1 - frac) * 100).toFixed(2) + "%";
+      const atEnd = pos > 0.98;
+      wrap.classList.toggle("at-end", atEnd);
+      wrap.classList.toggle("at-start", pos < 0.02);
+      label.innerHTML = atEnd ? "&larr; Swipe back" : "Swipe sideways to see more &rarr;";
+    };
+    scroller.addEventListener("scroll", update, { passive: true });
+    track.addEventListener("click", (e) => {
+      const r = track.getBoundingClientRect();
+      const pos = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      scroller.scrollTo({ left: pos * (scroller.scrollWidth - scroller.clientWidth), behavior: "smooth" });
+    });
+    if (window.ResizeObserver) new ResizeObserver(update).observe(scroller);
+    window.addEventListener("resize", update);
+    requestAnimationFrame(update);
+    return wrap;
+  }
+
   function fmtMetric(key, v, unit) {
     if (v == null) return "–";
     if (key === "pitch") return `${noteName(v)} <span style="opacity:.6">(${v.toFixed(1)})</span>`;
@@ -375,9 +415,7 @@
         table.append(el);
       }
     });
-    const scroll = h("div", "intensity-scroll");
-    scroll.append(table);
-    card.append(scroll);
+    card.append(hscroll(table, "intensity-scroll"));
     return card;
   }
 
@@ -492,9 +530,7 @@
         table.append(cell);
       }
     });
-    const scroll = h("div", "ladder-scroll");
-    scroll.append(table);
-    card.append(scroll);
+    card.append(hscroll(table, "ladder-scroll"));
     return card;
   }
 
