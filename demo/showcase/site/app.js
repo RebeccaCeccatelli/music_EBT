@@ -212,7 +212,8 @@
     const card = h("article", "example");
     const head = h("div", "example-head");
     const titles = h("div", "titles");
-    titles.append(h("h3", null, b.title || b.prompt_name || ""));
+    const name = b.title || b.prompt_name || "";
+    titles.append(h("h3", null, b._num ? `<span class="num">${b._num}</span>${name}` : name));
     if (b.subtitle) titles.append(h("p", "subtitle", b.subtitle));
     head.append(titles);
     if (b.title && b.prompt_name) head.append(h("span", "pid", `prompt: ${b.prompt_name}${sub ? " · " + sub : ""}`));
@@ -380,7 +381,97 @@
     return card;
   }
 
+  // Curated picks for one prompt: one column per target SD, from left (▼) to right (▲), with the
+  // unguided reference in the middle. Each column stacks only the clips that exist (EBT first, then the
+  // baselines), so there are no empty slots. Several strengths of one system at one SD share an entry
+  // with a selector.
+  function ladderBlock(b) {
+    const card = blockCard(b);
+    const range = exampleRange(b);
+    const ref = b.clips.find((c) => c.col === "ref");
+    const sds = [...new Set(b.clips.filter((c) => c.col !== "ref").map((c) => c.sd))].sort((x, y) => x - y);
+    const cols = [...sds.filter((s) => s < 0), "ref", ...sds.filter((s) => s > 0)];
+    const maxSd = Math.max(...sds.map(Math.abs), 1);
+    const systems = [...new Set(b.clips.map((c) => c.row))];   // already in display order (EBT first)
+    const table = h("div", "ladder");
+    table.style.setProperty("--cols", cols.length);
+
+    for (const k of cols) {
+      table.append(k === "ref"
+        ? h("div", "colhead ref", "unguided<small>reference</small>")
+        : h("div", "colhead " + (k < 0 ? "down" : "up"),
+            `${k < 0 ? "▼" : "▲"} ${fmtSd(k)}<small>${k < 0 ? b.down : b.up}</small>`));
+    }
+
+    const meter = (c) => c.levels > 1
+      ? ` <span class="meter" title="strength ${c.level} of ${c.levels} used for this system in this tab">` +
+        Array.from({ length: c.levels }, (_, i) => `<i class="${i < c.level ? "on" : ""}"></i>`).join("") + "</span>"
+      : "";
+
+    for (const k of cols) {
+      const col = h("div", "lad-col" + (k === "ref" ? " ref" : ""));
+      for (const sys of systems) {
+        const here = b.clips.filter((c) => c.row === sys &&
+          (k === "ref" ? c.col === "ref" : c.col !== "ref" && c.sd === k))
+          .sort((x, y) => parseFloat(x.strength) - parseFloat(y.strength));
+        if (!here.length) continue;
+        const entry = h("div", "lad-entry");
+        const head = h("div", "lad-sys " + (here[0].tag === "ours" || k === "ref" ? "ours" : "base"), sys);
+        head.title = here[0].row_sub || "";
+        entry.append(head);
+        const versions = here.map((c, i) => {
+          const el = makeClip(c, range, {
+            label: k === "ref" ? "Unguided" : c.label + meter(c),
+            col: k === "ref" ? null : (k < 0 ? "down" : "up"),
+            metricHTML: b.metric ? metricCell(b, c, ref && c.row === ref.row && c !== ref ? ref : null) : null,
+          });
+          if (k !== "ref") {   // deeper tint = bigger target
+            el.style.setProperty("--int", (Math.abs(k) / maxSd).toFixed(3));
+            el.classList.add(k > 0 ? "tint-up" : "tint-down");
+          }
+          if (i) el.style.display = "none";
+          return el;
+        });
+        if (here.length > 1) {
+          const sw = h("div", "strength-switch");
+          here.forEach((c, i) => {
+            const btn = h("button", "st-btn" + (i ? "" : " on"), c.label);
+            btn.type = "button";
+            btn.addEventListener("click", () => {
+              versions.forEach((el, j) => {
+                if (j !== i && current && current.el === el) player.pause();
+                el.style.display = j === i ? "" : "none";
+              });
+              sw.querySelectorAll(".st-btn").forEach((x, j) => x.classList.toggle("on", j === i));
+              requestAnimationFrame(() => clips.forEach((x) => { if (x.el === versions[i]) drawBase(x); }));
+            });
+            sw.append(btn);
+          });
+          entry.append(sw);
+        }
+        entry.append(...versions);
+        col.append(entry);
+      }
+      table.append(col);
+    }
+    const scroll = h("div", "ladder-scroll");
+    scroll.append(table);
+    card.append(scroll);
+    return card;
+  }
+
   function noteBlock(b) {
+    if (b.collapsible) {   // a "learn more" card: one line until clicked
+      const card = h("details", "note learn");
+      const sum = h("summary", null,
+        `<span class="learn-icon">i</span><span class="learn-text"><b>${b.title || ""}</b>` +
+        `${b.teaser ? `<small>${b.teaser}</small>` : ""}</span><span class="learn-cta">Learn more</span>`);
+      card.append(sum, h("p", null, b.text || ""));
+      card.addEventListener("toggle", () => {
+        sum.querySelector(".learn-cta").textContent = card.open ? "Close" : "Learn more";
+      });
+      return card;
+    }
     const card = h("aside", "note");
     card.append(h("h4", null, b.title || ""), h("p", null, b.text || ""));
     return card;
@@ -398,7 +489,7 @@
     return card;
   }
 
-  const BLOCKS = { clips: clipsBlock, steer: steerBlock, intensity: intensityBlock, note: noteBlock, group: groupBlock };
+  const BLOCKS = { clips: clipsBlock, steer: steerBlock, intensity: intensityBlock, ladder: ladderBlock, note: noteBlock, group: groupBlock };
 
   // ----------------------------------------------------------------- tabs
   // Above each block title: which tabs it belongs to, and whether it is a baseline or ours.
@@ -415,10 +506,62 @@
   function renderNode(node, depth, path = []) {
     const frag = h("div", "node depth-" + depth);
     if (node.intro && depth > 0) frag.append(h("p", "intro", node.intro));
-    for (const b of node.blocks || []) frag.append(withContext(BLOCKS[b.type](b), b, path));
+    // collapse_after: show the first n blocks; the rest sit behind a "Show more" button.
+    const extra = [];
+    // numbered: examples (not notes) get 1, 2, 3 … in their tab
+    if (node.numbered) {
+      let k = 0;
+      for (const b of node.blocks || []) if (b.type !== "note") b._num = ++k;
+    }
+    let nEx = 0;   // examples so far (notes don't count towards collapse_after)
+    (node.blocks || []).forEach((b) => {
+      const el = withContext(BLOCKS[b.type](b), b, path);
+      if (b.type !== "note" && node.collapse_after != null && nEx++ >= node.collapse_after) {
+        el.style.display = "none";
+        extra.push(el);
+      }
+      frag.append(el);
+    });
+    if (extra.length) {
+      const more = `Show ${extra.length} more example${extra.length > 1 ? "s" : ""}`;
+      const btn = h("button", "show-more", `${more} <span>▾</span>`);
+      btn.type = "button";
+      btn.addEventListener("click", () => {
+        const open = extra[0].style.display === "none";
+        if (!open && current && extra.some((el) => el.contains(current.el))) player.pause();
+        extra.forEach((el) => { el.style.display = open ? "" : "none"; });
+        btn.innerHTML = open ? "Show fewer <span>▴</span>" : `${more} <span>▾</span>`;
+        if (open) requestAnimationFrame(() => clips.forEach((c) => { if (extra.some((el) => el.contains(c.el))) drawBase(c); }));
+        else btn.scrollIntoView({ block: "nearest" });
+      });
+      frag.append(btn);
+    }
     if (node.tabs && node.tabs.length) {
       const bar = h("div", "tabs " + (depth === 0 ? "tabs-main" : "tabs-sub"));
       bar.setAttribute("role", "tablist");
+      let helpBox = null;
+      if (node.tabs_label) {
+        const lab = h("span", "tabs-label", node.tabs_label);
+        if (node.tabs_help) {
+          // "?" next to the label opens a short explanation below the tab bar.
+          const q = h("button", "help-q", "?");
+          q.type = "button";
+          q.setAttribute("aria-label", `What is ${node.tabs_label.toLowerCase()}?`);
+          q.setAttribute("aria-expanded", "false");
+          helpBox = h("div", "help-box", node.tabs_help);
+          helpBox.style.display = "none";
+          const set = (open) => {
+            helpBox.style.display = open ? "" : "none";
+            q.setAttribute("aria-expanded", String(open));
+            q.classList.toggle("on", open);
+          };
+          q.addEventListener("click", (e) => { e.stopPropagation(); set(helpBox.style.display === "none"); });
+          document.addEventListener("click", (e) => { if (!helpBox.contains(e.target)) set(false); });
+          document.addEventListener("keydown", (e) => { if (e.key === "Escape") set(false); });
+          lab.append(q);
+        }
+        bar.append(lab);
+      }
       const panels = node.tabs.map((t) => {
         const p = renderNode(t, depth + 1, [...path, t.label]);
         p.setAttribute("role", "tabpanel");
@@ -436,7 +579,7 @@
         panels.forEach((p, j) => { p.hidden = j !== i; });
         requestAnimationFrame(() => clips.forEach((c) => { if (panels[i].contains(c.el)) drawBase(c); }));
       }
-      frag.append(bar, ...panels);
+      frag.append(bar, ...(helpBox ? [helpBox] : []), ...panels);
       select(0);
     }
     return frag;

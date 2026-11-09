@@ -315,7 +315,7 @@ def _with(base, **kw):
 def expand_block(b):
     """Block spec -> block with a flat list of clip specs (row/col/label set)."""
     t = b["type"]
-    if t in ("clips", "note"):
+    if t in ("clips", "note", "ladder"):
         return b
     ctx = {"tok": b["tok"], "prompt": b["prompt"], "attribute": b.get("attribute")}
     clips = []
@@ -459,7 +459,7 @@ class Builder:
             }
         self.used.add(f"{cid}.mp3")
         keep = {k: v for k, v in spec.items()
-                if k in ("label", "tag", "row", "row_sub", "col", "operating", "default", "placeholder", "sd", "strength")
+                if k in ("label", "tag", "row", "row_sub", "col", "operating", "default", "placeholder", "sd", "strength", "level", "levels")
                 and v not in (None, False)}
         return {"id": cid, **keep, **self.cache[cid]}
 

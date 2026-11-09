@@ -23,6 +23,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "survey"))
 import build_showcase as bs  # noqa: E402
 import build_survey_v5 as sv  # noqa: E402
+from prompt_names import describe  # noqa: E402
 
 ROOT = bs.LOGS.parent
 SYSTEMS = {  # system -> (block title, subtitle, model, method)
@@ -39,8 +40,18 @@ ATTR = {  # attribute -> (tab label, sublabel, metric key, metric label, unit, d
     "pitch_register": ("Pitch register", "low ↔ high", "pitch", "mean pitch", "", "lower", "higher"),
 }
 TOK = {"remi": "REMI", "ant": "Anticipation"}
+TOK_HINT = {"REMI": "notes on a beat grid", "Anticipation": "notes as timed events"}
+TOKEN_NOTE = {
+    "type": "note", "title": "REMI or Anticipation?",
+    "text": "To learn music, a model reads it as a sequence of symbols (tokens), like a song spelled out with an "
+            "alphabet. REMI and Anticipation are two such alphabets, called tokenizations. Every model is "
+            "trained once with each."}
 TILT_NOTE = {"type": "note", "title": "Tilt: not applicable",
              "text": "Tilt needs a hand-written value map over the attribute's own tokens, which only exists for REMI."}
+ATTR_HELP_TEXT = ("An attribute is the musical property being steered: <b>velocity</b> is how loud the notes "
+                  "are, <b>duration</b> is how long they are held (short and detached, or long and connected), "
+                  "and <b>pitch register</b> is how high or low they sit. Velocity can only be steered with REMI: "
+                  "Anticipation has no symbol for loudness.")
 ANT_VELOCITY_NOTE = {"type": "note", "title": "Not available for Anticipation",
                      "text": "The Anticipation vocabulary has no velocity field: every note is rendered at the same "
                              "default velocity, so there is nothing to steer."}
@@ -86,7 +97,13 @@ def main():
                  if c["system"] == "original" and c["section"] == "unguided"}
 
     def name(tok, pid, orig=None):
-        return bs.prompt_name(tok, pid, orig or originals.get((tok, pid)) or bs.prompt_of(Path("/nonexistent")))
+        """Descriptive name from the original excerpt (prompt_names.describe); instrument list as fallback."""
+        path = orig or originals.get((tok, pid))
+        return describe(path) if path and Path(path).exists() else bs.prompt_name(tok, pid)
+
+    def instruments(tok, pid, orig=None):
+        path = orig or originals.get((tok, pid))
+        return bs.prompt_name(tok, pid, path) if path else ""
 
     # ---------------------------------------------------------------- unguided
     order = {"original": 0, "llama": 1, "gpt2": 2, "ebt": 3}
@@ -99,9 +116,10 @@ def main():
         opts = sorted(t["options"], key=lambda m: order[clips[m]["system"]])
         seen[(tok, pid)] += 1
         b = {"type": "clips", "tok": tok, "prompt": pid, "prompt_name": name(tok, pid, opts[0]),
+             "subtitle": instruments(tok, pid, opts[0]),
              "clips": [clip_spec(m, clips[m], *label[clips[m]["system"]]) for m in opts]}
         if seen[(tok, pid)] > 1:
-            b["subtitle"] = "same prompt, another set of picked continuations"
+            b["subtitle"] += " · same prompt, another set of picked continuations"
         ung[t["tok"]].append(b)
 
     # ------------------------------------------------------------------ steered
@@ -114,34 +132,37 @@ def main():
         slot["picks"].append(t["test"])
 
     def prompt_card(tok, attr, pid, systems):
+        """One 'ladder' card: rows = systems, columns = target SD left to right (reference in the middle).
+        Only the EBT row has the unguided sample: it is the one reference for the whole card."""
         lab, _, key, mlabel, unit, down, up = ATTR[attr]
-        rows = []
+        specs = []
         for s in [s for s in sv.SYSTEM_ORDER if s in systems]:
             title, sub, _, _ = SYSTEMS[s]
             slot = systems[s]
-            picks = sorted(set(slot["picks"]), key=lambda m: (clips[m]["sd"], float(clips[m]["strength"])))
-            # Only the EBT row keeps its unguided sample: it is the one reference for the whole card.
-            # Baseline rows show their metric without arrows (their targets are relative to their own,
-            # different unguided level, so arrows against the EBT's would mislead).
-            specs = ([clip_spec(slot["ref"], {**clips[slot["ref"]], "condition": "unguided"}, "Unguided · reference")]
-                     if s == "ebt" else [])
-            for m in picks:
+            row = {"row": title, "row_sub": sub}
+            if s == "ebt":
+                specs.append({**clip_spec(slot["ref"], {**clips[slot["ref"]], "condition": "unguided"}, "Unguided"),
+                              **row, "col": "ref"})
+            lv = levels[(tok, attr, s)]
+            for m in sorted(set(slot["picks"]), key=lambda m: (clips[m]["sd"], float(clips[m]["strength"]))):
                 c = clips[m]
-                arrow = "▲" if c["sd"] > 0 else "▼"
-                specs.append(clip_spec(m, c, f"{arrow} {up if c['sd'] > 0 else down} · {fmt_sd(c['sd'])} · "
-                                             f"{strength_text(s, c['strength'])}",
-                                       "ours" if s == "ebt" else "baseline"))
-            row = {"type": "clips", "tok": tok, "prompt": pid, "title": title, "subtitle": sub,
-                   "metric": key, "metric_label": mlabel, "metric_unit": unit, "clips": specs}
-            if s != "ebt":
-                row["no_ref"] = True
-            rows.append(row)
-        assert rows and rows[0]["title"] == "EBT", (tok, attr, pid)  # the reference lives in the EBT row
-        return {"type": "group", "title": name(tok, pid),
-                "subtitle": f"prompt {pid} · reference: the EBT's unguided sample (first clip), for every row · "
-                            f"then each system's picked versions (▲ {up}, ▼ {down}); arrows next to the metric "
-                            f"(EBT row only) compare with the reference",
-                "blocks": rows}
+                specs.append({**clip_spec(m, c, strength_text(s, c["strength"]), "ours" if s == "ebt" else "baseline"),
+                              **row, "col": "pick", "sd": c["sd"], "strength": c["strength"],
+                              "level": lv.index(float(c["strength"])) + 1, "levels": len(lv)})
+        assert specs and specs[0]["col"] == "ref", (tok, attr, pid)  # the reference lives in the EBT row
+        return {"type": "ladder", "tok": tok, "prompt": pid, "title": name(tok, pid),
+                "prompt_name": instruments(tok, pid) or f"prompt {pid}",
+                "subtitle": f"left: ▼ {down}, right: ▲ {up}, further out = bigger target (SD) · "
+                            f"the EBT's unguided sample in the middle is the reference for all clips",
+                "metric": key, "metric_label": mlabel, "metric_unit": unit, "down": down, "up": up,
+                "clips": specs}
+
+    # Strength levels per (tok, attr, system), over all picks in that tab, so a meter reads the same in every card.
+    levels = defaultdict(set)
+    for (tok, attr, _), systems in tree.items():
+        for s, slot in systems.items():
+            levels[(tok, attr, s)] |= {float(clips[m]["strength"]) for m in slot["picks"]}
+    levels = {k: sorted(v) for k, v in levels.items()}
 
     single_tabs = []
     for tok in ("remi", "ant"):
@@ -149,30 +170,32 @@ def main():
         for attr in ("velocity", "duration", "pitch_register"):
             lab, sublab = ATTR[attr][:2]
             prompts = sorted(p for (t, a, p) in tree if t == tok and a == attr)
-            blocks = []
             if tok == "ant" and attr == "velocity":
-                blocks = [ANT_VELOCITY_NOTE]
-            else:
-                if tok == "ant":
-                    blocks.append(TILT_NOTE)
-                blocks += [prompt_card(tok, attr, p, tree[(tok, attr, p)]) for p in prompts]
-            attr_tabs.append({"label": lab, "sublabel": sublab, "blocks": blocks})
-        single_tabs.append({"label": TOK[tok], "tabs": attr_tabs})
+                continue   # Anticipation has no loudness symbol: no velocity tab at all
+            blocks = [TILT_NOTE] if tok == "ant" else []
+            blocks += [prompt_card(tok, attr, p, tree[(tok, attr, p)]) for p in prompts]
+            attr_tabs.append({"label": lab, "sublabel": sublab, "numbered": True, "collapse_after": 5,
+                              "blocks": blocks})
+        single_tabs.append({"label": TOK[tok], "tabs_label": "Attribute", "tabs_help": ATTR_HELP_TEXT,
+                            "tabs": attr_tabs})
 
     sel = json.loads(bs.SELECTION.read_text())
     secs = {s["id"]: s for s in sel["sections"]}
-    secs["unguided"]["tabs"] = [{"label": TOK[t], "blocks": ung[t]} for t in ("remi", "ant")]
+    secs["unguided"]["tabs"] = [{"label": TOK[t], "collapse_after": 5, "numbered": True, "blocks": ung[t]} for t in ("remi", "ant")]
     secs["unguided"]["intro"] = (
         "Each model gets the same short prompt (shaded) and continues it, with no control. All models are small "
-        "and trained on GigaMIDI, once per tokenizer; Llama and GPT-2 are trained with the same recipe as the EBT "
-        "(same data, context length and number of training tokens). REMI encodes music as bar/position/pitch/"
-        "velocity/duration tokens; Anticipation encodes (time, duration, note) triplets. The EBT generates each "
+        "and trained on GigaMIDI, once per tokenization; Llama and GPT-2 are trained with the same recipe as the EBT "
+        "(same data, context length and number of training tokens). The REMI and Anticipation tabs are two "
+        "tokenizations (see the ? next to Tokenization). The EBT generates each "
         "token by minimising a learned energy with a few gradient steps; Llama and GPT-2 are standard next-token "
         "predictors. Every continuation here was picked by ear.")
     single = secs["single"]
     single["tabs"] = single_tabs
     for b in single.get("blocks", []):   # the SD / strength explainer: strengths are now shown as numbers
         if b.get("type") == "note" and "<b>Strength</b>" in b.get("text", ""):
+            b["collapsible"] = True   # a "learn more" card, closed until clicked
+            b["title"] = "What do “SD” and “strength” mean?"
+            b["teaser"] = "How far each clip is pushed, and how hard"
             b["text"] = b["text"].replace(
                 "<b>Strength</b> (low / medium / high)",
                 "<b>Strength</b> (λ for the EBT; a strength or N for the baselines)")
@@ -191,9 +214,20 @@ def main():
         "the same recipe as the EBT. Combined Control and Pushing Too Hard are not curated: every system gets the "
         "same prompt and its first sample, with the earlier Llama baselines. Leading silence is trimmed in the "
         "picked clips. The aggregate results are in the thesis.")
+    # Tokenization: label the REMI / Anticipation tabs everywhere, and explain it once in plain words.
+    for sec in sel["sections"]:
+        tabs = sec.get("tabs", [])
+        if tabs and {t["label"] for t in tabs} <= set(TOK_HINT):
+            sec["tabs_label"] = "Tokenization"
+            sec["tabs_help"] = TOKEN_NOTE["text"]   # shown in a box behind a "?" next to the label
+            for t in tabs:
+                t.pop("sublabel", None)
+    secs["unguided"]["blocks"] = []
+    secs["combined"]["intro"] = secs["combined"]["intro"].replace(
+        "combinations (REMI).", "combinations (REMI tokenization only).")
     bs.SELECTION.write_text(json.dumps(sel, indent=1, ensure_ascii=False) + "\n")
     n_ung = sum(len(b["clips"]) for v in ung.values() for b in v)
-    n_st = sum(len(r["clips"]) for t in single_tabs for a in t["tabs"] for g in a["blocks"] for r in g.get("blocks", []))
+    n_st = sum(len(g.get("clips", [])) for t in single_tabs for a in t["tabs"] for g in a["blocks"])
     print(f"unguided: {sum(len(v) for v in ung.values())} sets, {n_ung} clips; steered cards: {n_st} clips")
 
 
