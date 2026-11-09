@@ -87,6 +87,7 @@ def guidance_off(hparams):
     hparams.attribute_regressor_ckpts = None
     hparams.attribute_targets = None
     hparams.attribute_weights = None
+    hparams.attribute_lambdas = None
     hparams.logit_processor = None
 
 
@@ -129,7 +130,13 @@ def main():
     for a in attributes:
         if a not in ATTRIBUTES:
             raise ValueError(f"Unknown attribute '{a}'")
-    strengths = [float(s) for s in (args.strengths or DEFAULT_STRENGTHS[args.method]).split(",")]
+    # A strength entry "a:b" gives one value per attribute (in --attributes order),
+    # e.g. each attribute at its own single-attribute operating point.
+    strengths = [tuple(float(x) for x in s.split(":")) if ":" in s else float(s)
+                 for s in (args.strengths or DEFAULT_STRENGTHS[args.method]).split(",")]
+    for s in strengths:
+        if isinstance(s, tuple) and (len(s) != len(attributes) or args.method == "best_of_n"):
+            raise ValueError("per-attribute strengths need one value per attribute (not for best_of_n)")
     if args.method == "best_of_n":
         strengths = [int(s) for s in strengths]
     mags = [float(m) for m in args.target_deltas_std_mag.split(",")]
@@ -213,6 +220,9 @@ def main():
         {**vars(args), "model_name": model_name, "tokenizer_type": tokenizer_type,
          "prompt_ids": prompt_ids, "strengths": strengths, "combos": combos}, indent=2))
     rows = {a: [] for a in attributes}
+
+    def slabel(s):
+        return ":".join(f"{x:g}" for x in s) if isinstance(s, tuple) else f"{s:g}"
     joint = []  # one record per guided sample: per-attribute correctness and SD error
 
     def add_rows(pi, condition, strength, targets, deltas, baselines, gen, sample_id, combo):
@@ -241,7 +251,7 @@ def main():
             rs = [r for r in joint if r["strength"] == s]
             if not rs:
                 continue
-            summary[str(s)] = {
+            summary[slabel(s) if isinstance(s, tuple) else str(s)] = {
                 "n": len(rs),
                 "joint_accuracy": statistics.mean(all(r["hit"].values()) for r in rs),
                 **{f"accuracy_{a}": statistics.mean(r["hit"][a] for r in rs) for a in attributes},
@@ -291,21 +301,28 @@ def main():
                         hparams.attribute_regressor_ckpts = regressors
                         hparams.attribute_targets = [targets[a] for a in attributes]
                         hparams.attribute_weights = [1.0] * len(attributes)
-                        hparams.lambda_attribute = strength
+                        if isinstance(strength, tuple):
+                            hparams.attribute_lambdas = list(strength)
+                            hparams.lambda_attribute = max(strength)
+                        else:
+                            hparams.lambda_attribute = strength
                     else:  # tilt
+                        per = strength if isinstance(strength, tuple) else (strength,) * len(attributes)
                         hparams.logit_processor = ChainedProcessor(
-                            [ExpectationTilt(a, targets[a], strength, args.temperature) for a in attributes])
+                            [ExpectationTilt(a, targets[a], st, args.temperature)
+                             for a, st in zip(attributes, per)])
                     gen = generate(model, batch, hparams)
                     guidance_off(hparams)
                 cname = "_".join(f"{d:+g}" for d in combo)
-                sample_id = f"p{pi}_{args.method}{strength:g}_c{cname}"
+                sample_id = f"p{pi}_{args.method}{slabel(strength)}_c{cname}"
                 save_midi(sample_id, prompt, gen)
-                achieved = add_rows(pi, f"{args.method}={strength} combo={cname}", strength,
+                achieved = add_rows(pi, f"{args.method}={slabel(strength)} combo={cname}",
+                                    slabel(strength) if isinstance(strength, tuple) else strength,
                                     targets, deltas, baselines, gen, sample_id, combo)
                 hit = {a: (achieved[a] - baselines[a]) * deltas[a] > 0 for a in attributes}
                 err = {a: abs(achieved[a] - targets[a]) / corpus[a]["stdev"] for a in attributes}
                 joint.append({"strength": strength, "combo": list(combo), "hit": hit, "err_sd": err})
-                print(f"[prompt {pi}] {args.method}={strength} combo={cname} " +
+                print(f"[prompt {pi}] {args.method}={slabel(strength)} combo={cname} " +
                       "  ".join(f"{a}: {achieved[a]:.4f}→{targets[a]:.4f} {'✓' if hit[a] else '✗'}"
                                 for a in attributes))
         summary = save()

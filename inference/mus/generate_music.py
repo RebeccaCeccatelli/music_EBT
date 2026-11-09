@@ -88,6 +88,24 @@ def _anticipation_step_is_relevant(triplet_idx: int, attribute: str) -> bool:
     return True  # unknown attribute: fail open, don't gate
 
 
+def _per_attribute_lambda_scale(active_prepped, base_lambda, attr_lambda):
+    """Optional per-attribute λ (hparams.attribute_lambdas). Returns the
+    lambda_scale for this step and folds each active attribute's share into its
+    `weight` (on the prepped copies only). With disjoint gates (velocity/duration
+    in REMI, duration/pitch_register in Anticipation) one attribute is active per
+    step, so this is exactly that attribute's single-attribute λ. `base_lambda /
+    attr_lambda` carries any taper. Without attribute_lambdas: unchanged."""
+    lams = [s.get('lam') for s in active_prepped]
+    if not lams or any(l is None for l in lams):
+        return base_lambda
+    total = float(sum(lams))
+    if total <= 0:
+        return 0.0
+    for s in active_prepped:
+        s['weight'] = s['weight'] * s['lam'] / total
+    return total * (base_lambda / attr_lambda if attr_lambda > 0 else 1.0)
+
+
 def sample_top_p(probs, p):
     """
     Perform top-p (nucleus) sampling on a probability distribution.
@@ -337,6 +355,13 @@ def generate_remi(model, batch, hparams):
         attr_targets = [single_target] if single_target is not None else []
     if not attr_weights:
         attr_weights = [1.0] * len(attr_ckpts)
+    attr_lams = getattr(hparams, 'attribute_lambdas', None)
+    if attr_lams:
+        if len(attr_lams) != len(attr_ckpts):
+            raise ValueError("attribute_lambdas needs one entry per regressor")
+        attr_lambda = max(attr_lams)
+    else:
+        attr_lams = [None] * len(attr_ckpts)
     attr_steering = (attr_lambda > 0 and len(attr_ckpts) > 0
                       and len(attr_ckpts) == len(attr_targets)
                       and all(c is not None and t is not None for c, t in zip(attr_ckpts, attr_targets)))
@@ -359,7 +384,7 @@ def generate_remi(model, batch, hparams):
         from attribute_control.note_density import NoteDensityRegressor
         reg_device = next(model.parameters()).device
         emb_weight = model.embeddings.weight.detach().to(reg_device)
-        for ckpt_path, tgt, w in zip(attr_ckpts, attr_targets, attr_weights):
+        for ckpt_path, tgt, w, lam_a in zip(attr_ckpts, attr_targets, attr_weights, attr_lams):
             reg_ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
             emb_dim = reg_ckpt['emb_dim']
             hidden = reg_ckpt.get('hidden_dim', 256)
@@ -372,13 +397,15 @@ def generate_remi(model, batch, hparams):
                 'hard_window': reg_ckpt.get('density_hard_window', 48),
                 'target': tgt,
                 'weight': w,
+                'lam': lam_a,
             })
         taper_str = (f"  taper=hold{attr_lambda_taper_hold_frac:.0%}->floor{attr_lambda_taper_floor:.0%}"
                      if attr_lambda_taper else "")
         specs_str = "  ".join(f"{s['name']}(target={s['target']:.3f} w={s['weight']} "
                                f"hard_window={s['hard_window']})" for s in attr_specs)
         print(f"  Attribute control (R³{'+compose' if len(attr_specs) > 1 else ''}): "
-              f"{specs_str}  λ={attr_lambda}{taper_str}")
+              f"{specs_str}  λ={attr_lambda}{taper_str}"
+              f"{'  per-attribute λ=' + str([s['lam'] for s in attr_specs]) if attr_specs[0]['lam'] is not None else ''}")
     # attr_name/attr_target are only meaningful for a single-attribute run (the
     # compose/multi-attribute case has no one name or target to report) — used
     # below both for the diagnostics achieved-value trace and the wandb logging
@@ -549,7 +576,8 @@ def generate_remi(model, batch, hparams):
                         )
                 else:
                     current_lambda = attr_lambda
-                _attribute_energy_fn.lambda_scale = current_lambda
+                _attribute_energy_fn.lambda_scale = _per_attribute_lambda_scale(
+                    active_prepped, current_lambda, attr_lambda)
                 attr_energy_fn = _attribute_energy_fn
             else:
                 attr_energy_fn = None
@@ -754,6 +782,13 @@ def generate_anticipation(model, batch, hparams) -> Dict:
         attr_targets = [single_target] if single_target is not None else []
     if not attr_weights:
         attr_weights = [1.0] * len(attr_ckpts)
+    attr_lams = getattr(hparams, 'attribute_lambdas', None)
+    if attr_lams:
+        if len(attr_lams) != len(attr_ckpts):
+            raise ValueError("attribute_lambdas needs one entry per regressor")
+        attr_lambda = max(attr_lams)
+    else:
+        attr_lams = [None] * len(attr_ckpts)
     attr_steering = (attr_lambda > 0 and len(attr_ckpts) > 0
                       and len(attr_ckpts) == len(attr_targets)
                       and all(c is not None and t is not None for c, t in zip(attr_ckpts, attr_targets)))
@@ -764,7 +799,7 @@ def generate_anticipation(model, batch, hparams) -> Dict:
         from attribute_control.note_density import NoteDensityRegressor
         reg_device = next(model.parameters()).device
         emb_weight = model.embeddings.weight.detach().to(reg_device)
-        for ckpt_path, tgt, w in zip(attr_ckpts, attr_targets, attr_weights):
+        for ckpt_path, tgt, w, lam_a in zip(attr_ckpts, attr_targets, attr_weights, attr_lams):
             reg_ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
             emb_dim = reg_ckpt['emb_dim']
             hidden = reg_ckpt.get('hidden_dim', 256)
@@ -778,12 +813,14 @@ def generate_anticipation(model, batch, hparams) -> Dict:
                 'note_only_window': reg_ckpt.get('note_only_window', False),
                 'target': tgt,
                 'weight': w,
+                'lam': lam_a,
             })
         specs_str = "  ".join(f"{s['name']}(target={s['target']:.3f} w={s['weight']} "
                                f"hard_window={s['hard_window']}"
                                f"{' note_only' if s['note_only_window'] else ''})" for s in attr_specs)
         print(f"  Attribute control (R³{'+compose' if len(attr_specs) > 1 else ''}, Anticipation): "
-              f"{specs_str}  λ={attr_lambda}")
+              f"{specs_str}  λ={attr_lambda}"
+              f"{'  per-attribute λ=' + str([s['lam'] for s in attr_specs]) if attr_specs[0]['lam'] is not None else ''}")
 
     attr_name = attr_specs[0]['name'] if len(attr_specs) == 1 else None
     attr_target = attr_specs[0]['target'] if len(attr_specs) == 1 else None
@@ -915,7 +952,8 @@ def generate_anticipation(model, batch, hparams) -> Dict:
                             _attribute_energy_fn.last_energy = float(energy.item())
                             return energy
 
-                        _attribute_energy_fn.lambda_scale = attr_lambda
+                        _attribute_energy_fn.lambda_scale = _per_attribute_lambda_scale(
+                            active_prepped, attr_lambda, attr_lambda)
                         attr_energy_fn = _attribute_energy_fn
                     else:
                         attr_energy_fn = None
