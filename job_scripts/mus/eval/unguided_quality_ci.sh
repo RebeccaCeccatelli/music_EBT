@@ -23,7 +23,7 @@ mkdir -p "${OUT}"
 # One process per tokenizer, in parallel (2 CPUs).
 for t in remi ant-at-full-ar; do
     "${PY}" eval/unguided_quality_ci.py --root "${R}" --tok "${t}" --n_boot "${N_BOOT:-1000}" \
-        --n_perm "${N_PERM:-1000}" --out "${OUT}/${t}.json" > "logs/unguided_quality_ci_${SLURM_JOB_ID}_${t}.log" 2>&1 &
+        --n_perm "${N_PERM:-1000}" --models "${MODELS:-ebt,gpt2,llama}" --out "${OUT}/${t}${SUFFIX:-}.json" > "logs/unguided_quality_ci_${SLURM_JOB_ID}_${t}.log" 2>&1 &
 done
 wait
 cat logs/unguided_quality_ci_${SLURM_JOB_ID}_*.log | grep -v Warning

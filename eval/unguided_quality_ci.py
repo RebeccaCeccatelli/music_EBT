@@ -73,39 +73,46 @@ def main():
     ap.add_argument('--n_boot', type=int, default=1000)
     ap.add_argument('--n_perm', type=int, default=1000)
     ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--models', default=','.join(MODELS),
+                    help="gen_<model>_<tok> folders to compare, EBT first (e.g. "
+                         "ebt,gpt2,llama,gpt2-ebtrecipe,llama-ebtrecipe)")
     ap.add_argument('--out', required=True)
     args = ap.parse_args()
     root = Path(args.root).expanduser()
+    models = args.models.split(',')
+    assert models[0] == 'ebt', 'differences are taken against the first model, EBT'
 
     ebt_map = ebt_song_ids(root, args.tok)
     gen = {}
-    for m in MODELS:
+    for m in models:
         g = read_scores(root / f'gen_{m}_{args.tok}' / 'scores_generated.csv')
         gen[m] = {ebt_map[k]: v for k, v in g.items()} if m == 'ebt' else g
-    gt = {m: read_scores(root / f'gen_{m}_{args.tok}' / 'scores_ground_truth.csv') for m in ('gpt2', 'llama')}
+    gt = {m: read_scores(root / f'gen_{m}_{args.tok}' / 'scores_ground_truth.csv')
+          for m in ['gpt2', 'llama'] + [m for m in models if m not in ('ebt', 'gpt2', 'llama')]}
     shared_gt = set(gt['gpt2']) & set(gt['llama'])
-    for s in shared_gt:  # same song, same real continuation → identical scores
-        assert np.allclose([gt['gpt2'][s][k] for k in METRICS], [gt['llama'][s][k] for k in METRICS],
-                           equal_nan=True), s
-    ref = {**gt['llama'], **gt['gpt2']}
-    songs = sorted(set.intersection(set(ref), *(set(gen[m]) for m in MODELS)))
+    for other in gt:  # same song, same real continuation → identical scores
+        for s in set(gt['gpt2']) & set(gt[other]):
+            assert np.allclose([gt['gpt2'][s][k] for k in METRICS], [gt[other][s][k] for k in METRICS],
+                               equal_nan=True), (other, s)
+    ref = {k: v for g in gt.values() for k, v in g.items()}
+    songs = sorted(set.intersection(set(ref), *(set(gen[m]) for m in models)))
     print(f"{args.tok}: {len(songs)} songs scored by every model and the reference "
-          f"(per model: {', '.join(f'{m} {len(gen[m])}' for m in MODELS)}); GT agrees on {len(shared_gt)} shared songs")
+          f"(per model: {', '.join(f'{m} {len(gen[m])}' for m in models)}); GT agrees on {len(shared_gt)} shared songs")
 
-    point = {m: mean_oa(gen[m], ref, songs) for m in MODELS}
+    point = {m: mean_oa(gen[m], ref, songs) for m in models}
     rng = np.random.default_rng(args.seed)
-    boots = {m: [] for m in MODELS}
+    boots = {m: [] for m in models}
     for _ in range(args.n_boot):
         draw = [songs[i] for i in rng.integers(0, len(songs), len(songs))]
-        for m in MODELS:
+        for m in models:
             boots[m].append(mean_oa(gen[m], ref, draw))
     boots = {m: np.array(v) for m, v in boots.items()}
     res = {'tok': args.tok, 'n_songs': len(songs), 'n_boot': args.n_boot, 'n_perm': args.n_perm,
            'models': {}, 'diff_vs_ebt': {}}
-    for m in MODELS:
+    for m in models:
         res['models'][m] = {'mean_oa': point[m], 'ci95': np.percentile(boots[m], [2.5, 97.5]).tolist()}
         print(f"  {m:6s} mean OA {point[m]:.3f} [{res['models'][m]['ci95'][0]:.3f}, {res['models'][m]['ci95'][1]:.3f}]")
-    for m in MODELS[1:]:
+    for m in models[1:]:
         d = boots[m] - boots['ebt']
         r = {'diff': point[m] - point['ebt'], 'ci95': np.percentile(d, [2.5, 97.5]).tolist(),
              'frac_boot_le_0': float((d <= 0).mean())}

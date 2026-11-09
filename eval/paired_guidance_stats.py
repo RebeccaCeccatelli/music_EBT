@@ -68,18 +68,22 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--results', required=True, help="score_sweep_quality.py JSON (for _operating_points)")
     ap.add_argument('--sweep', action='append', required=True,
-                    help='"<table glob>[::<midi root>]", the same specs as score_sweep_quality.py')
+                    help='"<table glob>[::<midi root>[::<model label>]]", the same specs as score_sweep_quality.py')
     ap.add_argument('--extra_best_of_n', default='4', help='also compare best-of-N at these N (comma list)')
     ap.add_argument('--out', required=True)
     args = ap.parse_args()
 
     rows = []
     for spec in args.sweep:
-        tables = sorted(glob.glob(spec.split('::')[0]))
+        parts = spec.split('::')
+        tables = sorted(glob.glob(parts[0]))
         if not tables:
             sys.exit(f"no tables match {spec}")
         for t in tables:
-            rows.extend(load_rows(t))
+            for r in load_rows(t):
+                if len(parts) > 2:  # rename the model, e.g. llama -> llama-ebtrecipe
+                    r['model'] = parts[2]
+                rows.append(r)
     acc = per_prompt_accuracy(rows)
     ops = json.loads(Path(args.results).read_text())['_operating_points']
 

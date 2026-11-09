@@ -143,7 +143,8 @@ def fwd_per_token(method: str, strength: str, ebt_mcmc_steps: int) -> float | No
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--sweep', action='append', required=True,
-                    help='"<table glob>::<midi root>" (repeatable)')
+                    help='"<table glob>::<midi root>[::<model label>]" (repeatable); the label replaces '
+                         'the tables\' model name, e.g. llama-ebtrecipe, so retrained baselines stay separate')
     ap.add_argument('--ref', required=True, help='scores.csv of a real-data reference set')
     ap.add_argument('--out', default=None)
     ap.add_argument('--min_oa_unguided', type=float, default=0.75,
@@ -155,7 +156,7 @@ def main():
 
     rows, scores, unguided_by_root = [], {}, {}
     for spec in args.sweep:
-        tables_glob, root = spec.split('::')
+        tables_glob, root, *label = spec.split('::')
         tables = sorted(glob.glob(tables_glob))
         if not tables:
             sys.exit(f"no tables match {tables_glob}")
@@ -166,6 +167,8 @@ def main():
         unguided = [root_scores[i] for i in sorted(base_ids) if i in root_scores]
         for t in tables:
             for r in load_rows(t):
+                if label:
+                    r['model'] = label[0]
                 r['_scores'] = root_scores.get(r.get('sample_id'))
                 r['_root'] = str(root)
                 rows.append(r)
