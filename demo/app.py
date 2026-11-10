@@ -2664,8 +2664,8 @@ def build_ui():
                 "language models, **Llama** and **GPT-2**.\n\n"
                 '<span class="lede-2">Pick a piece of music and let them continue it live, '
                 "then steer the continuation towards a chosen attribute.</span>\n\n"
-                '<span class="lede-3">Ready-made examples: '
-                '<a href="https://rebeccaceccatelli.github.io/music_EBT/" target="_blank">the showcase</a></span>',
+                '<span class="lede-3">Ready-made tracks: '
+                '<a href="https://rebeccaceccatelli.github.io/music_EBT/" target="_blank">listen to the showcase →</a></span>',
                 elem_classes="app-subtitle",
             )
             # Author line, as on the showcase: links back to the Tonic front page.
