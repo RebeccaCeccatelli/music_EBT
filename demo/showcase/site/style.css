@@ -306,6 +306,9 @@ a:hover { text-decoration: underline; }
 .ladder .strength-switch { gap: 4px; }
 .ladder .strength-switch .sw-label { margin-right: 2px; white-space: nowrap; }
 .ladder .strength-switch .st-btn { font-size: 11px; padding: 2px 7px; }
+.strength-switch .st-btn small { font-size: 10px; opacity: .75; margin-left: 3px; }
+.clip .sdv { opacity: .7; font-size: .92em; }
+.clip .exact { text-decoration: underline dotted; text-underline-offset: 2px; cursor: help; }
 .meter { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }
 .meter i { width: 5px; height: 10px; border-radius: 1px; background: rgba(255,255,255,.15); }
 .meter i.on { background: var(--accent); }

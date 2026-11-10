@@ -152,8 +152,8 @@ def main():
         assert specs and specs[0]["col"] == "ref", (tok, attr, pid)  # the reference lives in the EBT row
         return {"type": "ladder", "tok": tok, "prompt": pid, "title": name(tok, pid),
                 "prompt_name": instruments(tok, pid) or f"prompt {pid}",
-                "subtitle": f"one row per technique: ▼ {down} on the left, ▲ {up} on the right; choose the target "
-                            f"(SD) and strength in each cell · the EBT's unguided sample in the middle is the reference",
+                "subtitle": f"one row per technique: ▼ {down} on the left, ▲ {up} on the right; in each cell choose how much "
+                            f"change to ask for and how hard to push · the EBT's unguided sample in the middle is the reference",
                 "metric": key, "metric_label": mlabel, "metric_unit": unit, "down": down, "up": up,
                 "clips": specs}
 
@@ -194,21 +194,23 @@ def main():
     for b in single.get("blocks", []):   # the SD / strength explainer: strengths are now shown as numbers
         if b.get("type") == "note" and "<b>Strength</b>" in b.get("text", ""):
             b["collapsible"] = True   # a "learn more" card, closed until clicked
-            b["title"] = "What do “target” and “strength” mean?"
+            b["title"] = "What do “asked for” and “push” mean?"
             b["teaser"] = "How far each clip is pushed, and how hard"
             b["text"] = (
-                '<span class="nl"><b>Target</b> = <i>where</i> you ask the music to go: “a bit louder” (+1 SD) or '
-                '“much louder” (+2 SD); minus means the opposite direction. Targets are measured in SD (standard '
-                'deviations): how much loudness, note length or pitch usually varies between pieces.</span>'
-                '<span class="nl"><b>Strength</b> = <i>how hard</i> the model is pushed to get there: how '
-                'insistently you ask, not what you ask for. For the EBT the strength is called λ; for the baselines '
-                'it is their own setting (PPLM and Tilt: a strength value; Best-of-N: the number of samples N).</span>'
+                '<span class="nl"><b>Asked for</b> (the target) = <i>where</i> you ask the music to go: “slightly '
+                'louder” (+0.5 SD), “louder” (+1 SD) or “much louder” (+2 SD), and the same downwards. SD (standard '
+                'deviation) is how much loudness, note length or pitch usually varies between pieces.</span>'
+                '<span class="nl"><b>Push</b> (the strength) = <i>how hard</i> the model is pushed to get there: how '
+                'insistently you ask, not what you ask for. Gentle / medium / strong are ranked within each technique, '
+                'so “strong” means the strongest setting shown for that technique, not the same force for all. '
+                'Hover a label for the exact setting (λ for the EBT, a strength value for PPLM and Tilt). '
+                'Best-of-N keeps its number: “best of 8 tries” draws 8 continuations and keeps the closest.</span>'
                 '<span class="nl">Think of throwing a ball: the target is where you aim, the strength is how hard '
                 'you throw. Too soft and it falls short; too hard and it flies past and goes wild, which is what '
                 '“Pushing Too Hard” shows.</span>')
             b["text"] = b["text"].replace(
                 "<b>Strength</b> (low / medium / high)",
-                "<b>Strength</b> (λ for the EBT; a strength or N for the baselines)")
+                "<b>Strength</b> (gentle / medium / strong, ranked within each technique)")
     single["intro"] = (
         "With a small regressor that predicts a musical attribute, generation can be steered toward a target "
         "without retraining. For the EBT, the regressor's error is added to the energy it already minimises, and "

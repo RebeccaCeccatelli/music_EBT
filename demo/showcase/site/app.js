@@ -220,7 +220,7 @@
 
     const duration = data.notes.reduce((m, n) => Math.max(m, n[0] + n[1]), 0);
     time.textContent = fmtTime(duration);
-    const clip = { el, canvas, btn, time, data, range, duration, name: opts.label || data.id };
+    const clip = { el, canvas, btn, time, data, range, duration, name: (opts.label || "").replace(/<[^>]*>/g, "").trim() || data.id };
     btn.addEventListener("click", () => toggle(clip));
     canvas.addEventListener("click", (e) => {
       const r = canvas.getBoundingClientRect();
@@ -244,8 +244,12 @@
 
   // --------------------------------------------------------------- blocks
   // Plain-language names for an ordered set of strengths; the exact value stays in a tooltip.
-  const strengthNames = (n) => n === 3 ? ["low", "medium", "high"] : n === 2 ? ["low", "high"]
-    : Array.from({ length: n }, (_, i) => `level ${i + 1}`);
+  // Strength levels are ranked within one technique (λ 0.02 and PPLM 16 are not on one scale).
+  const RANKS = { 1: ["normal"], 2: ["gentle", "strong"], 3: ["gentle", "medium", "strong"],
+    4: ["gentle", "medium", "strong", "very strong"], 5: ["very gentle", "gentle", "medium", "strong", "very strong"] };
+  const strengthNames = (n) => RANKS[n] || Array.from({ length: n }, (_, i) => `level ${i + 1}`);
+  // Target in the attribute's own words, e.g. −2 SD on velocity -> "much softer".
+  const targetWord = (sd, b) => `${{ 0.5: "slightly ", 1: "", 2: "much " }[Math.abs(sd)] ?? ""}${sd < 0 ? b.down : b.up}`;
   const fmtSd = (sd) => `${sd > 0 ? "+" : "−"}${Math.abs(sd)} SD`;
 
   function blockCard(b, sub) {
@@ -328,7 +332,7 @@
           // Each version carries the same switch, so it stays put while the card swaps.
           for (const el of Object.values(versions)) {
             const sw = h("div", "strength-switch");
-            sw.append(h("span", "sw-label", "strength"));
+            sw.append(h("span", "sw-label", "push"));
             strengths.forEach((st, i) => {
               const btn = h("button", "st-btn" + (st === first ? " on" : ""), names[i]);
               btn.type = "button";
@@ -453,9 +457,15 @@
         Array.from({ length: c.levels }, (_, i) => `<i class="${i < c.level ? "on" : ""}"></i>`).join("") + "</span>"
       : "";
     const sdText = (sd) => `${sd > 0 ? "+" : "−"}${Math.abs(sd)} SD`;
-    // Strength buttons show only the number; the row label names the scale once (so 3 fit on one line).
-    const strengthName = (c) => c.label.replace(/^(λ|strength|best of) /, "");
-    const strengthScale = (c) => c.label.startsWith("λ") ? "strength λ" : c.label.startsWith("best of") ? "N" : "strength";
+    // Plain words on the buttons; the exact setting (λ 0.02, strength 16) stays in a tooltip.
+    // Best-of-N keeps its number, which already means something: "best of 8 tries".
+    const isBon = (c) => c.label.startsWith("best of");
+    const strengthName = (c) => isBon(c) ? `${c.strength} tries` : (strengthNames(c.levels || 1)[(c.level || 1) - 1]);
+    const strengthScale = (c) => isBon(c) ? "best of" : "push";
+    // One setting only for this technique in this tab (e.g. PPLM 32): no rank to name, the exact value on hover.
+    const strengthHTML = (c) => isBon(c) ? ` · <span class="exact" title="N = ${c.strength}">${c.label} tries</span>`
+      : (c.levels || 1) > 1 ? ` · <span class="exact" title="${c.label}">${strengthName(c)} push</span>`
+      : "";
 
     rows.forEach((row, ri) => {
       const rc = picks.filter((c) => c.row === row);
@@ -476,7 +486,7 @@
         const els = new Map();
         for (const c of here) {
           const el = makeClip(c, rangeOf(c), {
-            label: `${dir < 0 ? "▼" : "▲"} ${sdText(c.sd)} · ${c.label}${meter(c)}`,
+            label: `<span title="${sdText(c.sd)} · ${c.label}">${dir < 0 ? "▼" : "▲"} ${targetWord(c.sd, b)} <span class="sdv">${sdText(c.sd)}</span>${strengthHTML(c)}</span>${meter(c)}`,
             col: dir < 0 ? "down" : "up",
             metricHTML: b.metric ? metricCell(b, c, ours && ref ? ref : null) : null,
           });
@@ -503,6 +513,7 @@
           for (const c of opts) {
             const btn = h("button", "st-btn" + (c.strength === selSt ? " on" : ""), strengthName(c));
             btn.type = "button";
+            btn.title = c.label;
             btn.addEventListener("click", () => { selSt = c.strength; show(); });
             stBar.append(btn);
           }
@@ -512,9 +523,9 @@
         const box = h("div", "lad-box " + (dir < 0 ? "down" : "up"));
         const ctrl = h("div", "lad-ctrl");
         if (sds.length > 1) {
-          sdBar.append(h("span", "sw-label", "target"));
+          sdBar.append(h("span", "sw-label", "asked for"));
           for (const sd of sds) {
-            const btn = h("button", "st-btn", sdText(sd));
+            const btn = h("button", "st-btn", `${targetWord(sd, b)} <small>${sdText(sd)}</small>`);
             btn.type = "button";
             btn.dataset.v = sd;
             btn.addEventListener("click", () => { selSd = sd; show(); });
