@@ -18,6 +18,11 @@ ICONS = {
     # archive: a record
     "archive": ("#2f5bd3", '<circle cx="32" cy="32" r="21" fill="#fff"/><circle cx="32" cy="32" r="15" fill="none" stroke="#2f5bd3" '
                 'stroke-width="1.4" opacity=".55"/><circle cx="32" cy="32" r="8" fill="#2f5bd3"/><circle cx="32" cy="32" r="2.6" fill="#fff"/>'),
+    # tonic (front page): three stacked notes of a triad on a staff line
+    "tonic": ("#141226", '<rect x="3" y="3" width="58" height="58" rx="12" fill="none" stroke="#8b7cff" stroke-width="2.5"/>'
+              '<g fill="#8b7cff"><ellipse cx="32" cy="45" rx="8" ry="6" transform="rotate(-18 32 45)"/></g>'
+              '<g fill="#5ad1e6"><ellipse cx="32" cy="32" rx="8" ry="6" transform="rotate(-18 32 32)"/></g>'
+              '<g fill="#ff8a5c"><ellipse cx="32" cy="19" rx="8" ry="6" transform="rotate(-18 32 19)"/></g>'),
     # study (survey): headphones
     "study": ("#1d8a5c", '<path d="M15 38v-5a17 17 0 0 1 34 0v5" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>'
               '<rect x="11" y="34" width="11" height="17" rx="4" fill="#fff"/><rect x="42" y="34" width="11" height="17" rx="4" fill="#fff"/>'),
