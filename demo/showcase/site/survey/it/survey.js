@@ -279,7 +279,7 @@
       h("div", "r-blocks",
         '<div class="r-block"><span class="r-num">01</span><h3>Cosa fa questa tesi</h3>' +
         '<p>Oggi la maggior parte dei modelli che generano musica funziona come una scatola chiusa: si ottiene un risultato, ma si può decidere ' +
-        'ben poco di come viene fuori. Questa tesi studia come dare più controllo a chi usa il modello, e capire meglio cosa sta facendo. Gli si può chiedere</p>' +
+        'ben poco di come viene fuori. Questa tesi studia come dare più controllo a chi usa il modello, e capire meglio cosa sta facendo. Gli si può chiedere, per esempio,</p>' +
         '<div class="r-chips"><span>un suono più piano o più forte</span><span>note più lunghe o più corte</span><span>un registro più acuto o più grave</span></div>' +
         '<p>e ascoltare come risponde.</p></div>' +
         '<div class="r-block"><span class="r-num">02</span><h3>Dove potrebbe portare</h3>' +
