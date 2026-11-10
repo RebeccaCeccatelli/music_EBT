@@ -281,16 +281,17 @@
       h("p", "eyebrow", "Una nota personale di chi ha realizzato questo lavoro"),
       h("h2", "s-title", "Uno strumento al servizio dei musicisti, non un sostituto"),
       h("div", "r-personal",
-        "<p>Sono musicista da tutta la vita, e molti miei amici vivono di musica. So quanto impegno, amore e passione ci siano dietro.</p>" +
-        "<p>Questo lavoro <b>non</b> vuole sostituire musicisti e artisti: vuole dare loro strumenti migliori.</p>"),
+        "<p>Questo lavoro <b>non</b> vuole sostituire musicisti e artisti: vuole dare loro strumenti migliori.</p>" +
+        "<p>Sono musicista da tutta la vita, e molti miei amici vivono di musica. So quanto impegno, amore e passione ci siano dietro.</p>"),
       h("div", "r-blocks",
-        '<div class="r-block"><span class="r-num">01</span><h3>Cosa fa questa tesi</h3>' +
+        '<div class="r-block"><span class="r-num">01</span><h3>Cosa fa questo lavoro</h3>' +
         '<p>Oggi la maggior parte dei modelli che generano musica funziona come una scatola chiusa: si ottiene un risultato, ma si può decidere ' +
-        'ben poco di come viene fuori. Questa tesi studia come dare più controllo a chi usa il modello, e capire meglio cosa sta facendo. Gli si può chiedere, per esempio,</p>' +
+        'ben poco di come viene fuori. Questo lavoro studia come dare più controllo a chi usa il modello, e capire meglio cosa sta facendo. Gli si può chiedere, per esempio,</p>' +
         '<div class="r-chips"><span>un suono più piano o più forte</span><span>note più lunghe o più corte</span><span>un registro più acuto o più grave</span></div>' +
         '<p>e ascoltare come risponde.</p></div>' +
         '<div class="r-block"><span class="r-num">02</span><h3>Dove potrebbe portare</h3>' +
-        '<p>Decenni fa i musicisti hanno fatto propri i sintetizzatori e gli strumenti elettronici. Vedo questo lavoro come un piccolo passo nella stessa ' +
+        '<p>Decenni fa i musicisti hanno fatto propri i sintetizzatori e gli strumenti elettronici.</p>' +
+        '<p>Vedo questo lavoro come un piccolo passo nella stessa ' +
         'direzione: modelli come strumenti per dare forma alle proprie idee e, un giorno, magari per <i>dipingere</i> la musica, ' +
         'interagendo con loro dal vivo, quasi come in una jam session.</p></div>'),
       h("div", "r-data",

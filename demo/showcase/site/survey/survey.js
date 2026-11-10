@@ -260,16 +260,17 @@
       h("p", "eyebrow", "A personal note from the author of this work"),
       h("h2", "s-title", "A tool for musicians to work with, not a replacement"),
       h("div", "r-personal",
-        "<p>I have been a musician all my life, and many of my friends make their living from music. I know how much effort, love and passion go into it.</p>" +
-        "<p>This work is <b>not</b> meant to replace musicians and artists. It is about giving them better tools.</p>"),
+        "<p>This work is <b>not</b> meant to replace musicians and artists. It is about giving them better tools.</p>" +
+        "<p>I have been a musician all my life, and many of my friends make their living from music. I know how much effort, love and passion go into it.</p>"),
       h("div", "r-blocks",
-        '<div class="r-block"><span class="r-num">01</span><h3>What this thesis does</h3>' +
+        '<div class="r-block"><span class="r-num">01</span><h3>What this work does</h3>' +
         '<p>Most models that generate music today work like a black box: you get a result, but little say in how it turns out. ' +
-        'This thesis looks at how to give the person using the model more control, and a clearer view of what it is doing. You can ask it, for instance, for</p>' +
+        'This work looks at how to give the person using the model more control, and a clearer view of what it is doing. You can ask it, for instance, for</p>' +
         '<div class="r-chips"><span>softer or louder playing</span><span>longer or shorter notes</span><span>a higher or lower register</span></div>' +
         '<p>and hear how it responds.</p></div>' +
         '<div class="r-block"><span class="r-num">02</span><h3>Where it could lead</h3>' +
-        '<p>Decades ago, musicians took up synthesizers and electronic instruments and made them their own. I see this work as a small step in the same ' +
+        '<p>Decades ago, musicians took up synthesizers and electronic instruments and made them their own.</p>' +
+        '<p>I see this work as a small step in the same ' +
         'direction: models as instruments for shaping your own ideas, and one day perhaps for <i>painting</i> music with them, ' +
         'interacting live, almost jamming together.</p></div>'),
       h("div", "r-data",
