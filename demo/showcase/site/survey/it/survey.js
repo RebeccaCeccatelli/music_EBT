@@ -271,9 +271,11 @@
     const s = h("section", "card-screen research");
     s.append(
       dots("research"),
-      h("p", "eyebrow", "Questa ricerca"),
+      h("p", "eyebrow", "Una nota personale di chi ha realizzato questo lavoro"),
       h("h2", "s-title", "Uno strumento al servizio dei musicisti, non un sostituto"),
-      h("p", "lede", "Questo lavoro non vuole sostituire musicisti e artisti: vuole dare loro strumenti migliori."),
+      h("div", "r-personal",
+        "<p>Sono musicista da tutta la vita, e molti miei amici vivono di musica. So quanto impegno, amore e passione ci siano dietro.</p>" +
+        "<p>Per questo, questo lavoro non vuole sostituire musicisti e artisti: vuole dare loro strumenti migliori.</p>"),
       h("div", "r-blocks",
         '<div class="r-block"><span class="r-num">01</span><h3>Il problema</h3>' +
         '<p>Oggi la maggior parte dei modelli che generano musica funziona come una scatola chiusa: si ottiene un risultato, ma si può decidere ' +
@@ -283,12 +285,12 @@
         '<div class="r-chips"><span>un suono più piano o più forte</span><span>note più lunghe o più corte</span><span>un registro più acuto o più grave</span></div>' +
         '<p>e ascoltare come risponde.</p></div>' +
         '<div class="r-block"><span class="r-num">03</span><h3>Dove potrebbe portare</h3>' +
-        '<p>Decenni fa i musicisti hanno fatto propri i sintetizzatori e gli strumenti elettronici. Vediamo questo lavoro come un piccolo passo nella stessa ' +
+        '<p>Decenni fa i musicisti hanno fatto propri i sintetizzatori e gli strumenti elettronici. Vedo questo lavoro come un piccolo passo nella stessa ' +
         'direzione: modelli come strumenti per dare forma alle proprie idee e, un giorno, magari per <i>dipingere</i> la musica, ' +
         'interagendo con loro dal vivo, quasi come in una jam session.</p></div>'),
       h("div", "r-data",
         '<span class="v-ico" aria-hidden="true">🎼</span><div><b>Addestrati su dati aperti</b>' +
-        '<p>Tutta la musica usata per addestrare questi modelli proviene da raccolte open source, disponibili pubblicamente e legalmente su internet.</p></div>'),
+        '<p>Tutta la musica usata per addestrare questi modelli proviene da <a href="https://huggingface.co/datasets/Metacreation/GigaMIDI" target="_blank" rel="noopener">GigaMIDI</a>, una raccolta open source di file MIDI disponibile pubblicamente e legalmente su internet.</p></div>'),
     );
     s.append(nav("Continua", goto("how"), "welcome").row);
     screen(s);

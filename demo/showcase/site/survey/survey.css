@@ -110,6 +110,10 @@
 .steps3 small { color: var(--faint); font-size: 13px; }
 /* "About this research" page. */
 .research .lede { max-width: 62ch; }
+.r-personal { margin: 0 0 18px; padding: 4px 0 4px 18px; border-left: 3px solid var(--accent); max-width: 66ch; }
+.r-personal p { margin: 0; font-size: 16.5px; line-height: 1.6; color: var(--text); }
+.r-personal p + p { margin-top: 8px; color: var(--muted); }
+.r-data a { color: var(--accent-2); }
 .r-blocks { display: grid; gap: 12px; margin: 8px 0 0; }
 .r-block { position: relative; padding: 18px 20px 18px 64px; border-radius: 16px; background: rgba(255,255,255,.03); border: 1px solid var(--border); }
 .r-num { position: absolute; left: 20px; top: 19px; font: 600 13px var(--mono); color: var(--accent-2); }
