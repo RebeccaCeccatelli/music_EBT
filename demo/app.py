@@ -2433,9 +2433,9 @@ def build_ui():
 
         gr.Markdown('## <span class="kicker">01</span>Choose format and models', elem_classes="section-title")
         gr.Markdown(
-            "Tokenization format affects how the prompt itself gets read (its offset "
-            "units, start-point precision, etc.), so it's chosen first — picking a "
-            "prompt below won't need to get re-resolved if you change format afterward.",
+            "First, choose how the music is written down for the models: **REMI** or "
+            "**Anticipation**, two ways of turning a piece into tokens. Each has its own "
+            "trained models. You can switch later; the piece you pick below stays selected.",
             elem_classes="section-sub",
         )
         tokenizer_dd = gr.Dropdown(choices=TOKENIZER_CHOICES, value="REMI", label="Tokenization format")
