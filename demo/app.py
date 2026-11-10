@@ -2335,6 +2335,17 @@ body, gradio-app {
 .app-title h1 { font-size: clamp(30px, 4.6vw, 48px) !important; letter-spacing: -0.03em !important; }
 .app-subtitle, .app-subtitle p { max-width: 70ch; margin: 0 auto !important; color: #9298ab !important; font-size: 16px !important; line-height: 1.6; }
 .app-subtitle a { color: #3fd0c9 !important; text-decoration: none; }
+.app-subtitle p { margin: 0 auto 10px !important; }
+.app-subtitle strong { color: #e8eaf2 !important; font-weight: 650; }
+.app-subtitle .lede-2 { font-size: 15px; color: #9298ab !important; }
+.app-subtitle .lede-3 { font-size: 14px; color: #9298ab !important; }
+/* Trait tags as on the showcase: flat labels, not buttons. */
+.app-subtitle .traits { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.app-subtitle .traits span {
+    padding: 3px 10px; border-radius: 6px;
+    border: 1px solid rgba(63,208,201,0.35); background: rgba(63,208,201,0.07);
+    color: #3fd0c9; font: 500 13px/1.6 "JetBrains Mono", ui-monospace, monospace;
+}
 .app-subtitle a:hover { text-decoration: underline; }
 
 /* Markdown blocks are Gradio "blocks" with the theme's border and radius,
@@ -2343,6 +2354,14 @@ body, gradio-app {
     border: 0 !important; box-shadow: none !important; background: transparent !important;
 }
 .section-title { margin-top: clamp(28px, 5vw, 48px) !important; }
+/* Showcase section heads: a violet mono number (01, 02, …) left of the heading,
+   with the intro text indented to line up under the heading. */
+.section-title h2 { display: flex !important; align-items: baseline; gap: 14px; }
+.section-title .kicker {
+    flex: 0 0 24px; font: 600 13px "JetBrains Mono", ui-monospace, monospace;
+    color: #8b7cff; letter-spacing: 0;
+}
+.section-title + .section-sub { padding-left: 38px !important; }
 .section-title h2 {
     margin: 0 !important; font-size: 28px !important; font-weight: 700 !important;
     letter-spacing: -0.02em !important; color: #e8eaf2 !important;
@@ -2399,15 +2418,19 @@ def build_ui():
                         elem_classes="app-eyebrow")
             gr.Markdown("# 🎷 Tonic · Interactive Demo 🎷", elem_classes="app-title")
             gr.Markdown(
-                "Pick a piece of music and let Tonic, an Energy-Based Transformer (EBT), and two "
-                "standard language models, Llama and GPT-2, continue it live. Then steer the "
-                "continuation towards a chosen trait: louder or softer playing, longer or shorter "
-                "notes, or a higher or lower register. For ready-made examples, see the "
-                "[showcase](https://rebeccaceccatelli.github.io/music_EBT/).",
+                # Same structure as the showcase subtitle: models line, "how" line, trait tags.
+                "**Tonic**, an Energy-Based Transformer (EBT), side by side with two standard "
+                "language models, **Llama** and **GPT-2**.\n\n"
+                '<span class="lede-2">Pick a piece of music and let them continue it live, '
+                "then steer the continuation towards a chosen trait.</span>\n\n"
+                '<span class="traits"><span>louder / softer</span><span>longer / shorter notes</span>'
+                "<span>higher / lower register</span></span>\n\n"
+                '<span class="lede-3">Ready-made examples: '
+                '<a href="https://rebeccaceccatelli.github.io/music_EBT/" target="_blank">the showcase</a></span>',
                 elem_classes="app-subtitle",
             )
 
-        gr.Markdown("## 1. Choose format and models", elem_classes="section-title")
+        gr.Markdown('## <span class="kicker">01</span>Choose format and models', elem_classes="section-title")
         gr.Markdown(
             "Tokenization format affects how the prompt itself gets read (its offset "
             "units, start-point precision, etc.), so it's chosen first — picking a "
@@ -2463,7 +2486,7 @@ def build_ui():
                 model_controls[model_key][2] = refresh_btn
         model_controls = {k: tuple(v) for k, v in model_controls.items()}
 
-        gr.Markdown("## 2. Choose your prompt", elem_classes="section-title")
+        gr.Markdown('## <span class="kicker">02</span>Choose your prompt', elem_classes="section-title")
         gr.Markdown(
             "Pick a song and mark where the prompt should start by ear — the model "
             "generates a continuation from whatever's playing at that point.",
@@ -2493,7 +2516,7 @@ def build_ui():
 
         generate_btn = gr.Button("🎹 Generate", variant="primary", size="lg")
 
-        gr.Markdown("## 3. Listen to generated outputs", elem_classes="section-title")
+        gr.Markdown('## <span class="kicker">03</span>Listen to generated outputs', elem_classes="section-title")
         status_box = gr.Textbox(label="Status", lines=8, interactive=False)
         gr.Markdown(
             "Prompt and ground-truth continuation are the same across every model, "
@@ -2527,7 +2550,7 @@ def build_ui():
                 model_output_cols[model_key] = _model_col
 
         # ── EBT attribute control ────────────────────────────────────────────
-        gr.Markdown("## 4. Guide attributes (EBT or baselines)", elem_classes="section-title")
+        gr.Markdown('## <span class="kicker">04</span>Guide attributes (EBT or baselines)', elem_classes="section-title")
         ebt_reference_audio = gr.Audio(
             label="Reference: EBT default (unguided, from the last Generate run above)",
             type="filepath", visible=False,
