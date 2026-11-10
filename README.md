@@ -1,161 +1,117 @@
-# ⚡️🧠🤖 Energy-Based Transformers are Scalable Learners and Thinkers
+# 🎹 Tonic: an Energy-Based Transformer for Symbolic Music
 
-📚 [Paper](https://arxiv.org/abs/2507.02092) | 🌐 [Website](https://energy-based-transformers.github.io/) | 📝 [Blog](https://alexiglad.github.io/blog/2025/ebt/) | 🧾 [Bibtex](https://github.com/alexiglad/ebt?tab=readme-ov-file#Citation) | ✏️ [Simple Training Loop](https://github.com/alexiglad/EBT/blob/main/example_code/minimal_nlp_training_loop.py)
+🏠 [Tonic](https://rebeccaceccatelli.github.io/tonic/) | 🎧 [Showcase](https://rebeccaceccatelli.github.io/music_EBT/) | 🗂️ [Code structure](docs/CODE_STRUCTURE.md) | 📊 [Findings](docs/thesis_findings/README.md) | 🧭 [Project status](docs/STATUS.md)
 
-<img src="assets/model.png" alt="Autoregressive Model Architecture" width="100%" />
+**Tonic** applies **Energy-Based Transformers (EBTs)** to **symbolic music generation**. This repository is its codebase, built for an ETH Zürich / MIT master's thesis.
 
+An EBT does not output the next token in one forward pass. It learns an energy function over (context, candidate) pairs and **refines its prediction by gradient descent on that energy** (MCMC-style "thinking" steps). The project asks two questions:
 
-Energy-Based Transformers (EBTs) are a new approach enabling **generalizable** reasoning/System 2 Thinking on any problem/modality. We demonstrate the scalability of EBTs by becoming the first approach to **outscale** feed-forward Transformers across modalities and with respect to several axes including data, depth, parameters, FLOPs, etc. EBTs can think over every single prediction being made (i.e. every token in language modeling) and tend to **generalize better** than existing models.
+1. **Can an EBT model music?** Tonic is a small EBT trained on the [GigaMIDI](https://huggingface.co/datasets/Metacreation/GigaMIDI) corpus. We compare it with autoregressive Llama and GPT-2 baselines trained on the same data and step budget.
+2. **Does the energy view help with control?** At generation time, Tonic steers musical attributes (loudness, note length, pitch register, …) by adding the gradient of a small learned attribute regressor to its prediction ([R³](https://arxiv.org/abs/2302.11552)-style guidance). We compare this with plug-and-play guidance for the AR baselines: PPLM, exponential tilting, and best-of-N.
 
+Everything runs with two tokenizations:
+- **REMI** (via [MidiTok](https://github.com/Natooz/MidiTok)): a flat stream of bar, position, pitch, velocity and duration tokens.
+- **Anticipation**, arrival-time variant ([Thickstun et al.](https://github.com/jthickstun/anticipation), our fork is a git submodule): (time, duration, note) triplets.
 
+## Highlights
+
+- **Unguided quality.** All models get close to the real-data reference on REMI. Tonic scores slightly lowest. Its typical failure is safe, repetitive music, not cacophony. → [findings](docs/thesis_findings/2026-10-06_unguided_music_quality.md)
+- **Attribute control.** On REMI, Tonic's guidance is statistically tied with Llama + PPLM. On Anticipation, PPLM and best-of-N come out ahead. Tonic's guidance only works in a narrow strength (λ) window, and pushing harder flattens the music into cacophony. → [findings](docs/thesis_findings/2026-11-05_heldout_guidance.md)
+- **Demos.** The [Tonic front page](https://rebeccaceccatelli.github.io/tonic/), a static [showcase](https://rebeccaceccatelli.github.io/music_EBT/) of curated clips, a blind listening survey, and an interactive Gradio app (*Tonic · Interactive Demo*). The app puts Tonic, Llama and GPT-2 side by side, with live attribute control.
+
+For how guidance works in detail (gating, λ, targets), see [docs/attribute_control_mechanism.md](docs/attribute_control_mechanism.md).
+
+## Repository at a glance
+
+| Path | What's there |
+|---|---|
+| `train_model.py`, `base_model_trainer.py` | Entry point and PyTorch Lightning trainer, shared by every model and modality |
+| `model/mus/` | Music models: `ebt_symbolic.py` (Tonic), `baseline_llama_transformer.py`, `baseline_hf_gpt2_transformer.py` |
+| `data/mus/symbolic/` | GigaMIDI / custom dataloaders, REMI + Anticipation tokenizers |
+| `inference/mus/` | Generation for all models (incl. guided), tokens → MIDI → WAV / piano roll |
+| `attribute_control/` | Attribute definitions, regressor training, guidance sweeps (EBT and AR baselines), composition of attributes |
+| `eval/` | Music-quality metrics, loss comparisons, significance tests, plots |
+| `demo/` | Gradio app, static showcase site, listening survey, clip library |
+| `job_scripts/mus/` | SLURM scripts for tokenization, pretraining, inference, evaluation, demo builds |
+| `docs/` | Status, daily diary, findings, training-run reference, mechanism notes |
+
+A file-by-file overview is in **[docs/CODE_STRUCTURE.md](docs/CODE_STRUCTURE.md)**.
 
 ## Setup
 
-To set up the environment using Conda (recommended):
-```
-conda create -n ebt python=3.12
-conda activate ebt
-pip install -r requirements.txt
-```
-
-<details>
-<summary>Help! I'm having issues installing the requirements</summary>
-
-If there are issues with PyTorch or any other packages you may also use the `gh200_requirements.txt` or `loose_requirements.txt` for requirements for GH200s and without nvidia, pytorch, and triton packages respectively. You can also create a conda environment using the `environment.yml`.
-
-</details>
-
-
-You may want to set the $HF_HOME env variable so that your data/models cache to a desired directory and posssibly the $HF_TOKEN env variable for authenticating with HF:
-
-```
-export HF_HOME=/path/to/cache                                                              
-export HF_TOKEN=your_token_here
+```bash
+git clone --recursive https://github.com/RebeccaCeccatelli/music_EBT.git
+cd music_EBT
+conda create -n music_EBT python=3.12 && conda activate music_EBT
+bash setup_env.sh        # syncs the anticipation submodule, installs requirements, checks the environment
 ```
 
-[Login](https://docs.wandb.ai/ref/cli/wandb-login) to wandb using `wandb login` inside of that environment.
+`setup_env.sh` puts large datasets under `REMOTE_DATA_STORAGE` (edit it at the top of the script, or set it to `""` to keep data in the repo). It also adds `data/mus/symbolic` to `PYTHONPATH`. Log in to wandb with `wandb login`. You can set `HF_HOME` / `HF_TOKEN` if needed.
 
+> The job scripts target the MIT ORCD cluster: SLURM partitions `mit_normal_gpu` / `mit_preemptable`, L40S GPUs, and data paths under `~/orcd/pool`. Adapt the `#SBATCH` headers and paths to your machine.
 
-For the video dataset setup please see the README at [/data/vid/](/data/vid/README.md) for dataset installation and FFPROBE installation; similarly for video inference setup please see the README at [/inference/vid/](/inference/vid/README.md).
+## Usage
 
- 
+All commands run from the project root. Each script lists its own options at the top.
 
-## Running Code
-
-Start by running a job script. There are two ways to do this:
-
-##### Running a bash script directly (quick start):
-
-```
-bash job_scripts/nlp/pretrain/ebt_s1.sh
+**1. Tokenize the data**
+```bash
+sbatch job_scripts/mus/tokenization/gigaMIDI.sh REMI           # or: anticipation
 ```
 
-##### Running a bash script using slurm executor (recommended on HPC if slurm is installed):
-
+**2. Pretrain**
+```bash
+sbatch job_scripts/mus/pretrain/ebt_s1.sh                       # Tonic, System-1 EBT (REMI by default; --tokenizer_type to change)
+sbatch job_scripts/mus/pretrain/baseline_llama_transformer.sh   # AR baselines
+sbatch job_scripts/mus/pretrain/baseline_hf_gpt2_transformer.sh
 ```
-bash slurm_executor.sh reference_a100 job_scripts/nlp/pretrain/ebt_s1.sh
+The pretraining scripts resume from the latest compatible checkpoint and resubmit themselves when they hit the wall-clock limit. Hyperparameters of every run used in the thesis are in [docs/training_runs.md](docs/training_runs.md).
+
+**3. Generate**
+```bash
+CHECKPOINT=/path/to/ebt.ckpt sbatch job_scripts/mus/inference/ebt.sh --num_samples 10
+sbatch job_scripts/mus/inference/baseline_llama_transformer.sh
 ```
+These write MIDI and WAV. `inference/mus/` also has converters to piano rolls.
 
-- This method has a mandatory param (in this case `reference_a100`) which tells slurm_executor.sh how to build the slurm script (**Note**, *you need to tailor this and set the corresponding script according to your cluster.*). The available parameters are currently "reference_a100" (for your reference :). 
-- You can also just add a slurm header to the existing bash scripts and execute scripts using sbatch, which is more standard, but this `slurm_executor.sh` is super helpful for keeping code modular
-  - To add an HPC config type for slurm_executor.sh please see the reference script [job_scripts/slurm_headers/reference_a100.slurm](job_scripts/slurm_headers/reference_a100.slurm) and add the script name to [slurm_executor.sh](./slurm_executor.sh)
-
-The key parameters in these job scripts are *the RUN_NAME, MODEL_NAME, and MODEL_SIZE*. Make sure to ctrl/cmd d (edit 3 things at once) when changing these to change the log names as well in addition to the RUN_NAME. The model size *magically* automatically sets the numbers of layers, attention heads, embed dim, etc. :) Also make sure you set the wandb run information properly (entity and project).
-
-If you want to do multinode, you may need to set `ntasks = ngpus` and run the code using `srun python filename.py` (see the [job_scripts/nlp/pretrain/ebt_s1_mn.sh](job_scripts/nlp/pretrain/ebt_s1_mn.sh) file. Note that very little multinode training was used for this paper, hence the lack of exploration of multinode code in the codebase. *You may also need to disable GPU binding in slurm headers (i.e. dont have `#SBATCH --gpu-bind=verbose,closest`)*, more on that [here](https://lightning.ai/docs/pytorch/stable/clouds/cluster_advanced.html).
-
-##### Run example minimalistic training loop for Transformer++ vs EBT language models (NOTE this doesn't reproduce paper results)
-
-```
-python example_code/minimal_nlp_training_loop.py
-```
-
-### Energy-Based Transformers Pretraining
-The pretraining scripts are located under the specific modality desired (i.e. NLP, IMG) in the `job_scripts` dir. For example, the NLP pretraining script in [job_scripts/nlp/pretrain/ebt_s1.sh](job_scripts/nlp/pretrain/ebt_s1.sh) is the System 1 EBT used for many experiments in the paper.
-  - There are several similar scripts for System 2 EBTs and for other modalities in the  `job_scripts` folder, that can all be run in the same manner described above (with bash directly or slurm).
-  - If you are training your own EBT, I recommend starting with these System 1 hyperparameters for the respective modality and then tweaking them from there.
-
-
-### Energy-Based Transformers Inference
-
-The inference scripts are located under the specific modality desired and under the inference subdirectory. For example, the NLP inference script for EBTs in [job_scripts/nlp/inference/ebt.sh](job_scripts/nlp/inference/ebt.sh) is useful. The biggest difference between pretraining and inference is the use of a pretrained checkpoint with `--only_test_model_ckpt`, `--only_test` for telling the trained to not train and just test, as well as `--execution_mode "inference"` which controls the "mode" of the training loop. Everything else is relatively standard and can be used to do more complex inference procedures, such as EBT System 2 Thinking with self-verification (`infer_generated_samples` and `infer_ebt_advanced`)
-  - If you are looking for more fine-grained control over these it's possible to use `--only_test` without using `--execution_mode "inference"` (for example if all you want to do is calculate the perplexity of language models). You can see more on this in the `test_step` of `base_model_trainer.py` as well as in `train_model.py`
-  - Most of the other hparams in the script dont matter as they will be inherited from the trained ckpt (this logic is in `train_model.py`).
-  - If you are using these inference scripts make sure to fill in the `your/model/ckpt` as an actual .ckpt file!
-
-
-## General Code Flow
-
-- The executed job script will send all the hparams to `train_model.py`. `train_model.py` will do things like set up distributed training, determine the number of GPUs, determine model config/size, and alter the behavior based off the specified hparams/args.
-- `train_model.py` will usually call `base_model_trainer.py`---this is the pytorch lightning trainer that is responsible for all training loop behavior, validation behavior, testing, dataset setup, logging, creating the optimizer and lr scheduler, etc. Feel free to check it out.
-  - The most important lines in base_model_trainer.py are the `eval_step` function as well as the instantiation of `self.model`.
-  - This file is also where the datasets are instantiated, particularly the `setup` function.
-- After the instantiation of `self.model`, different models will be created. Some examples of these can be seen in `model/nlp`. These are also pytorch lightning modules, that way lightning handles all the gpu calls, distributed things, etc.
-- After this, `train_model.py` will do something such as call `trainer.fit()` which will actually start training!
-- Generally, you should need to change little code in train_model.py and base_model_trainer.py, aside from maybe adding some new args, models, metrics, and datasets. The biggest changes usually need to be made when adding new models and their architectures
-- If all you want is to get the model code and put it in your own training loop, just refer to the `model/` directory which has the model architectures, model forward/loss calculations, and other miscellaneous utils that models use.
-- For more details on the code please reference [CODE_INFO.md](./CODE_INFO.md).
-
-
-## Repo Structure
-
-```
-┌── abbreviations.md                  # has various abbreviations used in the repo
-├── base_model_trainer.py             # 2nd most important file, contains PL training loop
-├── CODE_INFO.md                      # some extra information on coding
-├── data
-│   ├── img                           # various image datasets
-│   ├── nlp                           # various NLP datasets
-│   └── vid                           # various video datasets
-├── example_code
-│   └── minimal_nlp_training_loop.py  # minimal training loop for language modeling
-├── inference
-│   ├── img                           # inference code for images
-│   ├── nlp                           # inference code for NLP
-│   └── vid                           # inference code for video
-├── job_scripts # all the bash/slurm scripts for training/running jobs
-├── model
-│   ├── ar_ebt_adaln.py               # code for autoregressive EBT with adaptive layer norm, based on llama2
-│   ├── ar_ebt_default.py             # code for autoregressive EBT default, based on llama2
-│   ├── ar_ebt_time_embed.py          # code for autoregressive EBT with time embedding, based on llama2
-│   ├── ar_transformer.py             # baseline Transformer++ from llama2
-│   ├── bi_ebt_adaln.py               # bidirectional EBT with adaptive layer norm, based on DiT
-│   ├── diffusion                     # folder from diffusion repo
-│   ├── diffusion_transformer.py      # code from DiT repo
-│   ├── img                           # models for image denoising, generation, etc
-│   ├── model_utils.py                # useful code that several models share
-│   ├── nlp                           # nlp model implementations
-│   ├── replay_buffer.py              # causal replay buffer, only used by System 2 EBTs
-│   └── vid                           # video model implementations
-├── optimization.py                   # some additional optimization code, LR scheduler, etc
-├── slurm_executor.sh                 # helper code for executing slurm scripts
-├── train_model.py                    # most important file, argparses and sets up PL trainer, distributed, etc
-└── utils                             # various utilization files
+**4. Attribute control**
+```bash
+sbatch job_scripts/mus/attr_control/train_density.sh            # train an attribute regressor on the model's embeddings
+sbatch job_scripts/mus/attr_control/ar_guidance_sweep.sh        # PPLM / tilt / best-of-N on the AR baselines
+sbatch job_scripts/mus/attr_control/compose_guidance_sweep.sh   # several attributes at once
 ```
 
+**5. Evaluate**: scripts in `job_scripts/mus/eval/`, for example `music_quality_generate.sh`, `context_matched_loss.sh` and `unguided_quality_ci.sh`.
 
-A more thorough structure tree of every file is also in [CODE_INFO.md](./CODE_INFO.md).
+**6. Demo**
+```bash
+bash demo/launch_demo.sh            # Gradio app on a GPU node (SSH tunnel); --share for a public link
+```
+How to build the showcase and the survey is described in [demo/showcase/README.md](demo/showcase/README.md) and [demo/survey/README.md](demo/survey/README.md).
 
-## Additional Resources
-- [JVP Flash Attention Implementation](https://github.com/amorehead/jvp_flash_attention), enabling flash attention with 2nd order derivatives (HVPs)
-- [EBT-Policy](https://energy-based-transformers.github.io/ebt-policy/), using EBTs for policies, enabling real-world robotic reasoning
+## Documentation
 
-## Citation
+- [docs/STATUS.md](docs/STATUS.md): current state, final checkpoints, open TODOs
+- [docs/diary/](docs/diary/README.md): day-by-day log of what was done and why
+- [docs/thesis_findings/](docs/thesis_findings/README.md): self-contained, citable results
+- [docs/training_runs.md](docs/training_runs.md): exact settings of every trained model
+- [docs/attribute_control_mechanism.md](docs/attribute_control_mechanism.md): how guidance works
+- [docs/CODE_INFO.md](docs/CODE_INFO.md): notes on the training framework, inherited from upstream EBT
 
-If you find this repository useful, please consider giving a star ⭐ and citation 🙃:
+## Acknowledgements
+
+This repository is a fork of the official **Energy-Based Transformers** code by Alexi Gladstone et al. ([paper](https://arxiv.org/abs/2507.02092), [code](https://github.com/alexiglad/EBT)). The general training framework comes from that codebase, as do the NLP / image / video models that are still in the repo (`model/{nlp,img,vid}`, `data/{nlp,img,vid}`). Tonic itself was added here: the music modality, tokenization, attribute control, evaluation and demos. Anticipation tokenization builds on [jthickstun/anticipation](https://github.com/jthickstun/anticipation). Guidance builds on Du et al., *Reduce, Reuse, Recycle* (2023) and Dathathri et al., *PPLM* (2020).
 
 ```bibtex
 @misc{gladstone2025energybasedtransformersscalablelearners,
-  title={Energy-Based Transformers are Scalable Learners and Thinkers}, 
+  title={Energy-Based Transformers are Scalable Learners and Thinkers},
   author={Alexi Gladstone and Ganesh Nanduru and Md Mofijul Islam and Peixuan Han and Hyeonjeong Ha and Aman Chadha and Yilun Du and Heng Ji and Jundong Li and Tariq Iqbal},
   year={2025},
   eprint={2507.02092},
   archivePrefix={arXiv},
   primaryClass={cs.LG},
-  url={https://arxiv.org/abs/2507.02092}, 
+  url={https://arxiv.org/abs/2507.02092},
 }
 ```
 
-## Contact
-
-If you have questions feel free to post them on github issues, hugging face daily papers, or email me ([alexigladstone@gmail.com](mailto:alexigladstone@gmail.com)). Thank-you so much and hope you enjoy!
+See [LICENSE](LICENSE).
