@@ -254,23 +254,23 @@
       h("h2", "s-title", "A tool for musicians to work with, not a replacement"),
       h("div", "r-personal",
         "<p>I have been a musician all my life, and many of my friends make their living from music. I know how much effort, love and passion go into it.</p>" +
-        "<p>So this work is not meant to replace musicians and artists. It is about giving them better tools.</p>"),
+        "<p>This work is <b>not</b> meant to replace musicians and artists. It is about giving them better tools.</p>"),
       h("div", "r-blocks",
-        '<div class="r-block"><span class="r-num">01</span><h3>The problem</h3>' +
-        '<p>Most models that generate music today work like a black box: you get a result, but have little say in how it turns out, ' +
-        'and little idea of why it came out that way.</p></div>' +
-        '<div class="r-block"><span class="r-num">02</span><h3>What this thesis does</h3>' +
-        '<p>It looks at how to give the person using the model more control, and a clearer view of what the model is doing. ' +
-        'You can ask it for:</p>' +
+        '<div class="r-block"><span class="r-num">01</span><h3>What this thesis does</h3>' +
+        '<p>Most models that generate music today work like a black box: you get a result, but little say in how it turns out. ' +
+        'This thesis looks at how to give the person using the model more control, and a clearer view of what it is doing. You can ask it for</p>' +
         '<div class="r-chips"><span>softer or louder playing</span><span>longer or shorter notes</span><span>a higher or lower register</span></div>' +
         '<p>and hear how it responds.</p></div>' +
-        '<div class="r-block"><span class="r-num">03</span><h3>Where it could lead</h3>' +
+        '<div class="r-block"><span class="r-num">02</span><h3>Where it could lead</h3>' +
         '<p>Decades ago, musicians took up synthesizers and electronic instruments and made them their own. I see this work as a small step in the same ' +
         'direction: models as instruments for shaping your own ideas, and one day perhaps for <i>painting</i> music with them, ' +
         'interacting live, almost jamming together.</p></div>'),
       h("div", "r-data",
         '<span class="v-ico" aria-hidden="true">🎼</span><div><b>Trained on open data</b>' +
         '<p>All the music used to train these models comes from <a href="https://huggingface.co/datasets/Metacreation/GigaMIDI" target="_blank" rel="noopener">GigaMIDI</a>, an open-source collection of MIDI files that is publicly and legally available online.</p></div>'),
+      h("div", "r-thanks",
+        "<p>Thank you for taking the time to listen. Your answers really help.</p>" +
+        '<p class="r-sign" aria-label="Rebecca">Rebecca</p>'),
     );
     s.append(nav("Continue", goto("how"), "welcome").row);
     screen(s);

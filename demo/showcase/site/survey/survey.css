@@ -114,6 +114,11 @@
 .r-personal p { margin: 0; font-size: 16.5px; line-height: 1.6; color: var(--text); }
 .r-personal p + p { margin-top: 8px; color: var(--muted); }
 .r-data a { color: var(--accent-2); }
+.r-personal b { color: var(--text); }
+.r-thanks { margin: 22px 0 0; text-align: right; }
+.r-thanks p { margin: 0; color: var(--muted); font-size: 15px; }
+.r-sign { margin-top: 2px !important; font: 600 40px/1.1 "Caveat", "Segoe Script", "Bradley Hand", cursive !important;
+  color: #c4b5fd !important; transform: rotate(-3deg); transform-origin: right center; display: inline-block; }
 .r-blocks { display: grid; gap: 12px; margin: 8px 0 0; }
 .r-block { position: relative; padding: 18px 20px 18px 64px; border-radius: 16px; background: rgba(255,255,255,.03); border: 1px solid var(--border); }
 .r-num { position: absolute; left: 20px; top: 19px; font: 600 13px var(--mono); color: var(--accent-2); }

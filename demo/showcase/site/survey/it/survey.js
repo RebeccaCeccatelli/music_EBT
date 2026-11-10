@@ -275,22 +275,23 @@
       h("h2", "s-title", "Uno strumento al servizio dei musicisti, non un sostituto"),
       h("div", "r-personal",
         "<p>Sono musicista da tutta la vita, e molti miei amici vivono di musica. So quanto impegno, amore e passione ci siano dietro.</p>" +
-        "<p>Per questo, questo lavoro non vuole sostituire musicisti e artisti: vuole dare loro strumenti migliori.</p>"),
+        "<p>Questo lavoro <b>non</b> vuole sostituire musicisti e artisti: vuole dare loro strumenti migliori.</p>"),
       h("div", "r-blocks",
-        '<div class="r-block"><span class="r-num">01</span><h3>Il problema</h3>' +
+        '<div class="r-block"><span class="r-num">01</span><h3>Cosa fa questa tesi</h3>' +
         '<p>Oggi la maggior parte dei modelli che generano musica funziona come una scatola chiusa: si ottiene un risultato, ma si può decidere ' +
-        'ben poco di come viene fuori, e si capisce poco del perché.</p></div>' +
-        '<div class="r-block"><span class="r-num">02</span><h3>Cosa fa questa tesi</h3>' +
-        '<p>Studia come dare più controllo a chi usa il modello, e capire meglio cosa sta facendo. Gli si può chiedere:</p>' +
+        'ben poco di come viene fuori. Questa tesi studia come dare più controllo a chi usa il modello, e capire meglio cosa sta facendo. Gli si può chiedere</p>' +
         '<div class="r-chips"><span>un suono più piano o più forte</span><span>note più lunghe o più corte</span><span>un registro più acuto o più grave</span></div>' +
         '<p>e ascoltare come risponde.</p></div>' +
-        '<div class="r-block"><span class="r-num">03</span><h3>Dove potrebbe portare</h3>' +
+        '<div class="r-block"><span class="r-num">02</span><h3>Dove potrebbe portare</h3>' +
         '<p>Decenni fa i musicisti hanno fatto propri i sintetizzatori e gli strumenti elettronici. Vedo questo lavoro come un piccolo passo nella stessa ' +
         'direzione: modelli come strumenti per dare forma alle proprie idee e, un giorno, magari per <i>dipingere</i> la musica, ' +
         'interagendo con loro dal vivo, quasi come in una jam session.</p></div>'),
       h("div", "r-data",
         '<span class="v-ico" aria-hidden="true">🎼</span><div><b>Addestrati su dati aperti</b>' +
         '<p>Tutta la musica usata per addestrare questi modelli proviene da <a href="https://huggingface.co/datasets/Metacreation/GigaMIDI" target="_blank" rel="noopener">GigaMIDI</a>, una raccolta open source di file MIDI disponibile pubblicamente e legalmente su internet.</p></div>'),
+      h("div", "r-thanks",
+        "<p>Grazie per il tempo che dedicherai all'ascolto: le tue risposte mi aiutano davvero.</p>" +
+        '<p class="r-sign" aria-label="Rebecca">Rebecca</p>'),
     );
     s.append(nav("Continua", goto("how"), "welcome").row);
     screen(s);
