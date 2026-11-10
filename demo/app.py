@@ -2458,6 +2458,10 @@ body, gradio-app {
     background: linear-gradient(90deg, rgba(139,92,246,0.9), rgba(124,58,237,0.9)) !important; color: #fff !important;
     box-shadow: 0 6px 20px -8px rgba(139,92,246,0.8) !important; }
 
+/* Gradio wraps inputs in a grey .form box; the toggle and the checkboxes sit on the page/card instead. */
+.gradio-container .form:has(> .seg-toggle), .gradio-container .form:has(> .pick-toggle) {
+    background: transparent !important; border: 0 !important; box-shadow: none !important; }
+.seg-toggle { padding-top: 2px !important; }
 /* Model cards: name + role, a toggle, compact stat chips; dimmed when left out. */
 .pick-card { gap: 10px !important; padding: 18px !important; transition: border-color .2s, opacity .2s; }
 .pick-card:has(.pick-toggle input:checked) { border-color: rgba(139,124,255,0.45) !important; }
@@ -2494,7 +2498,15 @@ body, gradio-app {
 .preview-status:not(:empty) { padding: 10px 12px !important; border-radius: 12px !important;
     background: rgba(139,124,255,0.08) !important; border: 1px solid rgba(139,124,255,0.25) !important; }
 .gen-cta { justify-content: center; margin-top: 10px !important; }
-.gen-cta button { max-width: 420px; }
+.gradio-container .gen-cta button { min-width: 0 !important; width: 100%; max-width: 420px; }
+/* The full-song group: one quiet card, the note under the waveform on the same surface. */
+.gradio-container .gr-group:has(.hint-wrap) { background: rgba(255,255,255,0.035) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important; border-radius: 20px !important; overflow: hidden; }
+.gradio-container .gr-group:has(.hint-wrap) > * { background: transparent !important; }
+/* Without this the full-song waveform, once loaded, sized itself to the 1180px column on a phone. */
+.gradio-container .gr-group:has(.hint-wrap) { contain: inline-size; width: 100%; }
+.gradio-container .hint-wrap { padding: 4px 14px 14px !important; }
+.seg-toggle > span, .seg-toggle [data-testid="block-info"] { padding-left: 2px !important; }
 """
 
 
@@ -2756,7 +2768,7 @@ def build_ui():
         # gr.Group, both work fine). So the component itself stays
         # permanently visible=True, and the group around it is what actually
         # hides/shows the section.
-        with gr.Group(visible=False, elem_classes="prompt-card") as full_song_group:
+        with gr.Group(visible=False) as full_song_group:  # no padded card: the waveform resizes itself wider inside one
             full_song_audio = ClickAudio(
                 label="Full song: click the waveform where the prompt should start",
                 type="filepath", interactive=False, visible=True,
