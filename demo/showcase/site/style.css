@@ -60,6 +60,7 @@ a:hover { text-decoration: underline; }
 .byline > * + *::before { content: "·"; margin: 0 10px; color: var(--faint); }
 .byline span:first-child { color: var(--muted); font-weight: 550; }
 .byline a { color: var(--accent-2); }
+.note-slot { margin: 14px 0 0; }
 @media (max-width: 480px) { .byline { font-size: 13px; } .byline > * + *::before { margin: 0 7px; } }
 .toc { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 32px; }
 .toc a {

@@ -30,6 +30,8 @@ ZIP = Path.home() / "transfer/archive.zip"
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "icons"))
 from make_icons import head_tags  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "author_note"))
+from sync import BLOCK as AUTHOR_NOTE  # noqa: E402  "A note from the author" (hub trigger: data-author-note)
 ICON_TAGS = head_tags("archive")  # browser-tab icon (a record), inlined so every sub-page can use it
 SKELETON_HEAD = ('<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,'
                  'initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;'
@@ -107,7 +109,7 @@ def main():
     for a, b in HUB_LINKS.items():
         hub = rep(hub, f'href="{a}"', f'href="{b}"')
     assert "claude.ai" not in hub
-    (OUT / "index.html").write_text(SKELETON_HEAD + hub.strip() + SKELETON_TAIL)
+    (OUT / "index.html").write_text(SKELETON_HEAD + hub.strip() + "\n" + AUTHOR_NOTE + SKELETON_TAIL)
 
     total = 0
     for name, (src, mp3, kind) in PAGES.items():

@@ -108,6 +108,8 @@
 }
 .steps3 span { font-weight: 650; }
 .steps3 small { color: var(--faint); font-size: 13px; }
+/* The author-note pill under each screen. */
+.survey > .note-pill { display: flex; width: fit-content; margin: 22px auto 0; }
 /* "About this research" page. */
 .research .lede { max-width: 62ch; }
 .r-personal { margin: 0 0 18px; padding: 4px 0 4px 18px; border-left: 3px solid var(--accent); max-width: 66ch; }

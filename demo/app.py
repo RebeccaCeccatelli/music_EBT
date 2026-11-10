@@ -901,7 +901,7 @@ def _get_full_song_render(tokenizer_type: str, song_choice: str) -> tuple[str, f
 
     if not wav_path.exists():
         return None
-    _write_roll(wav_path, midi_path)  # piano roll under the full-song player (no prompt shading)
+    _write_roll(wav_path, midi_path, trim=False)  # roll under the full-song player; untrimmed: its timeline picks the start
     result = (str(wav_path), _wav_duration_seconds(str(wav_path)))
     _full_song_render_cache[cache_key] = result
     return result
@@ -1370,7 +1370,33 @@ def _note_list(midi_path) -> list[tuple]:
                    1 if t.is_drum else 0) for t in score.tracks for n in t.notes)
 
 
-def _write_roll(wav_path, midi_path, prompt_midi=None, prompt_only: bool = False) -> None:
+_TRIM_RELEASE_S = 0.35   # kept after the last note ends (release/decay)
+_TRIM_FADE_S = 0.03      # fade-out at the new end so the cut doesn't click
+
+
+def _trim_wav(wav_path, start_s: float, end_s: float) -> None:
+    """Cut a WAV in place to [start_s, end_s] (clamped), with a short fade-out."""
+    import wave
+    import numpy as np
+    with wave.open(str(wav_path), "rb") as w:
+        params, sr, n = w.getparams(), w.getframerate(), w.getnframes()
+        frames = w.readframes(n)
+    a = max(0, int(start_s * sr)); b = min(n, int(end_s * sr))
+    if b - a < sr // 10 or (a == 0 and b >= n):
+        return  # nothing worth cutting (or a degenerate range): leave the file alone
+    width = params.sampwidth * params.nchannels
+    chunk = frames[a * width:b * width]
+    if params.sampwidth == 2:
+        x = np.frombuffer(chunk, dtype="<i2").reshape(-1, params.nchannels).astype(np.float32)
+        k = min(len(x), int(_TRIM_FADE_S * sr))
+        if k > 0:
+            x[-k:] *= np.linspace(1.0, 0.0, k, dtype=np.float32)[:, None]
+        chunk = x.astype("<i2").tobytes()
+    with wave.open(str(wav_path), "wb") as w:
+        w.setparams(params); w.writeframes(chunk)
+
+
+def _write_roll(wav_path, midi_path, prompt_midi=None, prompt_only: bool = False, trim: bool = True) -> None:
     """Piano-roll data for one rendered clip, drawn under its audio player by
     _ROLL_HEAD in the showcase's style (shaded prompt, violet continuation,
     drum strip, playhead).
@@ -1379,11 +1405,21 @@ def _write_roll(wav_path, midi_path, prompt_midi=None, prompt_only: bool = False
     <upload folder>/<hash_file(wav)>/, so the JSON goes into that same folder
     as roll.json: the page script finds it from the player's download link.
     prompt_end follows the showcase (build_showcase.split_prompt): the first
-    onset that is not in the prompt. Never raises: a missing roll must not
-    cost the audio."""
+    onset that is not in the prompt.
+
+    trim: cut the WAV's silent tail (last note end + _TRIM_RELEASE_S), and for
+    prompt-only clips its leading rest too, so the roll isn't half empty. It
+    happens before hashing, so the roll matches the file the player gets.
+    Off for the full-song render, whose timeline picks the prompt start.
+    Never raises: a missing roll must not cost the audio."""
     try:
         from gradio import processing_utils, utils as gr_utils
         notes = _note_list(midi_path)
+        if trim and notes:
+            lead = min(n[0] for n in notes) if prompt_only else 0.0
+            _trim_wav(wav_path, lead, max(n[0] + n[1] for n in notes) + _TRIM_RELEASE_S)
+            if lead > 0:
+                notes = [(round(t - lead, 3), d, p, v, dr) for t, d, p, v, dr in notes]
         prompt_end = 0.0  # prompt_only clips: drawn like a continuation (purple, no shading)
         if prompt_midi is not None and not prompt_only:
             prompt = _note_list(prompt_midi)
@@ -2412,6 +2448,7 @@ body, gradio-app {
 .app-byline > * + *::before { content: "·"; margin: 0 10px; color: #6b7186; }
 .app-byline span:first-child { color: #9298ab; font-weight: 550; }
 .app-byline a { color: #3fd0c9 !important; text-decoration: none; }
+.app-note { display: flex; justify-content: center; margin: 12px 0 0 !important; }
 @media (max-width: 480px) { .app-byline { font-size: 13px; } .app-byline > * + *::before { margin: 0 7px; } }
 .app-subtitle a:hover { text-decoration: underline; }
 
@@ -2525,6 +2562,11 @@ body, gradio-app {
 # DOM), so HTMLMediaElement.play is wrapped to learn which element belongs to
 # the player that was last clicked. Gradio strips <script> from gr.HTML, so
 # this goes in via launch(head=...).
+# "A note from the author" (demo/author_note/author-note.js, shared with the other sites): a pill under the
+# byline that opens the note in a dialog. The pill is the data-author-note button in the hero.
+_AUTHOR_NOTE_HEAD = ("<script>" + (Path(__file__).resolve().parent / "author_note" / "author-note.js").read_text()
+                     + "</script>")
+
 _ROLL_HEAD = r"""
 <script>
 (() => {
@@ -2718,6 +2760,7 @@ def build_ui():
             # Author line, as on the showcase: links back to the Tonic front page.
             gr.HTML('<p class="app-byline"><span>Rebecca Ceccatelli</span><span>MIT × ETH Zürich</span>'
                     '<a href="https://rebeccaceccatelli.github.io/tonic/" target="_blank">← Tonic</a></p>')
+            gr.HTML('<p class="app-note"><button type="button" data-author-note></button></p>')
 
         gr.Markdown('## <span class="kicker">01</span>Choose format and models', elem_classes="section-title")
         gr.Markdown(
@@ -3518,6 +3561,6 @@ if __name__ == "__main__":
     # "the gauge shows but there's no audio," intermittently, across every
     # section of the demo, exactly matching this failure mode.
     app.launch(server_name="0.0.0.0", server_port=args.port, share=args.share,
-               theme=_THEME, css=_CSS, head=_ROLL_HEAD, allowed_paths=[tempfile.gettempdir()],
+               theme=_THEME, css=_CSS, head=_ROLL_HEAD + _AUTHOR_NOTE_HEAD, allowed_paths=[tempfile.gettempdir()],
                # Tab icon: the sax from demo/icons/make_icons.py ("demo").
                favicon_path=str(Path(__file__).resolve().parent / "icons" / "demo.png"))

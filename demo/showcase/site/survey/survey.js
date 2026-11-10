@@ -184,7 +184,7 @@
     app.innerHTML = "";
     app.append(...nodes);
     // Progress is kept across reloads; this discards it and starts a new participant.
-    if (state.step !== "welcome" && state.step !== "done") {
+    if (!["research", "welcome", "done"].includes(state.step)) {
       const again = h("button", "restart", "Start over");
       again.addEventListener("click", () => {
         if (!confirm("Start the survey again from the beginning? Your answers so far will be deleted.")) return;
@@ -192,6 +192,13 @@
         location.reload();
       });
       app.append(again);
+    }
+    // "A note from the author" (demo/author_note): on every screen but the note's own page.
+    if (state.step !== "research") {
+      const note = h("button", "note-pill");
+      note.type = "button";
+      note.setAttribute("data-author-note", "");
+      app.append(note);
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -208,7 +215,7 @@
   }
 
   // Onboarding: welcome -> how it works -> privacy & consent -> about you.
-  const ONBOARD = ["welcome", "research", "how", "consent", "about"];
+  const ONBOARD = ["research", "welcome", "how", "consent", "about"];
   function dots(step) {
     const d = h("div", "dots");
     ONBOARD.forEach((x, i) => d.append(h("span", i <= ONBOARD.indexOf(step) ? "on" : "")));
@@ -241,7 +248,7 @@
         '<div><b>3</b><span>Choose</span><small>click what fits best, or skip</small></div>'),
     );
     if (CFG.contact) s.append(h("p", "hint contact", `Questions about the study? Write to <a href="mailto:${CFG.contact}">${CFG.contact}</a>`));
-    s.append(nav("Let's go", goto("research")).row);
+    s.append(nav("Let's go", goto("how"), "research").row);
     screen(s);
   }
 
@@ -272,7 +279,7 @@
         "<p>Thank you for taking the time to listen. Your answers really help.</p>" +
         '<p class="r-sign" aria-label="Rebecca">Rebecca</p>'),
     );
-    s.append(nav("Continue", goto("how"), "welcome").row);
+    s.append(nav("Continue", goto("welcome")).row);
     screen(s);
   }
 
@@ -289,7 +296,7 @@
     );
     const ex = state.exampleClip && survey.clips[state.exampleClip] ? state.exampleClip : null;
     if (ex) s.append(row("sgrid one", clipCard(ex, "Example")));
-    s.append(nav("Got it", goto("consent"), "research").row);
+    s.append(nav("Got it", goto("consent"), "welcome").row);
     screen(s);
   }
 
@@ -648,7 +655,7 @@
       state = saved;
     } else {
       const id = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)).slice(0, 13);
-      state = { id, version: s.version, started: new Date().toISOString(), step: "welcome",
+      state = { id, version: s.version, started: new Date().toISOString(), step: "research",
                 background: {}, plan: makePlan(s, id), part: 0, trial: -1, responses: [] };
       const used = new Set(state.plan[0].trials.filter((t) => t.kind === "unguided").map((t) => t.pool_index));
       const spare = s.pool.unguided.findIndex((_, i) => !used.has(i));
