@@ -16,7 +16,7 @@ if [[ -n "$SLURM_JOB_ID" ]]; then
     cd "$PROJECT_ROOT" || { echo "❌ Cannot cd to $PROJECT_ROOT"; exit 1; }
 
     export PYTHONPATH="${PROJECT_ROOT}:${PROJECT_ROOT}/data/mus/symbolic:$PYTHONPATH"
-    export PATH="${HOME}/.conda/envs/music_EBT/bin:${PATH}"
+    export PATH="${HOME}/.conda/envs/music_EBT_demo/bin:${PATH}"  # Gradio 6.28 env (audio-teardown fix), see diary 2026-09-24
     export PYTHONUNBUFFERED=1
 
     PORT=7860
@@ -81,6 +81,6 @@ SCRIPT="$(realpath "$0")"
 export EBT_PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "Requesting GPU node (partition: mit_normal_gpu)…"
-srun --gpus=1 --mem=40GB --time=3:00:00 \
+srun --gpus=l40s:1 --mem=40GB --time=3:00:00 \
      --partition=mit_normal_gpu --account=mit_general \
      bash "${SCRIPT}"
