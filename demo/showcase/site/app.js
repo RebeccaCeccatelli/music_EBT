@@ -673,7 +673,7 @@
   function render(data) {
     const m = data.meta;
     document.getElementById("title").textContent = m.title;
-    document.getElementById("subtitle").textContent = m.subtitle;
+    document.getElementById("subtitle").innerHTML = m.subtitle;  // author-written markup: bold names, trait tags
     document.getElementById("disclaimer").textContent = m.disclaimer;
     document.getElementById("author").textContent = m.author;
     document.getElementById("repo").href = m.repo;

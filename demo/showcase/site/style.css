@@ -52,6 +52,15 @@ a:hover { text-decoration: underline; }
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .lede { max-width: 62ch; margin: 22px 0 0; color: var(--muted); font-size: 18px; }
+.lede strong { color: var(--text); font-weight: 650; }
+.lede .lede-2 { display: block; margin-top: 10px; font-size: 16px; }
+/* Trait tags: plain labels, not links, so they are styled unlike the pill nav below them. */
+.lede .traits { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.lede .traits span {
+  padding: 3px 10px; border-radius: 6px;
+  border: 1px solid rgba(63, 208, 201, 0.35); background: rgba(63, 208, 201, 0.07);
+  color: var(--accent-2); font: 500 13px/1.6 var(--mono);
+}
 .toc { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 32px; }
 .toc a {
   display: inline-flex; align-items: center; gap: 10px;
