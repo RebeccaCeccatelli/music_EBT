@@ -64,7 +64,11 @@
 		barRadius: 10,
 		dragToSeek: true,
 		normalize: true,
-		minPxPerSec: 20,
+		// 0 = fit the whole song to the player's width (was 20 px/s, which made a
+		// long song scroll sideways). The demo draws a whole-song piano roll over
+		// this waveform, so a click must map across the full width. Fine-tune the
+		// start with the slider.
+		minPxPerSec: 0,
 		waveColor: gradio.props.waveform_options.waveform_color || "#9ca3af",
 		progressColor:
 			gradio.props.waveform_options.waveform_progress_color || color_accent,

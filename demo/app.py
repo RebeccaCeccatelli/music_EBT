@@ -1384,10 +1384,8 @@ def _write_roll(wav_path, midi_path, prompt_midi=None, prompt_only: bool = False
     try:
         from gradio import processing_utils, utils as gr_utils
         notes = _note_list(midi_path)
-        prompt_end = 0.0
-        if prompt_only:
-            prompt_end = max((n[0] + n[1] for n in notes), default=0.0)
-        elif prompt_midi is not None:
+        prompt_end = 0.0  # prompt_only clips: drawn like a continuation (purple, no shading)
+        if prompt_midi is not None and not prompt_only:
             prompt = _note_list(prompt_midi)
             pset = {(n[0], n[2], n[4]) for n in prompt}
             cont = [n for n in notes if (n[0], n[2], n[4]) not in pset]
@@ -2288,6 +2286,11 @@ footer { display: none !important; }
     background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
 }
 .tonic-roll canvas { display: block; width: 100%; height: 100%; }
+/* Over the waveform (see place() in _ROLL_HEAD): the waveform stays, invisible,
+   underneath to take the clicks. */
+.has-roll .waveform-container { position: relative !important; height: 96px !important; }
+.has-roll #waveform { opacity: 0 !important; }
+.tonic-roll.overlay { position: absolute; inset: 0; margin: 0; pointer-events: none; }
 .tonic-roll-head {
     position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; display: none;
     background: #3fd0c9; box-shadow: 0 0 8px rgba(63,208,201,0.8); pointer-events: none;
@@ -2531,6 +2534,11 @@ _ROLL_HEAD = r"""
 
   const blockOf = (n) => (n && n.closest) ? n.closest(".block") : null;
   document.addEventListener("pointerdown", (e) => {
+    // A click on a covered waveform: remember where, so the playhead can show
+    // the clicked point while paused (the waveform's own cursor is hidden).
+    const wc = e.target.closest && e.target.closest(".has-roll .waveform-container");
+    if (wc) { const r = recs.get(wc.closest(".block")); const b = wc.getBoundingClientRect();
+              if (r) r.clickFrac = Math.max(0, Math.min(1, (e.clientX - b.left) / b.width)); }
     for (const n of e.composedPath()) {
       if (n.classList && n.classList.contains("block") && n.querySelector && n.querySelector(".play-pause-button")) { lastBlock = n; return; }
     }
@@ -2592,22 +2600,46 @@ _ROLL_HEAD = r"""
     let tries = 0; const iv = setInterval(() => { if (block.__media || ++tries > 40) { clearInterval(iv); if (block.__media) go(block.__media); } }, 50);
   }
 
+  // The roll replaces the waveform: it sits over the player's .waveform-container,
+  // the waveform underneath is invisible but stretched to the roll's height, and
+  // the roll lets clicks through, so the player's own click-to-seek (and the
+  // full-song player's click-to-pick-the-start) keep working unchanged.
+  const ROLL_H = 96;
+  function place(block, r) {
+    const c = block.querySelector(".waveform-container");
+    if (!c) {  // no waveform to cover: roll below the player, with its own click-to-seek
+      if (r.el.parentElement !== block) block.appendChild(r.el);
+      r.el.classList.remove("overlay"); block.classList.remove("has-roll"); return;
+    }
+    if (r.el.parentElement !== c) c.appendChild(r.el);
+    r.el.classList.add("overlay"); block.classList.add("has-roll");
+    const wf = c.querySelector("#waveform");
+    if (wf && wf.offsetHeight) { wf.style.transformOrigin = "top"; wf.style.transform = `scaleY(${ROLL_H / wf.offsetHeight})`; }
+  }
+  function drop(block, r) {
+    r.el.remove(); recs.delete(block); block.classList.remove("has-roll");
+    const wf = block.querySelector("#waveform"); if (wf) wf.style.transform = "";
+  }
+
   function ensure(block) {
     const a = block.querySelector("a[download][href]");
     const href = a ? a.getAttribute("href") : null;
     let r = recs.get(block);
-    if (!href || !/\.wav(\?|$)/i.test(href)) { if (r) { r.el.remove(); recs.delete(block); } return; }
-    if (r && r.url === href) { if (!r.el.isConnected && r.data) block.appendChild(r.el); return; }
-    if (r) r.el.remove();
+    if (!href || !/\.wav(\?|$)/i.test(href)) { if (r) drop(block, r); return; }
+    if (r && r.url === href) { if (r.data) place(block, r); return; }
+    if (r) drop(block, r);
     const el = document.createElement("div"); el.className = "tonic-roll"; el.style.display = "none";
     const canvas = document.createElement("canvas"); const head = document.createElement("div"); head.className = "tonic-roll-head";
     el.append(canvas, head);
     r = { url: href, el, canvas, head, data: null, range: null };
     recs.set(block, r);
-    el.addEventListener("click", (e) => { if (!r.data) return; const b = canvas.getBoundingClientRect(); seek(block, r, Math.max(0, Math.min(1, (e.clientX - b.left) / b.width))); });
+    el.addEventListener("click", (e) => {  // only reachable when the roll is not an overlay
+      if (!r.data || el.classList.contains("overlay")) return;
+      const b = canvas.getBoundingClientRect(); seek(block, r, Math.max(0, Math.min(1, (e.clientX - b.left) / b.width)));
+    });
     fetch(href.replace(/[^/]*$/, "roll.json")).then((res) => res.ok ? res.json() : null).then((d) => {
       if (!d || recs.get(block) !== r) return;
-      r.data = d; r.range = rangeOf(d); block.appendChild(el); el.style.display = ""; drawBase(r);
+      r.data = d; r.range = rangeOf(d); place(block, r); el.style.display = ""; drawBase(r);
     }).catch(() => {});
   }
 
@@ -2616,9 +2648,12 @@ _ROLL_HEAD = r"""
   (function tick() {
     recs.forEach((r, block) => {
       const m = block.__media;
-      if (!r.data || !m || (m.paused && !m.currentTime)) { r.head.style.display = "none"; return; }
+      let frac = null;
+      if (r.data && m && !(m.paused && !m.currentTime)) frac = m.currentTime / r.range.tMax;
+      else if (r.data && r.clickFrac != null) frac = r.clickFrac;
+      if (frac == null) { r.head.style.display = "none"; return; }
       r.head.style.display = "block";
-      r.head.style.left = (Math.min(1, m.currentTime / r.range.tMax) * 100) + "%";
+      r.head.style.left = (Math.min(1, frac) * 100) + "%";
     });
     requestAnimationFrame(tick);
   })();
@@ -2770,7 +2805,7 @@ def build_ui():
         # hides/shows the section.
         with gr.Group(visible=False) as full_song_group:  # no padded card: the waveform resizes itself wider inside one
             full_song_audio = ClickAudio(
-                label="Full song: click the waveform where the prompt should start",
+                label="Full song: click where the prompt should start",
                 type="filepath", interactive=False, visible=True,
                 waveform_options={"waveform_color": "#5d6377", "waveform_progress_color": "#8b7cff"},
             )
