@@ -278,7 +278,7 @@
     const s = h("section", "card-screen research");
     s.append(
       dots("research"),
-      h("p", "eyebrow", "Una nota personale di chi ha realizzato questo lavoro"),
+      h("p", "eyebrow", "Una nota sull'etica, di chi ha realizzato questo lavoro"),
       h("h2", "s-title", "Uno strumento al servizio dei musicisti, non un sostituto"),
       h("div", "r-personal",
         "<p>Questo lavoro <b>non</b> vuole sostituire musicisti e artisti: vuole dare loro strumenti migliori.</p>" +

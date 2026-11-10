@@ -257,7 +257,7 @@
     const s = h("section", "card-screen research");
     s.append(
       dots("research"),
-      h("p", "eyebrow", "A personal note from the author of this work"),
+      h("p", "eyebrow", "A note on ethics, from the author"),
       h("h2", "s-title", "A tool for musicians to work with, not a replacement"),
       h("div", "r-personal",
         "<p>This work is <b>not</b> meant to replace musicians and artists. It is about giving them better tools.</p>" +
