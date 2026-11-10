@@ -2489,6 +2489,47 @@ body, gradio-app {
     color: #8b7cff; letter-spacing: 0;
 }
 .section-title + .section-sub { padding-left: 38px !important; }
+/* 04/05 content sits on the page like the showcase sections, not in one big panel. */
+.column.attr-window { background: transparent !important; border: 0 !important; box-shadow: none !important;
+               padding: 0 !important; margin-top: 0 !important; }
+/* Variant / attribute rows as showcase example cards: one soft panel, no
+   violet bundle frame, no grey bars (Gradio fills a Group's gaps with the
+   border colour; .styler is that fill). */
+.attr-window .variants-bundle { border: 0 !important; padding: 0 !important; margin: 4px 0 6px !important; gap: 14px !important; }
+.attr-window .model-card {
+    background: rgba(255,255,255,0.035) !important; border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 20px !important; padding: 18px 20px !important; box-shadow: none !important;
+}
+.attr-window .model-card .styler, .attr-window .model-card .row, .attr-window .model-card .form,
+.attr-window .model-card .block {
+    background: transparent !important; border-color: transparent !important; box-shadow: none !important;
+}
+.attr-window .model-card .styler { gap: 12px !important; }
+/* Gradio puts the class on both the group's wrapper and its inner .gr-group:
+   draw the card once. */
+.attr-window .model-card .model-card { background: transparent !important; border: 0 !important;
+                                       border-radius: 0 !important; padding: 0 !important; }
+.attr-window .model-card .prose strong { font-size: 16px; font-weight: 650; color: #e8eaf2; }
+.attr-window .model-card button[class*="secondary"], .attr-window .model-card .row button.sm {
+    background: transparent !important; border: 1px solid rgba(255,255,255,0.14) !important;
+    color: #9298ab !important; font-size: 12px !important; padding: 4px 12px !important;
+}
+.attr-window .model-card .row button.sm:hover { color: #e8eaf2 !important; border-color: rgba(255,255,255,0.3) !important; }
+
+/* Status boxes: a quiet log, not a big grey input. */
+.form:has(> .status-log), .block.status-log, .block.status-log label, .block.status-log .container,
+.block.status-log .input-container {
+    background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important;
+}
+.block.status-log [data-testid="block-info"], .block.status-log label > span:first-child {
+    color: #5d6377 !important; font: 600 11px/1.4 "JetBrains Mono", ui-monospace, monospace !important;
+    letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px !important;
+}
+.status-log textarea {
+    background: rgba(255,255,255,0.025) !important; border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 12px !important; color: #9298ab !important;
+    font: 12.5px/1.6 "JetBrains Mono", ui-monospace, monospace !important;
+}
 .section-title h2 {
     margin: 0 !important; font-size: 28px !important; font-weight: 700 !important;
     letter-spacing: -0.02em !important; color: #e8eaf2 !important;
@@ -2894,7 +2935,7 @@ def build_ui():
             generate_btn = gr.Button("🎹 Generate", variant="primary", size="lg")
 
         gr.Markdown('## <span class="kicker">03</span>Listen to generated outputs', elem_classes="section-title")
-        status_box = gr.Textbox(label="Status", lines=8, interactive=False)
+        status_box = gr.Textbox(label="Status", lines=8, interactive=False, elem_classes="status-log")
         gr.Markdown(
             "Prompt and ground-truth continuation are the same across every model, "
             "shown once here — each model's card below only shows what it generated.",
@@ -2927,7 +2968,18 @@ def build_ui():
                 model_output_cols[model_key] = _model_col
 
         # ── EBT attribute control ────────────────────────────────────────────
-        gr.Markdown('## <span class="kicker">04</span>Guide attributes (EBT or baselines)', elem_classes="section-title")
+        gr.Markdown('## <span class="kicker">04</span>Single-Attribute Control', elem_classes="section-title")
+        gr.Markdown(
+            f"Each numbered box below is its own **separate variant** — its own "
+            f"model & guidance method, attribute, strength, and target value. Start with one, use **+ Add "
+            f"another variant** to queue more (up to {_MAX_SOLO_BATCH}), then hit Generate "
+            "once to run all of them together. **Model & method:** EBT steers its own "
+            "energy minimisation; for Llama/GPT-2, *PPLM* nudges the next-token scores with "
+            "a regressor's gradient, *tilting* shifts the probabilities of the attribute's own "
+            "tokens (REMI only), and *best-of-N* samples N unguided continuations and keeps "
+            "the closest one (N× the compute). All use the checkpoints selected above.",
+            elem_classes="section-sub",
+        )
         ebt_reference_audio = gr.Audio(
             label="Reference: EBT default (unguided, from the last Generate run above)",
             type="filepath", visible=False,
@@ -2939,18 +2991,6 @@ def build_ui():
         ebt_ref_pitch_register_state = gr.State(None)
 
         with gr.Column(elem_classes="attr-window"):
-            gr.Markdown("### Single attribute — generate multiple at once")
-            gr.Markdown(
-                f"Each numbered box below is its own **separate variant** — its own "
-                f"model & guidance method, attribute, strength, and target value. Start with one, use **+ Add "
-                f"another variant** to queue more (up to {_MAX_SOLO_BATCH}), then hit Generate "
-                "once to run all of them together. **Model & method:** EBT steers its own "
-                "energy minimisation; for Llama/GPT-2, *PPLM* nudges the next-token scores with "
-                "a regressor's gradient, *tilting* shifts the probabilities of the attribute's own "
-                "tokens (REMI only), and *best-of-N* samples N unguided continuations and keeps "
-                "the closest one (N× the compute). All use the checkpoints selected above.",
-                elem_classes="section-sub",
-            )
 
             solo_row_count_state = gr.State(1)
             solo_rows = []
@@ -3131,7 +3171,7 @@ def build_ui():
                 )
 
             solo_btn = gr.Button("🎹 Generate (Single Attribute)", variant="primary")
-            solo_status = gr.Textbox(label="Status", lines=6, interactive=False)
+            solo_status = gr.Textbox(label="Status", lines=6, interactive=False, elem_classes="status-log")
             solo_slots = []
             with gr.Row(elem_classes="solo-output-row"):
                 for _i in range(_MAX_SOLO_BATCH):
@@ -3147,16 +3187,16 @@ def build_ui():
                         _solo_gauge = gr.HTML(value="", elem_classes="attr-gauge-slot")
                         solo_slots.append((_solo_col, _solo_title, _solo_ph, _solo_audio, _solo_gauge))
 
+        gr.Markdown('## <span class="kicker">05</span>Combined-Attribute Control', elem_classes="section-title")
+        gr.Markdown(
+            "Different from **Single-Attribute Control** above: there, each row runs its "
+            "own separate generation. Here, every active row below contributes to "
+            "the **same** generation at once — their guidance is summed (each "
+            "scaled by its own Relative weight), then the combined result is "
+            "scaled by the one shared λ underneath.",
+            elem_classes="section-sub",
+        )
         with gr.Column(elem_classes="attr-window"):
-            gr.Markdown("### Compose — combine multiple attributes in one generation")
-            gr.Markdown(
-                "Different from **Single attribute** above: there, each row runs its "
-                "own separate generation. Here, every active row below contributes to "
-                "the **same** generation at once — their guidance is summed (each "
-                "scaled by its own Relative weight), then the combined result is "
-                "scaled by the one shared λ underneath.",
-                elem_classes="section-sub",
-            )
             compose_reference_html = gr.HTML(value=_render_compose_reference_html(None, None))
             compose_reference_audio = gr.Audio(
                 label="Reference: EBT default (unguided, from the last Generate run above)",
@@ -3263,7 +3303,7 @@ def build_ui():
 
             tokenizer_dd.change(_on_compose_tokenizer_change, inputs=[tokenizer_dd], outputs=[compose_lambda])
             compose_btn = gr.Button("🎹 Generate (Compose)", variant="primary")
-            compose_status = gr.Textbox(label="Status", lines=4, interactive=False)
+            compose_status = gr.Textbox(label="Status", lines=4, interactive=False, elem_classes="status-log")
             # Hidden until Generate is clicked — see _compose_generate,
             # which reveals this once a real result (or an error) is ready.
             compose_audio = gr.Audio(label="Generated Continuation", type="filepath", visible=False,
