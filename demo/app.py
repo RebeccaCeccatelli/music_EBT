@@ -2422,33 +2422,38 @@ body, gradio-app {
 .gradio-container .main.app { padding-left: clamp(4px, 2vw, 32px) !important;
                               padding-right: clamp(4px, 2vw, 32px) !important; }
 
+/* Header as on the showcase (.hero): no box, left-aligned, generous top space. */
 .hero-header {
-    background: rgba(255,255,255,0.035) !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 20px !important;
-    padding: clamp(24px, 4vw, 40px) clamp(16px, 3vw, 32px) clamp(20px, 3vw, 30px) !important;
-    margin: clamp(12px, 3vw, 28px) 0 18px !important;
-    backdrop-filter: blur(6px);
+    background: none !important; border: 0 !important; border-radius: 0 !important;
+    box-shadow: none !important; backdrop-filter: none !important;
+    padding: clamp(40px, 7vw, 96px) 0 clamp(8px, 2vw, 24px) !important;
+    margin: 0 !important; text-align: left !important;
 }
+.hero-header .prose, .hero-header .prose * { text-align: left !important; }
+.hero-header .block, .hero-header .html-container { padding-left: 0 !important; padding-right: 0 !important; }
+.app-eyebrow p { margin-bottom: 14px !important; }
 .app-eyebrow p {
     margin: 0 !important; color: #3fd0c9 !important;
     font: 600 12px/1.4 "JetBrains Mono", ui-monospace, monospace !important;
     letter-spacing: 0.14em; text-transform: uppercase;
 }
-.app-title h1 { font-size: clamp(30px, 4.6vw, 48px) !important; letter-spacing: -0.03em !important; }
-.app-subtitle, .app-subtitle p { max-width: 70ch; margin: 0 auto !important; color: #9298ab !important; font-size: 16px !important; line-height: 1.6; }
+.app-title h1 { font-size: clamp(36px, 5.6vw, 64px) !important; line-height: 1.04 !important;
+                letter-spacing: -0.03em !important; font-weight: 750 !important; margin: 0 !important; }
+.app-subtitle { margin-top: 22px !important; }
+.app-subtitle, .app-subtitle p { max-width: 62ch; margin-left: 0 !important; margin-right: 0 !important;
+                                 color: #9298ab !important; font-size: 18px !important; line-height: 1.6; }
 .app-subtitle a { color: #3fd0c9 !important; text-decoration: none; }
-.app-subtitle p { margin: 0 auto 10px !important; }
+.app-subtitle p { margin: 0 0 10px !important; }
 .app-subtitle strong { color: #e8eaf2 !important; font-weight: 650; }
 .app-subtitle .lede-2 { font-size: 15px; color: #9298ab !important; }
 .app-subtitle .lede-3 { font-size: 14px; color: #9298ab !important; }
 /* Author line as on the showcase: quiet, links back to the Tonic front page. */
-.app-byline { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 0; margin: 4px 0 0 !important;
+.app-byline { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px 0; margin: 4px 0 0 !important;
               color: #6b7186; font-size: 14px; }
 .app-byline > * + *::before { content: "·"; margin: 0 10px; color: #6b7186; }
 .app-byline span:first-child { color: #9298ab; font-weight: 550; }
 .app-byline a { color: #3fd0c9 !important; text-decoration: none; }
-.app-note { display: flex; justify-content: center; margin: 12px 0 0 !important; }
+.app-note { display: flex; justify-content: flex-start; margin: 12px 0 0 !important; }
 @media (max-width: 480px) { .app-byline { font-size: 13px; } .app-byline > * + *::before { margin: 0 7px; } }
 .app-subtitle a:hover { text-decoration: underline; }
 
