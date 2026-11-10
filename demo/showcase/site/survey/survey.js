@@ -208,7 +208,7 @@
   }
 
   // Onboarding: welcome -> how it works -> privacy & consent -> about you.
-  const ONBOARD = ["welcome", "how", "consent", "about"];
+  const ONBOARD = ["welcome", "research", "how", "consent", "about"];
   function dots(step) {
     const d = h("div", "dots");
     ONBOARD.forEach((x, i) => d.append(h("span", i <= ONBOARD.indexOf(step) ? "on" : "")));
@@ -239,19 +239,38 @@
         '<div><b>1</b><span>Listen</span><small>short clips of 3–20 seconds</small></div>' +
         '<div><b>2</b><span>Compare</span><small>a few versions at a time</small></div>' +
         '<div><b>3</b><span>Choose</span><small>click what fits best, or skip</small></div>'),
-      h("div", "values",
-        '<p class="values-title">A note on this research</p>' +
-        '<div class="value"><span class="v-ico" aria-hidden="true">🎼</span><div><b>Trained on open data</b>' +
-        '<p>All the music used to train these models comes from open-source collections that are publicly and legally available online.</p></div></div>' +
-        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>A tool for musicians to work with, not a replacement</b>' +
-        '<p>This work is not meant to replace musicians and artists. Most models that generate music today work like a black box: you get a result, ' +
-        'but have little say in how it turns out. This thesis looks at how to give the person using the model more control, and a clearer view of what ' +
-        'it is doing: asking for a passage to be softer or louder, to have longer or shorter notes, or to sit higher or lower, and hearing how the model responds. ' +
-        'We see it as a step towards musicians working with these tools the way they once took up synthesizers: as instruments for shaping their own ideas, ' +
-        'and one day perhaps for <i>painting</i> music.</p></div></div>'),
     );
     if (CFG.contact) s.append(h("p", "hint contact", `Questions about the study? Write to <a href="mailto:${CFG.contact}">${CFG.contact}</a>`));
-    s.append(nav("Let's go", goto("how")).row);
+    s.append(nav("Let's go", goto("research")).row);
+    screen(s);
+  }
+
+  // A page of its own: what this research is for, and where the training data comes from.
+  function research() {
+    const s = h("section", "card-screen research");
+    s.append(
+      dots("research"),
+      h("p", "eyebrow", "About this research"),
+      h("h2", "s-title", "A tool for musicians to work with, not a replacement"),
+      h("p", "lede", "This work is not meant to replace musicians and artists. It is about giving them better tools."),
+      h("div", "r-blocks",
+        '<div class="r-block"><span class="r-num">01</span><h3>The problem</h3>' +
+        '<p>Most models that generate music today work like a black box: you get a result, but have little say in how it turns out, ' +
+        'and little idea of why it came out that way.</p></div>' +
+        '<div class="r-block"><span class="r-num">02</span><h3>What this thesis does</h3>' +
+        '<p>It looks at how to give the person using the model more control, and a clearer view of what the model is doing. ' +
+        'You can ask it for:</p>' +
+        '<div class="r-chips"><span>softer or louder playing</span><span>longer or shorter notes</span><span>a higher or lower register</span></div>' +
+        '<p>and hear how it responds.</p></div>' +
+        '<div class="r-block"><span class="r-num">03</span><h3>Where it could lead</h3>' +
+        '<p>Decades ago, musicians took up synthesizers and electronic instruments and made them their own. We see this work as a small step in the same ' +
+        'direction: models as instruments for shaping your own ideas, and one day perhaps for <i>painting</i> music with them, ' +
+        'interacting live, almost jamming together.</p></div>'),
+      h("div", "r-data",
+        '<span class="v-ico" aria-hidden="true">🎼</span><div><b>Trained on open data</b>' +
+        '<p>All the music used to train these models comes from open-source collections that are publicly and legally available online.</p></div>'),
+    );
+    s.append(nav("Continue", goto("how"), "welcome").row);
     screen(s);
   }
 
@@ -268,7 +287,7 @@
     );
     const ex = state.exampleClip && survey.clips[state.exampleClip] ? state.exampleClip : null;
     if (ex) s.append(row("sgrid one", clipCard(ex, "Example")));
-    s.append(nav("Got it", goto("consent"), "welcome").row);
+    s.append(nav("Got it", goto("consent"), "research").row);
     screen(s);
   }
 
@@ -602,6 +621,7 @@
   function route() {
     topbar();
     if (state.step === "welcome") return welcome();
+    if (state.step === "research") return research();
     if (state.step === "how") return how();
     if (state.step === "consent") return consentPage();
     if (state.step === "about") return about();

@@ -108,16 +108,24 @@
 }
 .steps3 span { font-weight: 650; }
 .steps3 small { color: var(--faint); font-size: 13px; }
-/* Welcome page: "A note on this research" (open data; made for musicians). */
-.values { display: grid; grid-template-columns: 1fr 1.6fr; gap: 12px; margin: 22px 0 4px; }
-.values-title { grid-column: 1 / -1; margin: 0; font: 600 12px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent-2); }
-.value { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 14px;
-  background: rgba(255,255,255,.03); border: 1px solid var(--border); }
+/* "About this research" page. */
+.research .lede { max-width: 62ch; }
+.r-blocks { display: grid; gap: 12px; margin: 8px 0 0; }
+.r-block { position: relative; padding: 18px 20px 18px 64px; border-radius: 16px; background: rgba(255,255,255,.03); border: 1px solid var(--border); }
+.r-num { position: absolute; left: 20px; top: 19px; font: 600 13px var(--mono); color: var(--accent-2); }
+.r-block h3 { margin: 0 0 6px; font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+.r-block p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.6; max-width: 68ch; }
+.r-block p + p { margin-top: 10px; }
+.r-block i { color: var(--text); }
+.r-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.r-chips span { padding: 6px 12px; border-radius: 999px; font-size: 13.5px; color: var(--text);
+  background: rgba(139,124,255,.12); border: 1px solid rgba(139,124,255,.32); }
+.r-data { display: flex; gap: 12px; align-items: flex-start; margin: 16px 0 0; padding: 14px 16px; border-radius: 14px;
+  border: 1px dashed rgba(63,208,201,.35); background: rgba(63,208,201,.04); }
+.r-data b { display: block; font-weight: 650; margin-bottom: 3px; }
+.r-data p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
 .v-ico { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-size: 17px;
-  background: rgba(139,124,255,.12); border: 1px solid rgba(139,124,255,.3); }
-.value b { display: block; font-weight: 650; margin-bottom: 3px; }
-.value p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
-.value i { color: var(--text); }
+  background: rgba(63,208,201,.1); border: 1px solid rgba(63,208,201,.3); }
 
 .anatomy { margin: 6px 0 4px; }
 .an-bar { display: flex; height: 64px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
@@ -150,7 +158,8 @@
 .t-hint b { color: var(--accent-2); font-weight: 600; }
 
 @media (max-width: 700px) {
-  .steps3, .values { grid-template-columns: 1fr; }
+  .steps3 { grid-template-columns: 1fr; }
+  .r-block { padding: 16px 16px 16px 16px; } .r-num { position: static; display: block; margin-bottom: 4px; }
   .an-prompt { width: 38%; }
 }
 

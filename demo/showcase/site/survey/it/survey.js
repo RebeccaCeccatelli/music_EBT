@@ -229,7 +229,7 @@
   }
 
   // Onboarding: welcome -> how it works -> privacy & consent -> about you.
-  const ONBOARD = ["welcome", "how", "consent", "about"];
+  const ONBOARD = ["welcome", "research", "how", "consent", "about"];
   function dots(step) {
     const d = h("div", "dots");
     ONBOARD.forEach((x, i) => d.append(h("span", i <= ONBOARD.indexOf(step) ? "on" : "")));
@@ -260,19 +260,37 @@
         '<div><b>1</b><span>Ascolta</span><small>brevi clip da 3 a 20 secondi</small></div>' +
         '<div><b>2</b><span>Confronta</span><small>qualche versione alla volta</small></div>' +
         '<div><b>3</b><span>Scegli</span><small>clicca la risposta che preferisci, oppure salta</small></div>'),
-      h("div", "values",
-        '<p class="values-title">Una nota su questa ricerca</p>' +
-        '<div class="value"><span class="v-ico" aria-hidden="true">🎼</span><div><b>Addestrati su dati aperti</b>' +
-        '<p>Tutta la musica usata per addestrare questi modelli proviene da raccolte open source, disponibili pubblicamente e legalmente su internet.</p></div></div>' +
-        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>Uno strumento al servizio dei musicisti, non un sostituto</b>' +
-        '<p>Questo lavoro non vuole sostituire musicisti e artisti. Oggi la maggior parte dei modelli che generano musica funziona come una scatola chiusa: ' +
-        'si ottiene un risultato, ma si può decidere ben poco di come viene fuori. Questa tesi studia come dare più controllo a chi usa il modello, e capire meglio ' +
-        'cosa sta facendo: chiedere che un passaggio sia più piano o più forte, con note più lunghe o più corte, più acuto o più grave, e ascoltare come risponde. ' +
-        'Lo vediamo come un passo verso un uso di questi strumenti simile a quello che i musicisti hanno fatto dei sintetizzatori: strumenti per dare forma alle ' +
-        'proprie idee e, un giorno, magari per <i>dipingere</i> la musica.</p></div></div>'),
     );
     if (CFG.contact) s.append(h("p", "hint contact", `Hai domande sul test? Scrivi a <a href="mailto:${CFG.contact}">${CFG.contact}</a>`));
-    s.append(nav("Iniziamo", goto("how")).row);
+    s.append(nav("Iniziamo", goto("research")).row);
+    screen(s);
+  }
+
+  // Una pagina dedicata: a cosa serve questa ricerca e da dove vengono i dati di addestramento.
+  function research() {
+    const s = h("section", "card-screen research");
+    s.append(
+      dots("research"),
+      h("p", "eyebrow", "Questa ricerca"),
+      h("h2", "s-title", "Uno strumento al servizio dei musicisti, non un sostituto"),
+      h("p", "lede", "Questo lavoro non vuole sostituire musicisti e artisti: vuole dare loro strumenti migliori."),
+      h("div", "r-blocks",
+        '<div class="r-block"><span class="r-num">01</span><h3>Il problema</h3>' +
+        '<p>Oggi la maggior parte dei modelli che generano musica funziona come una scatola chiusa: si ottiene un risultato, ma si può decidere ' +
+        'ben poco di come viene fuori, e si capisce poco del perché.</p></div>' +
+        '<div class="r-block"><span class="r-num">02</span><h3>Cosa fa questa tesi</h3>' +
+        '<p>Studia come dare più controllo a chi usa il modello, e capire meglio cosa sta facendo. Gli si può chiedere:</p>' +
+        '<div class="r-chips"><span>un suono più piano o più forte</span><span>note più lunghe o più corte</span><span>un registro più acuto o più grave</span></div>' +
+        '<p>e ascoltare come risponde.</p></div>' +
+        '<div class="r-block"><span class="r-num">03</span><h3>Dove potrebbe portare</h3>' +
+        '<p>Decenni fa i musicisti hanno fatto propri i sintetizzatori e gli strumenti elettronici. Vediamo questo lavoro come un piccolo passo nella stessa ' +
+        'direzione: modelli come strumenti per dare forma alle proprie idee e, un giorno, magari per <i>dipingere</i> la musica, ' +
+        'interagendo con loro dal vivo, quasi come in una jam session.</p></div>'),
+      h("div", "r-data",
+        '<span class="v-ico" aria-hidden="true">🎼</span><div><b>Addestrati su dati aperti</b>' +
+        '<p>Tutta la musica usata per addestrare questi modelli proviene da raccolte open source, disponibili pubblicamente e legalmente su internet.</p></div>'),
+    );
+    s.append(nav("Continua", goto("how"), "welcome").row);
     screen(s);
   }
 
@@ -289,7 +307,7 @@
     );
     const ex = state.exampleClip && survey.clips[state.exampleClip] ? state.exampleClip : null;
     if (ex) s.append(row("sgrid one", clipCard(ex, "Esempio")));
-    s.append(nav("Ho capito", goto("consent"), "welcome").row);
+    s.append(nav("Ho capito", goto("consent"), "research").row);
     screen(s);
   }
 
@@ -623,6 +641,7 @@
   function route() {
     topbar();
     if (state.step === "welcome") return welcome();
+    if (state.step === "research") return research();
     if (state.step === "how") return how();
     if (state.step === "consent") return consentPage();
     if (state.step === "about") return about();
