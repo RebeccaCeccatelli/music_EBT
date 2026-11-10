@@ -901,6 +901,7 @@ def _get_full_song_render(tokenizer_type: str, song_choice: str) -> tuple[str, f
 
     if not wav_path.exists():
         return None
+    _write_roll(wav_path, midi_path)  # piano roll under the full-song player (no prompt shading)
     result = (str(wav_path), _wav_duration_seconds(str(wav_path)))
     _full_song_render_cache[cache_key] = result
     return result
@@ -2759,6 +2760,7 @@ def build_ui():
             full_song_audio = ClickAudio(
                 label="Full song: click the waveform where the prompt should start",
                 type="filepath", interactive=False, visible=True,
+                waveform_options={"waveform_color": "#5d6377", "waveform_progress_color": "#8b7cff"},
             )
             gr.HTML('<div class="hint"><span class="i">i</span><span>The start point is approximate. The models '
                     'read music as tokens (notes and their timing), not as continuous sound, so the prompt starts '
