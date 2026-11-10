@@ -2667,7 +2667,7 @@ def _audio_slot(label: str, idle_text: str = _DEFAULT_IDLE_TEXT):
 def build_ui():
     with gr.Blocks(title="Tonic · Interactive Demo") as demo:
         with gr.Column(elem_classes="hero-header"):
-            gr.Markdown("Interactive demo · live generation · ETH Zürich × MIT master's thesis",
+            gr.Markdown("Interactive demo · live generation · MIT × ETH Zürich master's thesis",
                         elem_classes="app-eyebrow")
             gr.Markdown("# 🎷 Tonic · Interactive Demo 🎷", elem_classes="app-title")
             gr.Markdown(
@@ -2681,7 +2681,7 @@ def build_ui():
                 elem_classes="app-subtitle",
             )
             # Author line, as on the showcase: links back to the Tonic front page.
-            gr.HTML('<p class="app-byline"><span>Rebecca Ceccatelli</span><span>ETH Zürich × MIT</span>'
+            gr.HTML('<p class="app-byline"><span>Rebecca Ceccatelli</span><span>MIT × ETH Zürich</span>'
                     '<a href="https://rebeccaceccatelli.github.io/tonic/" target="_blank">← Tonic</a></p>')
 
         gr.Markdown('## <span class="kicker">01</span>Choose format and models', elem_classes="section-title")
