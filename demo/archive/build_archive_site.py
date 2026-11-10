@@ -19,6 +19,7 @@ The author's own saved lists (from the claude.ai pages) are exported in demo/arc
 
 import json
 import os
+import sys
 import shutil
 import subprocess
 from pathlib import Path
@@ -27,12 +28,15 @@ SURVEY = Path.home() / "orcd/scratch/rebcecca/music_EBT_logs/survey"
 OUT = SURVEY / "archive_site"
 ZIP = Path.home() / "transfer/archive.zip"
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "icons"))
+from make_icons import head_tags  # noqa: E402
+ICON_TAGS = head_tags("archive")  # browser-tab icon (a record), inlined so every sub-page can use it
 SKELETON_HEAD = ('<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,'
                  'initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;'
                  'padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}'
                  'html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px '
                  '-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}'
-                 '[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>\n')
+                 '[hidden]:not([hidden=until-found i]){display:none!important}</style>' + ICON_TAGS + '</head><body>\n')
 SKELETON_TAIL = "\n</body></html>\n"
 
 PAGES = {  # out dir -> (source dir, mp3 dir, kind)

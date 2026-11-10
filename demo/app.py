@@ -85,27 +85,62 @@ def _ckpt_pattern(model_key: str, tokenizer_type: str) -> str:
     return _MODEL_INFO[model_key]["ckpt_pattern_tmpl"].format(slug=_TOK_SLUG[tokenizer_type])
 
 
-# Final checkpoints used for the thesis (docs/STATUS.md, "Final checkpoints"),
-# as globs under checkpoints/. Shown first in each dropdown and selected by
-# default. The EBT ones are also the checkpoints the current attribute
-# regressors were trained against; the most-recently-modified rule in
-# _find_checkpoints can't find them (REMI 33,732 shares its run dir with the
-# later 34,268 save, and the Anticipation s1* pattern also matches the newer
-# stab+ runs).
-_FINAL_CKPT_GLOBS = {
-    ("EBT", "REMI"): "ebt-symb-small-remi-s1-job*/*step=33732-*.ckpt",
-    ("EBT", "Anticipation-Arrival-Time"): "ebt-symb-small-ant-at-full-s1-job*/*step=88800-*.ckpt",
-    ("Llama", "REMI"): "baseline-llama-small-remi-*/*step=99660-valid_loss=valid_loss=0.5239.ckpt",
-    ("GPT-2", "REMI"): "baseline-hf-gpt2-small-remi-*/*step=99660-valid_loss=valid_loss=0.4756.ckpt",
-    ("Llama", "Anticipation-Arrival-Time"): "baseline-llama-small-ant-at-full-*/*step=100000-*.ckpt",
-    ("GPT-2", "Anticipation-Arrival-Time"): "baseline-hf-gpt2-small-ant-at-full-*/*step=98900-*.ckpt",
+# Checkpoints offered in each dropdown (docs/STATUS.md, "Final checkpoints"),
+# as globs under checkpoints/. The first entry is the thesis checkpoint and is
+# selected by default: the EBT finals, and the step-matched "ebtrecipe"
+# baselines used in the final comparisons (trained on the EBT recipe for the
+# same number of steps). Each further entry is a deliberately chosen extra,
+# so the dropdown stays short instead of listing every run on disk: for the
+# baselines, the original-recipe model trained to ~100k steps (different
+# context/batch, so not comparable to TONIC); for EBT, a later save of the
+# same run that the thesis does not use. Every checkpoint here has attribute regressors paired with it,
+# except the EBT extras (guidance falls back to the final's regressor with a
+# warning). Directory names pin the exact run where several runs share a step.
+_CKPT_CHOICES = {
+    ("EBT", "REMI"): [
+        ("★ TONIC · thesis checkpoint", "ebt-symb-small-remi-s1-job23868523_*/*step=33732-*.ckpt"),
+        ("TONIC · later save, not used in thesis", "ebt-symb-small-remi-s1-job23868523_*/*step=34268-*.ckpt"),
+    ],
+    ("EBT", "Anticipation-Arrival-Time"): [
+        ("★ TONIC · thesis checkpoint", "ebt-symb-small-ant-at-full-s1-job22827009_*/*step=88800-*.ckpt"),
+        ("TONIC · end of run, not used in thesis (worse val)", "ebt-symb-small-ant-at-full-s1-job22827009_*/*step=99900-*.ckpt"),
+    ],
+    ("Llama", "REMI"): [
+        ("★ Llama · thesis checkpoint, same recipe and training budget as TONIC", "baseline-llama-small-remi-ebtrecipe-job25810908_*/*step=33196-*.ckpt"),
+        ("Llama · original recipe (other context/batch), trained longer, not comparable to TONIC", "baseline-llama-small-remi-job21725352_*/*step=99660-*.ckpt"),
+    ],
+    ("GPT-2", "REMI"): [
+        ("★ GPT-2 · thesis checkpoint, same recipe and training budget as TONIC", "baseline-hf-gpt2-small-remi-ebtrecipe-job25810910_*/*step=33732-*.ckpt"),
+        ("GPT-2 · original recipe (other context/batch), trained longer, not comparable to TONIC", "baseline-hf-gpt2-small-remi-job21688861_*/*step=99660-*.ckpt"),
+    ],
+    ("Llama", "Anticipation-Arrival-Time"): [
+        ("★ Llama · thesis checkpoint, same recipe and training budget as TONIC", "baseline-llama-small-ant-at-full-ebtrecipe-job25810909_*/*step=88500-*.ckpt"),
+        ("Llama · original recipe (other context/batch), trained longer, not comparable to TONIC", "baseline-llama-small-ant-at-full-job21959743_*/*step=100000-*.ckpt"),
+    ],
+    ("GPT-2", "Anticipation-Arrival-Time"): [
+        ("★ GPT-2 · thesis checkpoint, same recipe and training budget as TONIC", "baseline-hf-gpt2-small-ant-at-full-ebtrecipe-job25810911_*/*step=87900-*.ckpt"),
+        ("GPT-2 · original recipe (other context/batch), trained longer, not comparable to TONIC", "baseline-hf-gpt2-small-ant-at-full-job21959742_*/*step=98900-*.ckpt"),
+    ],
 }
 
 
-def _final_checkpoint(model_key: str, tokenizer_type: str) -> str | None:
-    pattern = _FINAL_CKPT_GLOBS.get((model_key, tokenizer_type))
-    matches = sorted((SCRATCH_DIR / "checkpoints").glob(pattern)) if pattern else []
-    return str(matches[-1]) if matches else None
+def _curated_checkpoints(model_key: str, tokenizer_type: str) -> list[tuple[str, str, int, float]]:
+    """[(display_label, ckpt_path, step, loss)] for _CKPT_CHOICES, in order,
+    skipping entries whose file is missing."""
+    out = []
+    for tag, pattern in _CKPT_CHOICES.get((model_key, tokenizer_type), []):
+        # Skip saves with valid_loss=inf (written on a crash/resume, not real evaluations).
+        matches = sorted(p for p in (SCRATCH_DIR / "checkpoints").glob(pattern) if "valid_loss=inf" not in p.name)
+        if not matches:
+            continue
+        path = str(matches[-1])
+        step_m = re.search(r'step=(\d+)', path)
+        loss_m = re.search(r'valid_loss=(\d+\.\d+)', path)
+        step = int(step_m.group(1)) if step_m else 0
+        loss = float(loss_m.group(1)) if loss_m else float('nan')
+        loss_str = f"{loss:.3f}" if loss == loss else "n/a"  # loss != loss iff NaN
+        out.append((f"{tag} · {step:,} steps · val {loss_str}", path, step, loss))
+    return out
 
 
 # ── Song list ─────────────────────────────────────────────────────────────────
@@ -308,25 +343,27 @@ def _ckpt_label(ckpt_path: str, step: int, loss: float) -> str:
     run_dir = Path(ckpt_path).parent.name
     date_m = re.search(r'(\d{4}-\d{2}-\d{2})', run_dir)
     date = f" · {date_m.group(1)}" if date_m else ""
-    pct = step / MAX_STEPS * 100
-    loss_str = f"{loss:.4f}" if loss == loss else "n/a"  # loss != loss iff NaN
-    return f"step {step:,} ({pct:.1f}%) · val_loss {loss_str}{date}"
+    loss_str = f"{loss:.3f}" if loss == loss else "n/a"  # loss != loss iff NaN
+    return f"run {run_dir.split('_')[0]}{date} · {step:,} steps · val {loss_str}"
 
 
-def _ckpt_progress_html(step: int, loss: float, tokenizer_type: str = "") -> str:
+def _ckpt_progress_html(step: int, loss: float, tokenizer_type: str = "", note: str = "") -> str:
     # Naming the tokenizer format in the title itself (not just relying on
     # the numbers changing) is what actually makes a format switch visible —
     # without it, "Stats at this checkpoint" read identically before and
     # after switching tokenizer, so a successful switch and a silently
     # failed one looked the same at a glance.
-    pct = min(step / MAX_STEPS * 100, 100)
-    loss_str = f"{loss:.4f}" if loss == loss else "n/a"  # loss != loss iff NaN
+    # No "% trained": a share of the 100k-step cap made the thesis checkpoints
+    # (the end of their training budget) look a third trained.
+    loss_str = f"{loss:.3f}" if loss == loss else "n/a"  # loss != loss iff NaN
+    note_html = f'<div style="opacity:.85">{note}</div>' if note else ""
     title = f"Stats at this {tokenizer_type} checkpoint:" if tokenizer_type else "Stats at this checkpoint:"
     return f"""
 <div class="reference-box">
   <div style="font-weight:600;margin-bottom:6px">{title}</div>
   <div style="display:flex;flex-direction:column;gap:4px;font-size:.95em">
-    <div>Training progress &nbsp;<b style="color:var(--primary-500)">{pct:.1f}%</b></div>
+    {note_html}
+    <div>Training steps &nbsp;<b style="color:var(--primary-500)">{step:,}</b></div>
     <div>Validation loss &nbsp;<b style="color:var(--primary-500)">{loss_str}</b></div>
   </div>
 </div>"""
@@ -345,11 +382,17 @@ def _ckpt_stats_for_selection(label: str, tokenizer_type: str) -> str:
     kept showing numbers for a checkpoint you weren't actually about to use."""
     if not label:
         return ""
-    step_m = re.search(r'step ([\d,]+)', label)
-    loss_m = re.search(r'val_loss ([\d.]+)', label)
+    step_m = re.search(r'([\d,]+) steps', label)
+    loss_m = re.search(r'val ([\d.]+)', label)
     step = int(step_m.group(1).replace(',', '')) if step_m else 0
     loss = float(loss_m.group(1)) if loss_m else float('nan')
-    return _ckpt_progress_html(step, loss, tokenizer_type)
+    return _ckpt_progress_html(step, loss, tokenizer_type, _ckpt_note(label))
+
+
+def _ckpt_note(label: str) -> str:
+    """The description part of a curated dropdown label (before the step count)."""
+    head = re.split(r' · [\d,]+ steps', label)[0].lstrip("★ ").strip()
+    return "" if head.startswith("run ") else head
 
 
 def refresh_checkpoints(model_key: str, tokenizer_type: str, current_selection: str | None = None) -> tuple:
@@ -368,20 +411,16 @@ def refresh_checkpoints(model_key: str, tokenizer_type: str, current_selection: 
     without silently discarding a deliberate manual pick — always jumping
     back to the most recent checkpoint would really be a reset, not a
     rescan."""
-    pairs = _find_checkpoints(_ckpt_pattern(model_key, tokenizer_type))
+    # The curated short list (final first); the full most-recent-per-run scan
+    # is only a fallback for a checkout without those checkpoints.
+    pairs = (_curated_checkpoints(model_key, tokenizer_type)
+             or _find_checkpoints(_ckpt_pattern(model_key, tokenizer_type)))
     if not pairs:
         return (
             gr.update(choices=[], value=None, label=f"{model_key} {tokenizer_type} checkpoint", interactive=True),
             "",
             f'<div class="reference-box">No {model_key} checkpoints found for {tokenizer_type} yet.</div>',
         )
-    final = _final_checkpoint(model_key, tokenizer_type)
-    if final:
-        step_m = re.search(r'step=(\d+)', final)
-        loss_m = re.search(r'valid_loss=(\d+\.\d+)', final)
-        step, loss = int(step_m.group(1)), float(loss_m.group(1)) if loss_m else float('nan')
-        pairs = ([("★ final · " + _ckpt_label(final, step, loss), final, step, loss)]
-                 + [p for p in pairs if p[1] != final])
     labels = [lbl for lbl, _, _, _ in pairs]
     paths  = {lbl: path for lbl, path, _, _ in pairs}
     by_label = {lbl: (step, loss) for lbl, _, step, loss in pairs}
@@ -395,7 +434,7 @@ def refresh_checkpoints(model_key: str, tokenizer_type: str, current_selection: 
                   label=f"{model_key} {tokenizer_type} checkpoint ({len(labels)} found)",
                   interactive=True),
         json.dumps(paths),
-        _ckpt_progress_html(chosen_step, chosen_loss, tokenizer_type),
+        _ckpt_progress_html(chosen_step, chosen_loss, tokenizer_type, _ckpt_note(chosen)),
     )
 
 
@@ -1365,7 +1404,7 @@ def _find_baseline_regressor(attribute: str, tokenizer_type: str, model_key: str
         return None, f"Velocity control isn't available for {tokenizer_type} (no velocity in its tokens)."
     slug = _TOK_SLUG.get(tokenizer_type, tokenizer_type.lower())
     model_slug = {"Llama": "llama", "GPT-2": "gpt2"}[model_key]
-    candidates = sorted((SCRATCH_DIR / "attr_control").glob(f"{attribute}_regressor_{model_slug}-{slug}_*/best.pt"),
+    candidates = sorted((SCRATCH_DIR / "attr_control").glob(f"{attribute}_regressor_{model_slug}-*{slug}_*/best.pt"),
                         key=lambda p: p.stat().st_mtime, reverse=True)
     if not candidates:
         return None, (f"No {model_key} {attribute} regressor for {tokenizer_type} — train one with "
@@ -1996,70 +2035,112 @@ def _compose_generate(
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
 
+# Palette, fonts and surfaces follow the static showcase (demo/showcase/site/
+# style.css): near-black #0b0d14 page, translucent white panels with hairline
+# borders, violet #8b7cff accent, teal #3fd0c9 secondary, Inter + JetBrains Mono.
+_SC = {"bg": "#0b0d14", "panel": "rgba(255,255,255,0.035)", "panel_hi": "rgba(255,255,255,0.06)",
+       "block": "#121520",  # = showcase panel (white 3.5%) over the page, but opaque
+       "border": "rgba(255,255,255,0.08)", "border_hi": "rgba(255,255,255,0.16)",
+       "solid": "#141724", "solid_hi": "#1b1f2e",  # opaque, for popups/inputs that overlay content
+       "text": "#e8eaf2", "muted": "#9298ab", "faint": "#5d6377",
+       "accent": "#8b7cff", "accent_hi": "#a195ff", "accent2": "#3fd0c9"}
+
 _THEME = gr.themes.Base(
     primary_hue=gr.themes.colors.violet,
     secondary_hue=gr.themes.colors.cyan,
     neutral_hue=gr.themes.colors.slate,
     font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
+    font_mono=[gr.themes.GoogleFont("JetBrains Mono"), "ui-monospace", "SF Mono", "Menlo", "monospace"],
 ).set(
     # background_fill_primary/secondary are the base tokens body_background_fill
-    # etc. derive from — but overriding only the derived tokens (as a first pass
-    # here did) leaves anything that reads the base tokens directly, like the
-    # Dropdown popup/listbox (which uses background_fill_secondary, "items
-    # placed on top of another item"), still on the light default. That's what
-    # caused white text on a white popup — set the base tokens explicitly too.
-    background_fill_primary="*neutral_950",
-    background_fill_primary_dark="*neutral_950",
-    background_fill_secondary="*neutral_800",
-    background_fill_secondary_dark="*neutral_800",
-    border_color_primary="*neutral_700",
-    border_color_primary_dark="*neutral_700",
-    body_background_fill="*neutral_950",
-    body_background_fill_dark="*neutral_950",
-    block_background_fill="*neutral_900",
-    block_background_fill_dark="*neutral_900",
+    # etc. derive from — overriding only the derived tokens leaves anything that
+    # reads the base tokens directly, like the Dropdown popup/listbox (which uses
+    # background_fill_secondary), on the light default (white text on a white
+    # popup). Set the base tokens explicitly too; the popup one stays opaque.
+    background_fill_primary=_SC["bg"],
+    background_fill_primary_dark=_SC["bg"],
+    background_fill_secondary=_SC["solid"],
+    background_fill_secondary_dark=_SC["solid"],
+    border_color_primary="rgba(255,255,255,0.10)",  # also the fill between form fields
+    border_color_primary_dark="rgba(255,255,255,0.10)",
+    border_color_accent=_SC["accent"],
+    border_color_accent_dark=_SC["accent"],
+    color_accent=_SC["accent"],
+    color_accent_soft=_SC["panel_hi"],
+    color_accent_soft_dark=_SC["panel_hi"],
+    body_background_fill=_SC["bg"],
+    body_background_fill_dark=_SC["bg"],
+    # Opaque on purpose: Gradio fills the gaps inside Group/Form containers
+    # with border_color_primary, and translucent blocks let that grey through.
+    block_background_fill=_SC["block"],
+    block_background_fill_dark=_SC["block"],
     block_border_width="1px",
-    block_border_color="*neutral_800",
-    block_border_color_dark="*neutral_800",
+    block_border_color=_SC["border"],
+    block_border_color_dark=_SC["border"],
     block_radius="16px",
-    block_shadow="0 4px 24px rgba(0,0,0,0.25)",
-    button_primary_background_fill="*primary_500",
-    button_primary_background_fill_hover="*primary_400",
+    block_shadow="none",
+    block_shadow_dark="none",
+    block_label_background_fill="transparent",
+    block_label_background_fill_dark="transparent",
+    block_label_text_color=_SC["muted"],
+    block_label_text_color_dark=_SC["muted"],
+    block_label_border_width="0px",
+    block_title_text_color=_SC["muted"],
+    block_title_text_color_dark=_SC["muted"],
+    block_title_text_weight="600",
+    panel_background_fill=_SC["panel"],
+    panel_background_fill_dark=_SC["panel"],
+    panel_border_color=_SC["border"],
+    panel_border_color_dark=_SC["border"],
+    button_large_radius="999px",
+    button_medium_radius="999px",
+    button_small_radius="999px",
+    button_primary_background_fill=_SC["accent"],
+    button_primary_background_fill_dark=_SC["accent"],
+    button_primary_background_fill_hover=_SC["accent_hi"],
+    button_primary_background_fill_hover_dark=_SC["accent_hi"],
     button_primary_text_color="white",
+    button_primary_text_color_dark="white",
+    button_primary_border_color=_SC["accent"],
+    button_primary_border_color_dark=_SC["accent"],
     # button_secondary_* also drives the Radio/Checkbox "pill" background
     # (checkbox_label_background_fill defaults to *button_secondary_background_fill)
-    # — left at the Base theme's light default, this is what made the
-    # velocity/duration attribute picker and any non-primary button render
-    # white instead of matching the rest of the dark UI.
-    button_secondary_background_fill="*neutral_800",
-    button_secondary_background_fill_dark="*neutral_800",
-    button_secondary_background_fill_hover="*neutral_700",
-    button_secondary_background_fill_hover_dark="*neutral_700",
-    button_secondary_text_color="*neutral_100",
-    button_secondary_text_color_dark="*neutral_100",
-    button_secondary_border_color="*neutral_700",
-    button_secondary_border_color_dark="*neutral_700",
-    checkbox_label_background_fill_selected="*primary_500",
-    checkbox_label_background_fill_selected_dark="*primary_500",
+    # — left at the Base theme's light default, the attribute picker and any
+    # non-primary button render white instead of matching the dark UI.
+    button_secondary_background_fill=_SC["panel_hi"],
+    button_secondary_background_fill_dark=_SC["panel_hi"],
+    button_secondary_background_fill_hover="rgba(255,255,255,0.10)",
+    button_secondary_background_fill_hover_dark="rgba(255,255,255,0.10)",
+    button_secondary_text_color=_SC["text"],
+    button_secondary_text_color_dark=_SC["text"],
+    button_secondary_border_color=_SC["border_hi"],
+    button_secondary_border_color_dark=_SC["border_hi"],
+    checkbox_label_background_fill_selected=_SC["accent"],
+    checkbox_label_background_fill_selected_dark=_SC["accent"],
     checkbox_label_text_color_selected="white",
     checkbox_label_text_color_selected_dark="white",
-    # table_even/odd_background_fill default to literal "white"/near-white
-    # (Base theme's light-mode default) — same class of bug as the button/
-    # checkbox one above, surfaced by the batch-generation Dataframe table.
-    table_even_background_fill="*neutral_900",
-    table_even_background_fill_dark="*neutral_900",
-    table_odd_background_fill="*neutral_800",
-    table_odd_background_fill_dark="*neutral_800",
-    table_border_color="*neutral_700",
-    table_border_color_dark="*neutral_700",
-    table_text_color="*neutral_100",
-    table_text_color_dark="*neutral_100",
-    input_background_fill="*neutral_800",
-    input_background_fill_dark="*neutral_800",
-    body_text_color="*neutral_100",
-    body_text_color_dark="*neutral_100",
-    body_text_color_subdued="*neutral_400",
-    body_text_color_subdued_dark="*neutral_400",
+    checkbox_background_color_selected=_SC["accent"],
+    checkbox_background_color_selected_dark=_SC["accent"],
+    slider_color=_SC["accent"],
+    slider_color_dark=_SC["accent"],
+    # table_even/odd_background_fill default to literal white (Base theme's
+    # light-mode default), surfaced by the batch-generation Dataframe table.
+    table_even_background_fill=_SC["solid"],
+    table_even_background_fill_dark=_SC["solid"],
+    table_odd_background_fill=_SC["solid_hi"],
+    table_odd_background_fill_dark=_SC["solid_hi"],
+    table_border_color=_SC["border_hi"],
+    table_border_color_dark=_SC["border_hi"],
+    table_text_color=_SC["text"],
+    table_text_color_dark=_SC["text"],
+    input_background_fill=_SC["solid"],
+    input_background_fill_dark=_SC["solid"],
+    input_border_color=_SC["border_hi"],
+    input_border_color_dark=_SC["border_hi"],
+    body_text_color=_SC["text"],
+    body_text_color_dark=_SC["text"],
+    body_text_color_subdued=_SC["muted"],
+    body_text_color_subdued_dark=_SC["muted"],
 )
 
 _CSS = """
@@ -2217,6 +2298,66 @@ footer { display: none !important; }
     display: inline-block !important;
 }
 .app-subtitle { color: var(--body-text-color-subdued); font-size: .95em; }
+
+/* ── Showcase look (demo/showcase/site/style.css) ─────────────────────────
+   Page: the showcase's dark background with its violet/teal glow, a
+   1180px column, mono "eyebrow" line, section headings at showcase size. */
+body, gradio-app {
+    background:
+      radial-gradient(40% 50% at 20% 0%, rgba(139,124,255,0.20), transparent 70%),
+      radial-gradient(35% 45% at 85% 0%, rgba(63,208,201,0.12), transparent 70%),
+      #0b0d14 !important;
+    background-repeat: no-repeat !important;
+    background-attachment: fixed !important;
+}
+.gradio-container { background: transparent !important; }
+/* Fluid padding (clamp) rather than a phone @media rule: Gradio's own
+   wrappers (.gradio-container, .main) pad 28px + 32px a side, which on a
+   390px phone left a 270px column. */
+.gradio-container { max-width: 1180px !important; margin: 0 auto !important;
+                    padding: 0 clamp(4px, 2vw, 28px) 48px !important; }
+.gradio-container .main.app { padding-left: clamp(4px, 2vw, 32px) !important;
+                              padding-right: clamp(4px, 2vw, 32px) !important; }
+
+.hero-header {
+    background: rgba(255,255,255,0.035) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 20px !important;
+    padding: clamp(24px, 4vw, 40px) clamp(16px, 3vw, 32px) clamp(20px, 3vw, 30px) !important;
+    margin: clamp(12px, 3vw, 28px) 0 18px !important;
+    backdrop-filter: blur(6px);
+}
+.app-eyebrow p {
+    margin: 0 !important; color: #3fd0c9 !important;
+    font: 600 12px/1.4 "JetBrains Mono", ui-monospace, monospace !important;
+    letter-spacing: 0.14em; text-transform: uppercase;
+}
+.app-title h1 { font-size: clamp(30px, 4.6vw, 48px) !important; letter-spacing: -0.03em !important; }
+.app-subtitle, .app-subtitle p { max-width: 70ch; margin: 0 auto !important; color: #9298ab !important; font-size: 16px !important; line-height: 1.6; }
+.app-subtitle a { color: #3fd0c9 !important; text-decoration: none; }
+.app-subtitle a:hover { text-decoration: underline; }
+
+/* Markdown blocks are Gradio "blocks" with the theme's border and radius,
+   which drew an empty outlined box around each heading's top margin. */
+.section-title, .section-sub, .app-title, .app-subtitle, .app-eyebrow {
+    border: 0 !important; box-shadow: none !important; background: transparent !important;
+}
+.section-title { margin-top: clamp(28px, 5vw, 48px) !important; }
+.section-title h2 {
+    margin: 0 !important; font-size: 28px !important; font-weight: 700 !important;
+    letter-spacing: -0.02em !important; color: #e8eaf2 !important;
+}
+.section-sub, .section-sub p { color: #9298ab !important; font-size: 15px !important; max-width: 78ch; }
+
+.model-card, .attr-window {
+    background: rgba(255,255,255,0.035) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 20px !important;
+}
+.reference-box { background: rgba(255,255,255,0.035); border-color: rgba(255,255,255,0.08); }
+.variants-bundle { border: 1px solid rgba(139,124,255,0.55); border-radius: 20px; }
+.gen-placeholder { border-color: rgba(139,124,255,0.6); }
+.centered-btn-row button { box-shadow: 0 8px 30px rgba(139,124,255,0.25); }
 """
 
 
@@ -2252,12 +2393,15 @@ def _audio_slot(label: str, idle_text: str = _DEFAULT_IDLE_TEXT):
 
 
 def build_ui():
-    with gr.Blocks(title="Symbolic Music Demo") as demo:
+    with gr.Blocks(title="Tonic · Interactive Demo") as demo:
         with gr.Column(elem_classes="hero-header"):
-            gr.Markdown("# 🎷 Symbolic Music Generation 🎷", elem_classes="app-title")
+            gr.Markdown("Interactive demo · live generation · ETH Zürich × MIT master's thesis",
+                        elem_classes="app-eyebrow")
+            gr.Markdown("# 🎷 Tonic · Symbolic Music Generation · Interactive Demo 🎷", elem_classes="app-title")
             gr.Markdown(
-                "Compare EBT, Llama, and GPT-2 on the same prompt, then explore EBT's "
-                "attribute-guided generation. Models load once and are cached.",
+                "Generate music live with an Energy-Based Transformer (EBT), Llama and GPT-2, "
+                "and steer the EBT. Pre-rendered examples are in the "
+                "[showcase](https://rebeccaceccatelli.github.io/music_EBT/).",
                 elem_classes="app-subtitle",
             )
 
