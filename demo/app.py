@@ -2327,6 +2327,13 @@ footer { display: none !important; }
 .has-roll .waveform-container { position: relative !important; height: 96px !important; }
 .has-roll #waveform { opacity: 0 !important; }
 .tonic-roll.overlay { position: absolute; inset: 0; margin: 0; pointer-events: none; }
+/* Download/share icons sit over the roll's top-right corner: smaller and faint
+   until hovered, on a small dark pill so they stay legible over notes. */
+.has-roll .icon-button-wrapper.top-panel {
+    transform: scale(0.72); transform-origin: top right; opacity: 0.55;
+    background: rgba(11,13,20,0.75) !important; border-radius: 0 0 0 8px; transition: opacity .15s;
+}
+.has-roll .icon-button-wrapper.top-panel:hover { opacity: 1; }
 .tonic-roll-head {
     position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; display: none;
     background: #3fd0c9; box-shadow: 0 0 8px rgba(63,208,201,0.8); pointer-events: none;
