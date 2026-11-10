@@ -264,7 +264,7 @@
         '<p class="values-title">Una nota su questa ricerca</p>' +
         '<div class="value"><span class="v-ico" aria-hidden="true">🎼</span><div><b>Addestrati su dati aperti</b>' +
         '<p>Tutta la musica usata per addestrare questi modelli proviene da raccolte open source, disponibili pubblicamente e legalmente su internet.</p></div></div>' +
-        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>Di cosa parla questa tesi</b>' +
+        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>Uno strumento al servizio dei musicisti, non un sostituto</b>' +
         '<p>Questo lavoro non vuole sostituire musicisti e artisti. Oggi la maggior parte dei modelli che generano musica funziona come una scatola chiusa: ' +
         'si ottiene un risultato, ma si può decidere ben poco di come viene fuori. Questa tesi studia come dare più controllo a chi usa il modello, e capire meglio ' +
         'cosa sta facendo: chiedere che un passaggio sia più piano o più forte, con note più lunghe o più corte, più acuto o più grave, e ascoltare come risponde. ' +

@@ -243,7 +243,7 @@
         '<p class="values-title">A note on this research</p>' +
         '<div class="value"><span class="v-ico" aria-hidden="true">🎼</span><div><b>Trained on open data</b>' +
         '<p>All the music used to train these models comes from open-source collections that are publicly and legally available online.</p></div></div>' +
-        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>What this thesis is about</b>' +
+        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>A tool for musicians to work with, not a replacement</b>' +
         '<p>This work is not meant to replace musicians and artists. Most models that generate music today work like a black box: you get a result, ' +
         'but have little say in how it turns out. This thesis looks at how to give the person using the model more control, and a clearer view of what ' +
         'it is doing: asking for a passage to be softer or louder, to have longer or shorter notes, or to sit higher or lower, and hearing how the model responds. ' +
