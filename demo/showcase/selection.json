@@ -1,8 +1,10 @@
 {
  "meta": {
   "title": "Tonic · Showcase",
-  "subtitle": "<strong>Tonic</strong>, an Energy-Based Transformer (EBT), side by side with two standard language models, <strong>Llama</strong> and <strong>GPT-2</strong>.<span class=\"lede-2\">Each one continues the same short piece of music: first freely, then steered towards a chosen trait.</span><span class=\"traits\"><span>louder / softer</span><span>longer / shorter notes</span><span>higher / lower register</span></span>",
+  "subtitle": "<strong>Tonic</strong>, an Energy-Based Transformer (EBT), side by side with two standard language models, <strong>Llama</strong> and <strong>GPT-2</strong>.<span class=\"lede-2\">Each one continues the same short piece of music: first freely, then steered towards a chosen attribute.</span>",
   "author": "Rebecca Ceccatelli",
+  "affiliation": "ETH Zürich × MIT",
+  "home": "https://rebeccaceccatelli.github.io/tonic/",
   "repo": "https://github.com/RebeccaCeccatelli/music_EBT",
   "disclaimer": "These are selected examples. In Unguided Generation and Single-Attribute Control, every clip was selected by ear by the author from the final evaluation outputs (the same pool as the listening study): they show what each system does at its best, not on average. The baselines there are Llama and GPT-2 trained with the same recipe as the EBT. Combined Control and Pushing Too Hard are not curated: every system gets the same prompt and its first sample, with the earlier Llama baselines. Leading silence is trimmed in the selected clips. The aggregate results are in the thesis."
  },

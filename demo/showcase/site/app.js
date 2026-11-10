@@ -673,7 +673,10 @@
   function render(data) {
     const m = data.meta;
     document.getElementById("title").textContent = m.title;
-    document.getElementById("subtitle").innerHTML = m.subtitle;  // author-written markup: bold names, trait tags
+    document.getElementById("subtitle").innerHTML = m.subtitle;  // author-written markup: bold names
+    const by = document.getElementById("byline");
+    by.append(h("span", null, m.author), h("span", null, m.affiliation));
+    if (m.home) { const a = h("a", null, "← Tonic"); a.href = m.home; by.append(a); }
     document.getElementById("disclaimer").textContent = m.disclaimer;
     document.getElementById("author").textContent = m.author;
     document.getElementById("repo").href = m.repo;

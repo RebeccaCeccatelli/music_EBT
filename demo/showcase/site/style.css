@@ -46,21 +46,21 @@ a:hover { text-decoration: underline; }
   font: 600 12px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
 }
 .hero h1 {
-  margin: 0; max-width: 18ch;
+  margin: 0; max-width: 18ch; width: fit-content;  /* gradient spans the text, not the column */
   font-size: clamp(36px, 5.6vw, 64px); line-height: 1.04; letter-spacing: -0.03em; font-weight: 750;
-  background: linear-gradient(100deg, #fff 30%, #c9c2ff 65%, var(--accent-2));
+  /* Same gradient as the interactive demo title (its theme: violet-300, violet-500, cyan-400). */
+  background: linear-gradient(90deg, #c4b5fd 0%, #8b5cf6 55%, #22d3ee 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .lede { max-width: 62ch; margin: 22px 0 0; color: var(--muted); font-size: 18px; }
 .lede strong { color: var(--text); font-weight: 650; }
 .lede .lede-2 { display: block; margin-top: 10px; font-size: 16px; }
-/* Trait tags: plain labels, not links, so they are styled unlike the pill nav below them. */
-.lede .traits { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.lede .traits span {
-  padding: 3px 10px; border-radius: 6px;
-  border: 1px solid rgba(63, 208, 201, 0.35); background: rgba(63, 208, 201, 0.07);
-  color: var(--accent-2); font: 500 13px/1.6 var(--mono);
-}
+/* Author line under the subtitle: quiet, links back to the Tonic front page. */
+.byline { display: flex; flex-wrap: wrap; gap: 6px 0; margin: 16px 0 0; color: var(--faint); font-size: 14px; }
+.byline > * + *::before { content: "·"; margin: 0 10px; color: var(--faint); }
+.byline span:first-child { color: var(--muted); font-weight: 550; }
+.byline a { color: var(--accent-2); }
+@media (max-width: 480px) { .byline { font-size: 13px; } .byline > * + *::before { margin: 0 7px; } }
 .toc { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 32px; }
 .toc a {
   display: inline-flex; align-items: center; gap: 10px;

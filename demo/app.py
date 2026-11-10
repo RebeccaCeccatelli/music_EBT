@@ -2339,13 +2339,13 @@ body, gradio-app {
 .app-subtitle strong { color: #e8eaf2 !important; font-weight: 650; }
 .app-subtitle .lede-2 { font-size: 15px; color: #9298ab !important; }
 .app-subtitle .lede-3 { font-size: 14px; color: #9298ab !important; }
-/* Trait tags as on the showcase: flat labels, not buttons. */
-.app-subtitle .traits { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-.app-subtitle .traits span {
-    padding: 3px 10px; border-radius: 6px;
-    border: 1px solid rgba(63,208,201,0.35); background: rgba(63,208,201,0.07);
-    color: #3fd0c9; font: 500 13px/1.6 "JetBrains Mono", ui-monospace, monospace;
-}
+/* Author line as on the showcase: quiet, links back to the Tonic front page. */
+.app-byline { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 0; margin: 4px 0 0 !important;
+              color: #6b7186; font-size: 14px; }
+.app-byline > * + *::before { content: "·"; margin: 0 10px; color: #6b7186; }
+.app-byline span:first-child { color: #9298ab; font-weight: 550; }
+.app-byline a { color: #3fd0c9 !important; text-decoration: none; }
+@media (max-width: 480px) { .app-byline { font-size: 13px; } .app-byline > * + *::before { margin: 0 7px; } }
 .app-subtitle a:hover { text-decoration: underline; }
 
 /* Markdown blocks are Gradio "blocks" with the theme's border and radius,
@@ -2418,17 +2418,18 @@ def build_ui():
                         elem_classes="app-eyebrow")
             gr.Markdown("# 🎷 Tonic · Interactive Demo 🎷", elem_classes="app-title")
             gr.Markdown(
-                # Same structure as the showcase subtitle: models line, "how" line, trait tags.
+                # Same structure as the showcase subtitle: models line, then the "how" line.
                 "**Tonic**, an Energy-Based Transformer (EBT), side by side with two standard "
                 "language models, **Llama** and **GPT-2**.\n\n"
                 '<span class="lede-2">Pick a piece of music and let them continue it live, '
-                "then steer the continuation towards a chosen trait.</span>\n\n"
-                '<span class="traits"><span>louder / softer</span><span>longer / shorter notes</span>'
-                "<span>higher / lower register</span></span>\n\n"
+                "then steer the continuation towards a chosen attribute.</span>\n\n"
                 '<span class="lede-3">Ready-made examples: '
                 '<a href="https://rebeccaceccatelli.github.io/music_EBT/" target="_blank">the showcase</a></span>',
                 elem_classes="app-subtitle",
             )
+            # Author line, as on the showcase: links back to the Tonic front page.
+            gr.HTML('<p class="app-byline"><span>Rebecca Ceccatelli</span><span>ETH Zürich × MIT</span>'
+                    '<a href="https://rebeccaceccatelli.github.io/tonic/" target="_blank">← Tonic</a></p>')
 
         gr.Markdown('## <span class="kicker">01</span>Choose format and models', elem_classes="section-title")
         gr.Markdown(
