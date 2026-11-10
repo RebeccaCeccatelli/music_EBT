@@ -2397,10 +2397,12 @@ def build_ui():
         with gr.Column(elem_classes="hero-header"):
             gr.Markdown("Interactive demo · live generation · ETH Zürich × MIT master's thesis",
                         elem_classes="app-eyebrow")
-            gr.Markdown("# 🎷 Tonic · Symbolic Music Generation · Interactive Demo 🎷", elem_classes="app-title")
+            gr.Markdown("# 🎷 Tonic · Interactive Demo 🎷", elem_classes="app-title")
             gr.Markdown(
-                "Generate music live with an Energy-Based Transformer (EBT), Llama and GPT-2, "
-                "and steer the EBT. Pre-rendered examples are in the "
+                "Pick a piece of music and let Tonic, an Energy-Based Transformer (EBT), and two "
+                "standard language models, Llama and GPT-2, continue it live. Then steer the "
+                "continuation towards a chosen trait: louder or softer playing, longer or shorter "
+                "notes, or a higher or lower register. For ready-made examples, see the "
                 "[showcase](https://rebeccaceccatelli.github.io/music_EBT/).",
                 elem_classes="app-subtitle",
             )
