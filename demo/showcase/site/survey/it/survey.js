@@ -279,7 +279,7 @@
     s.append(
       dots("research"),
       h("p", "eyebrow", "Una nota sull'etica, di chi ha realizzato questo lavoro"),
-      h("h2", "s-title", "Uno strumento al servizio dei musicisti, non un sostituto"),
+      h("h2", "s-title", "Uno strumento al servizio dei musicisti"),
       h("div", "r-personal",
         "<p>Questo lavoro <b>non</b> vuole sostituire musicisti e artisti: vuole dare loro strumenti migliori.</p>" +
         "<p>Sono musicista da tutta la vita, e molti miei amici vivono di musica. So quanto impegno, amore e passione ci siano dietro.</p>"),
