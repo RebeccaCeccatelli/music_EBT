@@ -298,7 +298,7 @@
         '<span class="v-ico" aria-hidden="true">🎼</span><div><b>Addestrati su dati open source</b>' +
         '<p>Tutta la musica usata per addestrare questi modelli proviene da <a href="https://huggingface.co/datasets/Metacreation/GigaMIDI" target="_blank" rel="noopener">GigaMIDI</a>, una raccolta open source di file MIDI disponibile pubblicamente e legalmente su internet.</p></div>'),
       h("div", "r-thanks",
-        "<p>Grazie per il tempo che dedicherai all'ascolto: le tue risposte mi aiutano davvero.</p>" +
+        "<p>Grazie per il tuo tempo, le tue risposte sono di grande aiuto.</p>" +
         '<p class="r-sign" aria-label="Rebecca">Rebecca</p>'),
     );
     s.append(nav("Continua", goto("welcome")).row);

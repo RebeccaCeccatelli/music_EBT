@@ -57,7 +57,7 @@
       dataT: "Addestrati su dati open source",
       data: `Tutta la musica usata per addestrare questi modelli proviene da <a href="${GIGAMIDI}" target="_blank" rel="noopener">GigaMIDI</a>, ` +
             "una raccolta open source di file MIDI disponibile pubblicamente e legalmente su internet.",
-      thanks: "Grazie per il tempo che dedichi all'ascolto.",
+      thanks: "Grazie per il tuo tempo.",
       close: "Chiudi",
     },
   };
