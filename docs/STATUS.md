@@ -1,11 +1,11 @@
 # Project status
 
-_Last updated: 2026-11-09._ Living snapshot of where music-EBT stands; the
+_Last updated: 2026-11-10._ Living snapshot of where music-EBT stands; the
 day-by-day history is in [diary/](diary/README.md), citable results in
 [thesis_findings/](thesis_findings/README.md).
 
 **Phase: wrap-up.** Pretraining is stopped; remaining work is regressors →
-final experiments → demo freeze → writing.
+final experiments → demo freeze → writing. Thesis: Intro–Experiments drafted (Experiments: corpus attribute section added 2026-11-10); note σ_a for targets is REMI's, used for both tokenizations.
 
 ## Final checkpoints
 Under `~/orcd/scratch/rebcecca/music_EBT_logs/checkpoints/`. "Real best"

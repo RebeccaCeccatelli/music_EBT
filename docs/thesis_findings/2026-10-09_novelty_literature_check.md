@@ -151,3 +151,60 @@ exhaustive GitHub fork scan.
     (2605.31295), SMITIN, Amadeus, Ferreira et al. MCTS.
 - Framing stays: the AR methods are transfers of NLP techniques and serve
   as strong baselines, not contributions.
+
+## Correction 2026-11-10: PPLM has been applied to symbolic music
+
+Earlier sections say no application of PPLM to symbolic music was found. That
+is wrong. **Imasato, Miyazawa, Duncan & Nagai, "Using a Language Model to
+Generate Music in Its Symbolic Domain While Controlling Its Perceived
+Emotion", IEEE Access 11:52412–52428, 2023 (doi:10.1109/ACCESS.2023.3280603;
+PDF in `papers/Explicit control over generation/`)**:
+- GPT-2 trained from scratch on piano MIDI (MAESTRO, VGMIDI, EMOPIA),
+  pitch-and-duration pair tokens (~20.8k vocab), context 1024.
+- Full original PPLM: perturbs past key/values over m iterations with
+  gradients from a one-layer discriminator on hidden states, KL term,
+  geometric-mean fusion (γ_gm). Discriminator trained on EMOPIA's four
+  Russell quadrants (MSE on class probabilities).
+- Generation in 64-token chunks with a grid of PPLM hyperparameters; one
+  candidate per chunk kept by an mgeval-based score plus discriminator
+  probability, or by a human (so PPLM + best-of-N-style reranking).
+- Evaluation: VGMIDI valence/arousal classifiers, mgeval metrics, 939-person
+  listening study.
+
+**Revised claim (used in the thesis, Background):** PPLM has been applied to
+symbolic music for a categorical emotion attribute. To our knowledge it has
+not been used to steer low-level musical attributes towards continuous
+targets; expectation tilting has not been evaluated on symbolic music; and
+these plug-and-play methods have not been compared under one protocol. Our
+PPLM-style baseline (one logit-space step) is simpler than their full PPLM;
+the Method says so.
+
+Also: arXiv:2505.20934, cited above as a "strong guidance goes off-manifold"
+source, is NatADiff (adversarial image diffusion) and is not relevant. The
+thesis cites Rojas et al. 2025 (arXiv:2507.08965) for concentration under
+strong guidance in masked discrete diffusion instead.
+
+## Check 2026-11-10: the other steering methods
+
+Web searches only (several queries per method, extended mode); not exhaustive.
+- **Expectation tilting:** no application to symbolic music found (only
+  constrained decoding framed as KL projection, for text). Claim kept,
+  "to our knowledge".
+- **Best-of-N / reranking:** no plain best-of-N with an attribute regressor
+  found; search-based relatives exist: Ferreira et al. 2022 (MCTS, emotion),
+  dual-level beam search (tonal tension, arXiv:2511.19342),
+  **Text2midi-InferAlign** (Roy, Puri & Herremans, arXiv:2505.12669;
+  reward-guided tree search, CLAP + key-consistency rewards, no retraining).
+  Never claimed as new; InferAlign now cited.
+- **FUDGE / GeDi on music:** nothing found. Not claimed.
+- **EBT energy guidance:** nothing found; closest are classifier guidance in
+  symbolic diffusion: SCHmUBERT (note density), **AGE-DM** (Zhang, Ferris,
+  Yue & Xu, MMAsia 2024, doi:10.1145/3696409.3700289; emotion, guidance
+  scale vs quality).
+- **New closest prior work for low-level continuous inference-time control:**
+  **Stochastic Control Guidance** (Huang et al., ICML 2024 oral,
+  arXiv:2402.14285): training-free, plug-and-play guidance of a pretrained
+  diffusion model towards pitch histogram and note density (L2, numeric
+  targets from real pieces) and chord progression (0-1), forward evaluations
+  of the rule only. Diffusion, not EBT/AR, and no comparison with AR
+  plug-and-play methods, so our claims stand; now cited in the Background.
