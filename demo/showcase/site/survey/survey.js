@@ -243,10 +243,12 @@
         '<p class="values-title">A note on this research</p>' +
         '<div class="value"><span class="v-ico" aria-hidden="true">🎼</span><div><b>Trained on open data</b>' +
         '<p>All the music used to train these models comes from open-source collections that are publicly and legally available online.</p></div></div>' +
-        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>Made for musicians, not instead of them</b>' +
-        '<p>This work is not meant to replace musicians and artists. We see it as a step towards a collaboration between musicians and technology, ' +
-        'much as synthesizers and electronic instruments became part of music decades ago. This thesis explores how to make these models easier to ' +
-        'understand and to steer in finer detail: ideally, a first step towards letting composers <i>paint</i> music with them.</p></div></div>'),
+        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>What this thesis is about</b>' +
+        '<p>This work is not meant to replace musicians and artists. Most models that generate music today work like a black box: you get a result, ' +
+        'but have little say in how it turns out. This thesis looks at how to give the person using the model more control, and a clearer view of what ' +
+        'it is doing: asking for a passage to be softer or louder, to have longer or shorter notes, or to sit higher or lower, and hearing how the model responds. ' +
+        'We see it as a step towards musicians working with these tools the way they once took up synthesizers: as instruments for shaping their own ideas, ' +
+        'and one day perhaps for <i>painting</i> music.</p></div></div>'),
     );
     if (CFG.contact) s.append(h("p", "hint contact", `Questions about the study? Write to <a href="mailto:${CFG.contact}">${CFG.contact}</a>`));
     s.append(nav("Let's go", goto("how")).row);

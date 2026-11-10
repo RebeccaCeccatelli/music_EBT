@@ -264,10 +264,12 @@
         '<p class="values-title">Una nota su questa ricerca</p>' +
         '<div class="value"><span class="v-ico" aria-hidden="true">🎼</span><div><b>Addestrati su dati aperti</b>' +
         '<p>Tutta la musica usata per addestrare questi modelli proviene da raccolte open source, disponibili pubblicamente e legalmente su internet.</p></div></div>' +
-        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>Per chi fa musica, non al suo posto</b>' +
-        '<p>Questo lavoro non vuole sostituire musicisti e artisti. Lo vediamo piuttosto come un passo verso una collaborazione tra chi fa musica e la tecnologia, ' +
-        'come è successo decenni fa con l\'arrivo dei sintetizzatori e degli strumenti elettronici. In particolare, questa tesi studia come rendere questi modelli ' +
-        'più interpretabili e controllabili nei dettagli: idealmente, un primo passo per permettere a chi compone di <i>dipingere</i> la musica con questi strumenti.</p></div></div>'),
+        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>Di cosa parla questa tesi</b>' +
+        '<p>Questo lavoro non vuole sostituire musicisti e artisti. Oggi la maggior parte dei modelli che generano musica funziona come una scatola chiusa: ' +
+        'si ottiene un risultato, ma si può decidere ben poco di come viene fuori. Questa tesi studia come dare più controllo a chi usa il modello, e capire meglio ' +
+        'cosa sta facendo: chiedere che un passaggio sia più piano o più forte, con note più lunghe o più corte, più acuto o più grave, e ascoltare come risponde. ' +
+        'Lo vediamo come un passo verso un uso di questi strumenti simile a quello che i musicisti hanno fatto dei sintetizzatori: strumenti per dare forma alle ' +
+        'proprie idee e, un giorno, magari per <i>dipingere</i> la musica.</p></div></div>'),
     );
     if (CFG.contact) s.append(h("p", "hint contact", `Hai domande sul test? Scrivi a <a href="mailto:${CFG.contact}">${CFG.contact}</a>`));
     s.append(nav("Iniziamo", goto("how")).row);
