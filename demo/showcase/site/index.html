@@ -169,10 +169,14 @@ dialog.an-dialog::backdrop { background: rgba(5,6,10,.62); backdrop-filter: blur
 `;
 
   function setup() {
-    if (!document.querySelector('link[href*="family=Caveat"]')) {
+    // Caveat for the signature; Inter for pages that don't load it already (e.g. the archive hub).
+    const fam = [];
+    if (!document.querySelector('link[href*="family=Caveat"]')) fam.push("family=Caveat:wght@600");
+    if (!document.querySelector('link[href*="family=Inter"]')) fam.push("family=Inter:wght@400;500;600;650;750");
+    if (fam.length) {
       const f = document.createElement("link");
       f.rel = "stylesheet";
-      f.href = "https://fonts.googleapis.com/css2?family=Caveat:wght@600&display=swap";
+      f.href = `https://fonts.googleapis.com/css2?${fam.join("&")}&display=swap`;
       document.head.append(f);
     }
     const st = document.createElement("style");
