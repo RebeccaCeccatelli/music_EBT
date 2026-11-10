@@ -36,7 +36,7 @@ The thesis tests whether these advantages hold up for music, in four research qu
 
 Everything runs with two tokenizations:
 - **REMI** (via [MidiTok](https://github.com/Natooz/MidiTok)): a flat stream of bar, position, pitch, velocity and duration tokens.
-- **Anticipation**, arrival-time variant ([Thickstun et al.](https://github.com/jthickstun/anticipation), our fork is a git submodule): (time, duration, note) triplets.
+- **Anticipation**, arrival-time variant ([Thickstun et al.](https://github.com/jthickstun/anticipation), our [fork](https://github.com/RebeccaCeccatelli/anticipation-musicEBT) is a git submodule): (time, duration, note) triplets.
 
 ## Highlights
 
