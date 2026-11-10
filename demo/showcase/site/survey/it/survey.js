@@ -295,7 +295,7 @@
         'direzione: modelli come strumenti per dare forma alle proprie idee e, un giorno, magari per <i>dipingere</i> la musica, ' +
         'interagendo con loro dal vivo, quasi come in una jam session.</p></div>'),
       h("div", "r-data",
-        '<span class="v-ico" aria-hidden="true">🎼</span><div><b>Addestrati su dati aperti</b>' +
+        '<span class="v-ico" aria-hidden="true">🎼</span><div><b>Addestrati su dati open source</b>' +
         '<p>Tutta la musica usata per addestrare questi modelli proviene da <a href="https://huggingface.co/datasets/Metacreation/GigaMIDI" target="_blank" rel="noopener">GigaMIDI</a>, una raccolta open source di file MIDI disponibile pubblicamente e legalmente su internet.</p></div>'),
       h("div", "r-thanks",
         "<p>Grazie per il tempo che dedicherai all'ascolto: le tue risposte mi aiutano davvero.</p>" +
