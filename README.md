@@ -1,13 +1,38 @@
-# 🎹 Tonic: an Energy-Based Transformer for Symbolic Music
+# 🎹 Towards Controllable Symbolic Music Generation with Energy-Based Transformers
+
+**Tonic vs. autoregressive Transformers · single- and multi-attribute control**
 
 🏠 [Tonic](https://rebeccaceccatelli.github.io/tonic/) | 🎧 [Showcase](https://rebeccaceccatelli.github.io/music_EBT/) | 🗂️ [Code structure](docs/CODE_STRUCTURE.md) | 📊 [Findings](docs/thesis_findings/README.md) | 🧭 [Project status](docs/STATUS.md)
 
-**Tonic** applies **Energy-Based Transformers (EBTs)** to **symbolic music generation**. This repository is its codebase, built for an ETH Zürich / MIT master's thesis.
+This is the codebase of an ETH Zürich / MIT master's thesis. The thesis covers three things:
+- **Tonic**, the first Energy-Based Transformer (EBT) for symbolic music, to our knowledge.
+- **A comparison** between Tonic and autoregressive Llama and GPT-2 models of the same size, trained on the same data with the same recipe.
+- **Attribute control**: steering a frozen model towards requested values of musical attributes (loudness, note length, pitch register), one at a time or several combined. Tonic's energy-based control is compared with established plug-and-play methods for the AR models.
 
-An EBT does not output the next token in one forward pass. It learns an energy function over (context, candidate) pairs and **refines its prediction by gradient descent on that energy** (MCMC-style "thinking" steps). The project asks two questions:
+## Why energy-based models
 
-1. **Can an EBT model music?** Tonic is a small EBT trained on the [GigaMIDI](https://huggingface.co/datasets/Metacreation/GigaMIDI) corpus. We compare it with autoregressive Llama and GPT-2 baselines trained on the same data and step budget.
-2. **Does the energy view help with control?** At generation time, Tonic steers musical attributes (loudness, note length, pitch register, …) by adding the gradient of a small learned attribute regressor to its prediction ([R³](https://arxiv.org/abs/2302.11552)-style guidance). We compare this with plug-and-play guidance for the AR baselines: PPLM, exponential tilting, and best-of-N.
+Today's music models generate impressive music. The open question is **how precisely a musician can shape what they produce**. A composer or producer usually wants a continuation that is softer, higher or more sustained than the model's own, by a chosen amount, while still sounding like music. Current symbolic models mostly offer coarse, global conditions such as genre or mood. Those controls are fixed at training time, and each new one needs labelled data and a new training run.
+
+Plug-and-play control avoids retraining: a small regressor steers a frozen model at generation time. Autoregressive (AR) Transformers, however, commit to each token in a single forward pass and **never revisit a decision**. Guidance can only be added from outside: by nudging the next-token distribution, reranking samples, or perturbing hidden states.
+
+**Energy-based models** are built differently. An EBT ([Gladstone et al., 2025](https://arxiv.org/abs/2507.02092)) does not output a prediction directly. It assigns an energy to each candidate and **reaches its prediction by minimising that energy step by step**. This structure gives three advantages we hoped to use:
+- **Composability.** Energies add up ([Du et al., 2023](https://arxiv.org/abs/2302.11552)). Each musical request becomes its own energy term, with its own target and weight, and enters the model's own refinement loop. Requests can be combined freely at generation time.
+- **Finer control.** Requests are continuous, per-attribute targets rather than a fixed set of global labels, and adding a new one only needs a small regressor whose labels come straight from the MIDI.
+- **Interpretability.** The output is the result of an explicit optimisation, step by step, so the model's behaviour is easier to inspect than a single forward pass.
+
+The thesis tests whether these advantages hold up for music, in four research questions:
+1. Can an EBT be trained on symbolic music and generate coherent, musically plausible continuations?
+2. How does it compare with AR Transformers of the same size, trained on the same data with the same recipe, in likelihood and musical quality?
+3. Can a frozen EBT be steered towards target attribute values, singly and in combination, by adding attribute energies to its inference loop?
+4. How does this compare with plug-and-play steering of AR models (PPLM, exponential tilting, best-of-N), in control accuracy, musical quality and compute?
+
+## What's in this project
+
+- **Tonic**: a small EBT trained on the [GigaMIDI](https://huggingface.co/datasets/Metacreation/GigaMIDI) corpus.
+- **Baselines**: Llama and GPT-2 trained with the same recipe and step budget.
+- **Single-attribute control**: for each attribute, a small regressor's gradient is added to the model's prediction ([R³](https://arxiv.org/abs/2302.11552)-style guidance), gated to the token types that can move it. The AR baselines are steered with PPLM, tilting and best-of-N.
+- **Multi-attribute control**: several attributes requested in one generation. Tonic sums their energies; the AR methods are run with the same combined requests.
+- **Evaluation**: likelihood on matched windows, music-quality metrics against real data, controllability vs. quality trade-offs, paired significance tests, and a blind listening survey.
 
 Everything runs with two tokenizations:
 - **REMI** (via [MidiTok](https://github.com/Natooz/MidiTok)): a flat stream of bar, position, pitch, velocity and duration tokens.
@@ -16,7 +41,8 @@ Everything runs with two tokenizations:
 ## Highlights
 
 - **Unguided quality.** All models get close to the real-data reference on REMI. Tonic scores slightly lowest. Its typical failure is safe, repetitive music, not cacophony. → [findings](docs/thesis_findings/2026-10-06_unguided_music_quality.md)
-- **Attribute control.** On REMI, Tonic's guidance is statistically tied with Llama + PPLM. On Anticipation, PPLM and best-of-N come out ahead. Tonic's guidance only works in a narrow strength (λ) window, and pushing harder flattens the music into cacophony. → [findings](docs/thesis_findings/2026-11-05_heldout_guidance.md)
+- **Single-attribute control.** On REMI, Tonic's guidance is statistically tied with Llama + PPLM. On Anticipation, PPLM and best-of-N come out ahead. Tonic's guidance only works in a narrow strength (λ) window, and pushing harder flattens the music into cacophony. → [findings](docs/thesis_findings/2026-11-05_heldout_guidance.md)
+- **Multi-attribute control.** Combined requests (e.g. loudness + note length) are evaluated for Tonic and every AR method. See the thesis for results.
 - **Demos.** The [Tonic front page](https://rebeccaceccatelli.github.io/tonic/), a static [showcase](https://rebeccaceccatelli.github.io/music_EBT/) of curated clips, a blind listening survey, and an interactive Gradio app (*Tonic · Interactive Demo*). The app puts Tonic, Llama and GPT-2 side by side, with live attribute control.
 
 For how guidance works in detail (gating, λ, targets), see [docs/attribute_control_mechanism.md](docs/attribute_control_mechanism.md).
@@ -29,7 +55,7 @@ For how guidance works in detail (gating, λ, targets), see [docs/attribute_cont
 | `model/mus/` | Music models: `ebt_symbolic.py` (Tonic), `baseline_llama_transformer.py`, `baseline_hf_gpt2_transformer.py` |
 | `data/mus/symbolic/` | GigaMIDI / custom dataloaders, REMI + Anticipation tokenizers |
 | `inference/mus/` | Generation for all models (incl. guided), tokens → MIDI → WAV / piano roll |
-| `attribute_control/` | Attribute definitions, regressor training, guidance sweeps (EBT and AR baselines), composition of attributes |
+| `attribute_control/` | Attribute definitions, regressor training, single-attribute guidance sweeps (Tonic and AR baselines), multi-attribute composition |
 | `eval/` | Music-quality metrics, loss comparisons, significance tests, plots |
 | `demo/` | Gradio app, static showcase site, listening survey, clip library |
 | `job_scripts/mus/` | SLURM scripts for tokenization, pretraining, inference, evaluation, demo builds |
