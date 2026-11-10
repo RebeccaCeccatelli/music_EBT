@@ -5,7 +5,7 @@ name: Showcase page
 on:
   push:
     branches: [main]
-    paths: ["demo/showcase/site/**"]
+    paths: ["demo/showcase/site/**", ".github/workflows/showcase-pages.yml"]
   workflow_dispatch:
 
 permissions:
@@ -26,8 +26,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # The old survey pages (site/survey/, ~half the files) are served from Netlify, not from here;
+      # leaving them out keeps the Pages sync small (deploys with them stalled at "syncing_files").
+      - name: Stage site without survey/
+        run: |
+          mkdir -p _site
+          rsync -a --exclude 'survey/' --exclude 'audio/sources.json' demo/showcase/site/ _site/
+          echo "files: $(find _site -type f | wc -l)  size: $(du -sh _site | cut -f1)"
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: demo/showcase/site
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
