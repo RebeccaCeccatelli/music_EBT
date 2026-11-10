@@ -18,10 +18,13 @@ by the lowest `valid_loss` in its filename** (e.g. 0.1895, 0.1941, 0.3335,
 | EBT small-REMI s1 | step 33,732 · val 0.7150 (job23868523) | 34,268 latest; 19,496 + 10,584 (old regressor pairings) |
 | EBT small-Ant-AT s1 | step 88,800 · val 0.9903 (job22827009) | 99,900 final; 55,500 (old regressor pairing) |
 | EBT small-Ant-AT stab+ | step 42,900 · val 1.0209 | 44,700; 44,800 is corrupted (do not load) |
-| GPT-2 small-REMI | step 99,660 · val 0.4756 | latest |
-| Llama small-REMI | step 99,660 · val 0.5239 | latest |
-| GPT-2 small-Ant-AT | step 98,900 · val 0.7557 | latest |
-| Llama small-Ant-AT | step 100,000 · val 0.7735 | — |
+| GPT-2 small-REMI (step-matched, ebtrecipe) | step 33,732 · val 0.6972 (job25810910) | fully trained: 99,660 · val 0.4756 |
+| Llama small-REMI (step-matched, ebtrecipe) | step 33,196 · val 0.7203 (job25810908) | fully trained: 99,660 · val 0.5239 (job21725352) |
+| GPT-2 small-Ant-AT (step-matched, ebtrecipe) | step 87,900 · val 0.9971 (job25810911) | fully trained: 98,900 · val 0.7557 |
+| Llama small-Ant-AT (step-matched, ebtrecipe) | step 88,500 · val 0.9878 (job25810909) | fully trained: 100,000 · val 0.7735 |
+
+The step-matched baselines are the ones used in the final comparisons. The demo
+offers each final plus one extra (baselines: fully trained; EBT: last save).
 
 Scratch: ~39 GB used by checkpoints after the 2026-10-05 cleanup.
 
