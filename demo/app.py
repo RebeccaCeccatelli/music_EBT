@@ -65,6 +65,7 @@ REMI_TOKENIZER_CONFIG = "/home/rebcecca/orcd/pool/music_datasets/giga-midi/token
 
 TOKENIZER_CHOICES = ["REMI", "Anticipation-Arrival-Time"]
 _TOK_SLUG = {"REMI": "remi", "Anticipation-Arrival-Time": "ant-at-full"}
+_TOK_PRETTY = {"REMI": "REMI", "Anticipation-Arrival-Time": "Anticipation"}  # names shown in the UI
 
 
 def _tokenizer_config_path(tokenizer_type: str) -> str | None:
@@ -355,17 +356,16 @@ def _ckpt_progress_html(step: int, loss: float, tokenizer_type: str = "", note: 
     # failed one looked the same at a glance.
     # No "% trained": a share of the 100k-step cap made the thesis checkpoints
     # (the end of their training budget) look a third trained.
+    # The format chip keeps a format switch visible at a glance (it used to be
+    # the "Stats at this REMI checkpoint" title).
     loss_str = f"{loss:.3f}" if loss == loss else "n/a"  # loss != loss iff NaN
-    note_html = f'<div style="opacity:.85">{note}</div>' if note else ""
-    title = f"Stats at this {tokenizer_type} checkpoint:" if tokenizer_type else "Stats at this checkpoint:"
+    note_html = f'<div class="ckpt-note">{note}</div>' if note else ""
+    fmt = _TOK_PRETTY.get(tokenizer_type, tokenizer_type)
+    fmt_chip = f'<span class="ckpt-chip fmt">{fmt}</span>' if fmt else ""
     return f"""
-<div class="reference-box">
-  <div style="font-weight:600;margin-bottom:6px">{title}</div>
-  <div style="display:flex;flex-direction:column;gap:4px;font-size:.95em">
-    {note_html}
-    <div>Training steps &nbsp;<b style="color:var(--primary-500)">{step:,}</b></div>
-    <div>Validation loss &nbsp;<b style="color:var(--primary-500)">{loss_str}</b></div>
-  </div>
+<div class="ckpt-stats">
+  {note_html}
+  <div class="ckpt-chips">{fmt_chip}<span class="ckpt-chip"><b>{step:,}</b> training steps</span><span class="ckpt-chip">val. loss <b>{loss_str}</b></span></div>
 </div>"""
 
 
@@ -1281,6 +1281,8 @@ def preview_prompt(tokenizer_type: str, song_choice: str, start_offset: float):
         wav_path  = out_dir / "preview.wav"
         midi_path.write_bytes(tokens_to_midi(tokens, tokenizer))
         simple_synth(str(midi_path), str(wav_path))
+        if wav_path.exists():
+            _write_roll(wav_path, midi_path, prompt_only=True)
 
         if wav_path.exists():
             # Naming the format explicitly matters here: song choice and
@@ -1297,10 +1299,10 @@ def preview_prompt(tokenizer_type: str, song_choice: str, start_offset: float):
             # any snap-to-nearest-valid-position adjustment.
             if _is_seconds_mode(tokenizer_type, song_choice):
                 actual_seconds = _token_index_to_seconds(tokenizer_type, song_choice, token_offset)
-                status = (f'Previewing: "{song_choice}", starting at {actual_seconds:.1f}s. '
-                          f'Tokenization format chosen: {tokenizer_type}')
+                status = (f'▶ **Now previewing** “{song_choice}”, from **{actual_seconds:.1f} s** '
+                          f'· {_TOK_PRETTY.get(tokenizer_type, tokenizer_type)} format')
             else:
-                status = f"Previewing: {label}. Tokenization format chosen: {tokenizer_type}"
+                status = f"▶ **Now previewing** {label} · {_TOK_PRETTY.get(tokenizer_type, tokenizer_type)} format"
             return str(wav_path), status
         return None, "⚠️ WAV synthesis failed."
     except Exception as e:
@@ -1355,10 +1357,51 @@ def apply_seek_as_start(tokenizer_type: str, song_choice: str, evt: gr.EventData
     coarse_idx = _seconds_to_token_index(tmap, clicked_seconds)
     token_idx = _refine_token_index(tokenizer_type, song_choice, coarse_idx, clicked_seconds)
     offset_seconds = _token_index_to_seconds(tokenizer_type, song_choice, token_idx)
-    return gr.update(value=offset_seconds), f"Start point set to {offset_seconds:.1f}s from your click."
+    return gr.update(value=offset_seconds), (f"📍 **Start point set to {offset_seconds:.1f} s**, "
+                                             f"the nearest note to where you clicked.")
 
 
-def _synth_with_retry(tokens: list[int], tokenizer, out_dir: Path, name: str, attempts: int = 2):
+def _note_list(midi_path) -> list[tuple]:
+    """Notes in seconds as (start, duration, pitch, velocity, is_drum), sorted."""
+    import symusic
+    score = symusic.Score(str(midi_path)).to("second")
+    return sorted((round(float(n.time), 3), round(float(n.duration), 3), int(n.pitch), int(n.velocity),
+                   1 if t.is_drum else 0) for t in score.tracks for n in t.notes)
+
+
+def _write_roll(wav_path, midi_path, prompt_midi=None, prompt_only: bool = False) -> None:
+    """Piano-roll data for one rendered clip, drawn under its audio player by
+    _ROLL_HEAD in the showcase's style (shaded prompt, violet continuation,
+    drum strip, playhead).
+
+    gr.Audio serves a copy of the WAV from Gradio's cache folder
+    <upload folder>/<hash_file(wav)>/, so the JSON goes into that same folder
+    as roll.json: the page script finds it from the player's download link.
+    prompt_end follows the showcase (build_showcase.split_prompt): the first
+    onset that is not in the prompt. Never raises: a missing roll must not
+    cost the audio."""
+    try:
+        from gradio import processing_utils, utils as gr_utils
+        notes = _note_list(midi_path)
+        prompt_end = 0.0
+        if prompt_only:
+            prompt_end = max((n[0] + n[1] for n in notes), default=0.0)
+        elif prompt_midi is not None:
+            prompt = _note_list(prompt_midi)
+            pset = {(n[0], n[2], n[4]) for n in prompt}
+            cont = [n for n in notes if (n[0], n[2], n[4]) not in pset]
+            prompt_end = min((n[0] for n in cont), default=max((n[0] for n in prompt), default=0.0))
+        data = {"notes": notes, "prompt_end": round(prompt_end, 3),
+                "duration": round(_wav_duration_seconds(str(wav_path)), 3)}
+        folder = Path(gr_utils.get_upload_folder()) / processing_utils.hash_file(str(wav_path))
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "roll.json").write_text(json.dumps(data, separators=(",", ":")))
+    except Exception as e:
+        print(f"[roll] skipped for {wav_path}: {e}")
+
+
+def _synth_with_retry(tokens: list[int], tokenizer, out_dir: Path, name: str, attempts: int = 2,
+                      prompt_tokens: list[int] | None = None):
     """tokens_to_midi + simple_synth, retried once on any failure before
     giving up. Isolated failures here (a slow/starved FluidSynth subprocess
     on a shared, contended compute node; a transient write hiccup) were
@@ -1385,6 +1428,13 @@ def _synth_with_retry(tokens: list[int], tokenizer, out_dir: Path, name: str, at
             # that was killed or interrupted mid-write under load —
             # wav_path.exists() alone doesn't catch that.
             if wav_path.exists() and wav_path.stat().st_size > 0:
+                # Piano roll for the player. prompt_tokens marks where the
+                # prompt ends; passing the clip's own tokens marks it all prompt.
+                prompt_midi = None
+                if prompt_tokens is not None and prompt_tokens is not tokens:
+                    prompt_midi = out_dir / f"{name}_prompt_only.mid"
+                    prompt_midi.write_bytes(tokens_to_midi(prompt_tokens, tokenizer))
+                _write_roll(wav_path, midi_path, prompt_midi, prompt_only=prompt_tokens is tokens)
                 return str(wav_path), None
             last_err = "synthesis produced an empty file"
         except Exception as e:
@@ -1501,7 +1551,8 @@ def _run_generation(model_key: str, ckpt_path: str, tokenizer_type: str,
     # every model redundantly re-synthesizing the same audio.
     wav_paths = {}
     for name, toks in [("generated", generated_tokens), ("combined", combined)]:
-        wav_path, err = _synth_with_retry(toks, tokenizer, out_dir, name)
+        wav_path, err = _synth_with_retry(toks, tokenizer, out_dir, name,
+                                          prompt_tokens=prompt_tokens if name == "combined" else None)
         wav_paths[name] = wav_path
         if err:
             status_lines.append(f"⚠️ {model_key} {name} conversion failed: {err}")
@@ -1523,7 +1574,7 @@ def _render_prompt_and_gt(tokenizer_type: str, prompt_tokens: list[int], gt_toke
     gt_combined = prompt_tokens + gt_tokens
     wav_paths = {}
     for name, toks in [("prompt", prompt_tokens), ("gt_combined", gt_combined)]:
-        wav_path, _err = _synth_with_retry(toks, tokenizer, out_dir, name)
+        wav_path, _err = _synth_with_retry(toks, tokenizer, out_dir, name, prompt_tokens=prompt_tokens)
         wav_paths[name] = wav_path
     return wav_paths
 
@@ -2229,6 +2280,18 @@ footer { display: none !important; }
     animation: ckpt-spin 0.9s linear infinite;
 }
 
+/* Piano roll under each audio player (see _ROLL_HEAD). */
+.tonic-roll {
+    position: relative; height: 96px; margin: 10px 0 2px; cursor: pointer;
+    border-radius: 10px; overflow: hidden;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+}
+.tonic-roll canvas { display: block; width: 100%; height: 100%; }
+.tonic-roll-head {
+    position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; display: none;
+    background: #3fd0c9; box-shadow: 0 0 8px rgba(63,208,201,0.8); pointer-events: none;
+}
+
 .centered-btn-row { display: flex !important; justify-content: center !important; }
 .centered-btn-row button {
     min-width: 320px; font-size: 1.2em !important; padding: 16px 32px !important;
@@ -2377,6 +2440,177 @@ body, gradio-app {
 .variants-bundle { border: 1px solid rgba(139,124,255,0.55); border-radius: 20px; }
 .gen-placeholder { border-color: rgba(139,124,255,0.6); }
 .centered-btn-row button { box-shadow: 0 8px 30px rgba(139,124,255,0.25); }
+
+/* ── 01 / 02: modern controls ─────────────────────────────────────────── */
+/* Format: a segmented two-option toggle. */
+.gradio-container .seg-toggle, .gradio-container .seg-toggle > * { background: transparent !important; border: 0 !important;
+    box-shadow: none !important; padding: 0 !important; }
+.seg-toggle { display: flex !important; flex-direction: column; align-items: flex-start; gap: 8px; }
+.seg-toggle > span, .seg-toggle [data-testid="block-info"] { color: #9298ab !important; font-size: 13px !important; }
+.seg-toggle .wrap { display: inline-flex !important; gap: 4px !important; padding: 4px; border-radius: 999px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); width: auto !important; }
+.seg-toggle .wrap label { margin: 0 !important; padding: 9px 22px !important; border-radius: 999px !important;
+    background: transparent !important; border: 0 !important; box-shadow: none !important; cursor: pointer;
+    color: #9298ab !important; font-weight: 600; transition: background .2s, color .2s; }
+.seg-toggle .wrap label input { position: absolute; opacity: 0; pointer-events: none; }
+.seg-toggle .wrap label:has(input:checked), .seg-toggle .wrap label.selected {
+    background: linear-gradient(90deg, rgba(139,92,246,0.9), rgba(124,58,237,0.9)) !important; color: #fff !important;
+    box-shadow: 0 6px 20px -8px rgba(139,92,246,0.8) !important; }
+
+/* Model cards: name + role, a toggle, compact stat chips; dimmed when left out. */
+.pick-card { gap: 10px !important; padding: 18px !important; transition: border-color .2s, opacity .2s; }
+.pick-card:has(.pick-toggle input:checked) { border-color: rgba(139,124,255,0.45) !important; }
+.pick-card:has(.pick-toggle input:not(:checked)) > :not(.pick-toggle) { opacity: .45; }
+.model-head { display: flex; flex-direction: column; gap: 2px; }
+.mh-name { font: 750 22px/1.15 Inter, sans-serif; letter-spacing: -.02em; color: #e8eaf2; }
+.mh-role { font: 500 12px/1.4 "JetBrains Mono", ui-monospace, monospace; color: #3fd0c9; letter-spacing: .02em; }
+.gradio-container .pick-toggle, .gradio-container .pick-toggle :not(input) { background: transparent !important;
+    border-color: transparent !important; box-shadow: none !important; }
+.pick-toggle { padding: 0 !important; }
+.pick-toggle label { padding: 4px 0 !important; color: #c3c7d4 !important; cursor: pointer; }
+.ckpt-stats { display: flex; flex-direction: column; gap: 8px; }
+.ckpt-note { color: #9298ab; font-size: 13px; line-height: 1.45; }
+.ckpt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ckpt-chip { font: 500 12px/1 "JetBrains Mono", ui-monospace, monospace; padding: 7px 9px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.10); color: #9298ab; white-space: nowrap; }
+.ckpt-chip b { color: #c4b5fd; font-weight: 600; }
+.ckpt-chip.fmt { color: #3fd0c9; border-color: rgba(63,208,201,0.35); background: rgba(63,208,201,0.07); }
+
+/* Optional settings: two quiet accordions side by side. */
+.opt-row { gap: 12px !important; }
+.opt-row > .block, .opt-row > div { flex: 1 1 300px; }
+
+/* 02: song, waveform, start point and preview as cards. */
+.prompt-card { background: rgba(255,255,255,0.035) !important; border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 20px !important; padding: 14px !important; gap: 10px !important; }
+.prompt-row { gap: 14px !important; align-items: flex-start !important; }
+.gradio-container .hint-wrap { background: transparent !important; border: 0 !important; padding: 6px 4px 2px !important; }
+.hint { display: flex; gap: 10px; align-items: flex-start; color: #8a90a3; font-size: 13px; line-height: 1.5; }
+.hint .i { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; margin-top: 1px;
+    font: 700 11px/1 Inter, sans-serif; color: #3fd0c9; border: 1px solid rgba(63,208,201,0.5); }
+.preview-status, .preview-status p { color: #9298ab !important; font-size: 14px !important; line-height: 1.55; margin: 0 !important; }
+.preview-status strong { color: #e8eaf2 !important; }
+.preview-status:not(:empty) { padding: 10px 12px !important; border-radius: 12px !important;
+    background: rgba(139,124,255,0.08) !important; border: 1px solid rgba(139,124,255,0.25) !important; }
+.gen-cta { justify-content: center; margin-top: 10px !important; }
+.gen-cta button { max-width: 420px; }
+"""
+
+
+# Piano rolls under every audio player, drawn like the showcase
+# (demo/showcase/site/app.js drawBase): shaded prompt with a dashed edge,
+# grey prompt notes, violet continuation notes (brighter = louder), drums in a
+# yellow strip, octave guides, and a teal playhead that follows playback.
+# Clicking a roll jumps there and plays.
+#
+# How it finds things: each player's download link points at Gradio's cached
+# copy of the WAV; _write_roll put roll.json in that same folder. Gradio's
+# player plays through a detached <audio> element (wavesurfer, not in the
+# DOM), so HTMLMediaElement.play is wrapped to learn which element belongs to
+# the player that was last clicked. Gradio strips <script> from gr.HTML, so
+# this goes in via launch(head=...).
+_ROLL_HEAD = r"""
+<script>
+(() => {
+  if (window.__tonicRolls) return; window.__tonicRolls = true;
+  const recs = new Map();            // player block -> {url, el, canvas, head, data, range, base}
+  let lastBlock = null;
+
+  const blockOf = (n) => (n && n.closest) ? n.closest(".block") : null;
+  document.addEventListener("pointerdown", (e) => {
+    for (const n of e.composedPath()) {
+      if (n.classList && n.classList.contains("block") && n.querySelector && n.querySelector(".play-pause-button")) { lastBlock = n; return; }
+    }
+  }, true);
+  const play0 = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function () {
+    if (lastBlock) { lastBlock.__media = this; }
+    return play0.apply(this, arguments);
+  };
+
+  function rangeOf(d) {
+    let pMin = 127, pMax = 0, tEnd = 0;
+    for (const [t, du, p, v, drum] of d.notes) { tEnd = Math.max(tEnd, t + du); if (!drum) { pMin = Math.min(pMin, p); pMax = Math.max(pMax, p); } }
+    if (pMin > pMax) { pMin = 48; pMax = 72; }
+    return { tMax: Math.max(d.duration || 0, tEnd, 0.5), pMin: pMin - 2, pMax: pMax + 2 };
+  }
+
+  function drawBase(r) {
+    const { canvas, data, range } = r;
+    const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, hgt = canvas.clientHeight;
+    if (!w) return;
+    canvas.width = w * dpr; canvas.height = hgt * dpr;
+    const g = canvas.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, hgt);
+    const x = (t) => (t / range.tMax) * w;
+    const drumBand = data.notes.some((n) => n[4]) ? 14 : 0;
+    const pitchH = hgt - drumBand - 6;
+    const y = (p) => 3 + (1 - (p - range.pMin) / (range.pMax - range.pMin)) * pitchH;
+    const rowH = Math.max(2, Math.min(5, pitchH / (range.pMax - range.pMin)));
+    g.strokeStyle = "rgba(255,255,255,0.045)"; g.lineWidth = 1;
+    for (let p = Math.ceil(range.pMin / 12) * 12; p <= range.pMax; p += 12) { g.beginPath(); g.moveTo(0, y(p) + 0.5); g.lineTo(w, y(p) + 0.5); g.stroke(); }
+    if (data.prompt_end > 0) {
+      const px = x(data.prompt_end);
+      g.fillStyle = "rgba(255,255,255,0.07)"; g.fillRect(0, 0, px, hgt);
+      g.setLineDash([3, 3]); g.strokeStyle = "rgba(255,255,255,0.28)";
+      g.beginPath(); g.moveTo(px + 0.5, 0); g.lineTo(px + 0.5, hgt); g.stroke(); g.setLineDash([]);
+      g.fillStyle = "rgba(255,255,255,0.45)"; g.font = "600 9px ui-monospace, Menlo, monospace";
+      if (px > 46) g.fillText("PROMPT", 6, 12);
+    }
+    for (const [t, d, p, vel, drum] of data.notes) {
+      const a = 0.25 + 0.75 * Math.pow(vel / 127, 1.4);
+      if (drum) {
+        g.fillStyle = `rgba(242,193,78,${a * 0.9})`;
+        g.fillRect(x(t), hgt - drumBand + 2 + (p % 3) * 3.5, Math.max(2, x(t + Math.min(d, 0.1)) - x(t)), 2.5);
+      } else {
+        const inPrompt = t < data.prompt_end - 1e-3;
+        g.fillStyle = inPrompt ? `rgba(200,205,220,${a * 0.75})` : `rgba(150,135,255,${a})`;
+        const xx = x(t), ww = Math.max(2, x(t + d) - xx - 0.5);
+        g.beginPath(); g.roundRect ? g.roundRect(xx, y(p) - rowH / 2, ww, rowH, 1.5) : g.rect(xx, y(p) - rowH / 2, ww, rowH); g.fill();
+      }
+    }
+  }
+
+  function seek(block, r, frac) {
+    const t = frac * r.range.tMax;
+    const go = (m) => { try { m.currentTime = Math.min(t, (m.duration || t)); if (m.paused) m.play(); } catch (e) {} };
+    if (block.__media) { lastBlock = block; go(block.__media); return; }
+    lastBlock = block;
+    const btn = block.querySelector(".play-pause-button"); if (btn) btn.click();
+    let tries = 0; const iv = setInterval(() => { if (block.__media || ++tries > 40) { clearInterval(iv); if (block.__media) go(block.__media); } }, 50);
+  }
+
+  function ensure(block) {
+    const a = block.querySelector("a[download][href]");
+    const href = a ? a.getAttribute("href") : null;
+    let r = recs.get(block);
+    if (!href || !/\.wav(\?|$)/i.test(href)) { if (r) { r.el.remove(); recs.delete(block); } return; }
+    if (r && r.url === href) { if (!r.el.isConnected && r.data) block.appendChild(r.el); return; }
+    if (r) r.el.remove();
+    const el = document.createElement("div"); el.className = "tonic-roll"; el.style.display = "none";
+    const canvas = document.createElement("canvas"); const head = document.createElement("div"); head.className = "tonic-roll-head";
+    el.append(canvas, head);
+    r = { url: href, el, canvas, head, data: null, range: null };
+    recs.set(block, r);
+    el.addEventListener("click", (e) => { if (!r.data) return; const b = canvas.getBoundingClientRect(); seek(block, r, Math.max(0, Math.min(1, (e.clientX - b.left) / b.width))); });
+    fetch(href.replace(/[^/]*$/, "roll.json")).then((res) => res.ok ? res.json() : null).then((d) => {
+      if (!d || recs.get(block) !== r) return;
+      r.data = d; r.range = rangeOf(d); block.appendChild(el); el.style.display = ""; drawBase(r);
+    }).catch(() => {});
+  }
+
+  setInterval(() => { document.querySelectorAll(".play-pause-button").forEach((b) => { const bl = blockOf(b); if (bl) ensure(bl); }); }, 600);
+  window.addEventListener("resize", () => recs.forEach((r) => r.data && drawBase(r)));
+  (function tick() {
+    recs.forEach((r, block) => {
+      const m = block.__media;
+      if (!r.data || !m || (m.paused && !m.currentTime)) { r.head.style.display = "none"; return; }
+      r.head.style.display = "block";
+      r.head.style.left = (Math.min(1, m.currentTime / r.range.tMax) * 100) + "%";
+    });
+    requestAnimationFrame(tick);
+  })();
+})();
+</script>
 """
 
 
@@ -2399,6 +2633,11 @@ def _idle_placeholder_html(text: str = _DEFAULT_IDLE_TEXT) -> str:
     return f'<div class="gen-placeholder gen-placeholder-idle"><div class="gen-text">{text}</div></div>'
 
 
+# Player waveform in the showcase palette (Gradio's default progress colour is
+# orange). Everything else stays at WaveformOptions() defaults.
+_WAVEFORM = gr.WaveformOptions(waveform_color="#5d6377", waveform_progress_color="#8b7cff")
+
+
 def _audio_slot(label: str, idle_text: str = _DEFAULT_IDLE_TEXT):
     """One output audio slot: an idle "nothing yet" placeholder before
     Generate has ever run, a big pulsing "Generating…" placeholder while it's
@@ -2407,7 +2646,8 @@ def _audio_slot(label: str, idle_text: str = _DEFAULT_IDLE_TEXT):
     default spinner) so it's unmistakable when something in that exact spot
     is being generated, and so the audio player never sits there empty."""
     placeholder = gr.HTML(value=_idle_placeholder_html(idle_text), visible=True)
-    audio = gr.Audio(label=label, type="filepath", visible=False, elem_classes="gen-audio-slot")
+    audio = gr.Audio(label=label, type="filepath", visible=False, elem_classes="gen-audio-slot",
+                     waveform_options=_WAVEFORM)
     return placeholder, audio
 
 
@@ -2438,12 +2678,10 @@ def build_ui():
             "trained models. You can switch later; the piece you pick below stays selected.",
             elem_classes="section-sub",
         )
-        tokenizer_dd = gr.Dropdown(choices=TOKENIZER_CHOICES, value="REMI", label="Tokenization format")
-        with gr.Accordion("⚙️ Advanced generation settings", open=False):
-            with gr.Row():
-                temperature = gr.Slider(0.1, 2.0, value=0.7, step=0.05, label="Temperature")
-                top_p = gr.Slider(0.0, 1.0, value=0.9, step=0.05, label="Top-p")
-                gen_length = gr.Slider(64, 1024, value=512, step=64, label="Generation length (tokens)")
+        # A two-option segmented toggle rather than a dropdown. Same values as
+        # before (TOKENIZER_CHOICES), so every tokenizer_dd handler is unchanged.
+        tokenizer_dd = gr.Radio(choices=[(_TOK_PRETTY[t], t) for t in TOKENIZER_CHOICES], value="REMI",
+                                label="Tokenization format", elem_classes="seg-toggle")
 
         # By default no checkpoint dropdown is shown at all — the most recent
         # checkpoint is used automatically (see refresh_checkpoints/_find_
@@ -2454,18 +2692,30 @@ def build_ui():
         ckpt_states = {}
         ckpt_progress_htmls = {}
         model_controls = {}
-        with gr.Row():
+        _MODEL_ROLE = {"EBT": "Energy-Based Transformer · Tonic", "Llama": "standard language model",
+                       "GPT-2": "standard language model"}
+        with gr.Row(equal_height=True):
             for model_key in _MODEL_KEYS:
-                with gr.Column(elem_classes="model-card"):
-                    gr.Markdown(f"### {model_key}")
-                    on_cb = gr.Checkbox(value=True, label=f"Include {model_key}")
+                with gr.Column(elem_classes=["model-card", "pick-card"], min_width=220):
+                    gr.HTML(f'<div class="model-head"><span class="mh-name">{model_key}</span>'
+                            f'<span class="mh-role">{_MODEL_ROLE.get(model_key, "")}</span></div>')
+                    on_cb = gr.Checkbox(value=True, label="Include in the comparison", elem_classes="pick-toggle")
                     ckpt_progress_html = gr.HTML(value=_ckpt_loading_html("REMI"))
                     ckpt_state = gr.State("{}")
                     model_controls[model_key] = [on_cb, None, None]
                     ckpt_states[model_key] = ckpt_state
                     ckpt_progress_htmls[model_key] = ckpt_progress_html
 
-        with gr.Accordion("⚙️ Manually choose checkpoints (optional)", open=False):
+        # Optional settings, side by side under the model cards.
+        with gr.Row(elem_classes="opt-row"):
+          with gr.Accordion("⚙️ Generation settings", open=False):
+            temperature = gr.Slider(0.1, 2.0, value=0.7, step=0.05, label="Temperature",
+                                    info="Higher is more adventurous, lower is safer.")
+            top_p = gr.Slider(0.0, 1.0, value=0.9, step=0.05, label="Top-p",
+                              info="Only the most likely notes are considered, up to this share.")
+            gen_length = gr.Slider(64, 1024, value=512, step=64, label="Length (tokens)",
+                                   info="How much music each model writes.")
+          with gr.Accordion("🗂️ Use a specific checkpoint (optional)", open=False):
             for model_key in _MODEL_KEYS:
                 # The dropdown's own label sits above its value box, but a
                 # plain gr.Button has no label — left as a default gr.Row
@@ -2495,7 +2745,7 @@ def build_ui():
         )
         song_dd = gr.Dropdown(choices=_SONG_CHOICES,
                                value=_SONG_CHOICES[1] if len(_SONG_CHOICES) > 1 else RANDOM_SONG_LABEL,
-                               label="Song / Prompt")
+                               label="Song", elem_classes="song-pick")
 
         # ClickAudio's own `visible` prop can't be toggled after mount — a bug
         # in this custom component's build (confirmed via a headless-browser
@@ -2505,17 +2755,25 @@ def build_ui():
         # gr.Group, both work fine). So the component itself stays
         # permanently visible=True, and the group around it is what actually
         # hides/shows the section.
-        with gr.Group(visible=False) as full_song_group:
+        with gr.Group(visible=False, elem_classes="prompt-card") as full_song_group:
             full_song_audio = ClickAudio(
-                label="Full song — click anywhere on the waveform to set the prompt's start point",
+                label="Full song: click the waveform where the prompt should start",
                 type="filepath", interactive=False, visible=True,
             )
+            gr.HTML('<div class="hint"><span class="i">i</span><span>The start point is approximate. The models '
+                    'read music as tokens (notes and their timing), not as continuous sound, so the prompt starts '
+                    'at the nearest note to your click and can land a fraction of a second away from it.</span></div>',
+                    elem_classes="hint-wrap")
 
-        start_offset = gr.Slider(0, 2000, value=0, step=1, label="Prompt start offset (tokens)")
-        preview_audio = gr.Audio(label="Prompt preview", type="filepath")
-        preview_status = gr.Markdown("")
+        with gr.Row(equal_height=False, elem_classes="prompt-row"):
+            with gr.Column(scale=2, min_width=260, elem_classes="prompt-card"):
+                start_offset = gr.Slider(0, 2000, value=0, step=1, label="Prompt start offset (tokens)")
+                preview_status = gr.Markdown("", elem_classes="preview-status")
+            with gr.Column(scale=3, min_width=260, elem_classes="prompt-card"):
+                preview_audio = gr.Audio(label="Prompt preview", type="filepath", waveform_options=_WAVEFORM)
 
-        generate_btn = gr.Button("🎹 Generate", variant="primary", size="lg")
+        with gr.Row(elem_classes="centered-btn-row gen-cta"):
+            generate_btn = gr.Button("🎹 Generate", variant="primary", size="lg")
 
         gr.Markdown('## <span class="kicker">03</span>Listen to generated outputs', elem_classes="section-title")
         status_box = gr.Textbox(label="Status", lines=8, interactive=False)
@@ -2555,6 +2813,7 @@ def build_ui():
         ebt_reference_audio = gr.Audio(
             label="Reference: EBT default (unguided, from the last Generate run above)",
             type="filepath", visible=False,
+            waveform_options=_WAVEFORM,
         )
         solo_reference_html = gr.HTML(value=_render_compose_reference_html(None, None))
         ebt_ref_velocity_state = gr.State(None)
@@ -2784,6 +3043,7 @@ def build_ui():
             compose_reference_audio = gr.Audio(
                 label="Reference: EBT default (unguided, from the last Generate run above)",
                 type="filepath", visible=False,
+                waveform_options=_WAVEFORM,
             )
 
             compose_row_count_state = gr.State(1)
@@ -2888,7 +3148,8 @@ def build_ui():
             compose_status = gr.Textbox(label="Status", lines=4, interactive=False)
             # Hidden until Generate is clicked — see _compose_generate,
             # which reveals this once a real result (or an error) is ready.
-            compose_audio = gr.Audio(label="Generated Continuation", type="filepath", visible=False)
+            compose_audio = gr.Audio(label="Generated Continuation", type="filepath", visible=False,
+                                     waveform_options=_WAVEFORM)
             compose_gauge = gr.HTML(value="", elem_classes="attr-gauge-slot")
 
         # ── Event wiring ──────────────────────────────────────────────────────
@@ -3208,4 +3469,4 @@ if __name__ == "__main__":
     # "the gauge shows but there's no audio," intermittently, across every
     # section of the demo, exactly matching this failure mode.
     app.launch(server_name="0.0.0.0", server_port=args.port, share=args.share,
-               theme=_THEME, css=_CSS, allowed_paths=[tempfile.gettempdir()])
+               theme=_THEME, css=_CSS, head=_ROLL_HEAD, allowed_paths=[tempfile.gettempdir()])
