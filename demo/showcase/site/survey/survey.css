@@ -108,6 +108,16 @@
 }
 .steps3 span { font-weight: 650; }
 .steps3 small { color: var(--faint); font-size: 13px; }
+/* Welcome page: "A note on this research" (open data; made for musicians). */
+.values { display: grid; grid-template-columns: 1fr 1.6fr; gap: 12px; margin: 22px 0 4px; }
+.values-title { grid-column: 1 / -1; margin: 0; font: 600 12px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent-2); }
+.value { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 14px;
+  background: rgba(255,255,255,.03); border: 1px solid var(--border); }
+.v-ico { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-size: 17px;
+  background: rgba(139,124,255,.12); border: 1px solid rgba(139,124,255,.3); }
+.value b { display: block; font-weight: 650; margin-bottom: 3px; }
+.value p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+.value i { color: var(--text); }
 
 .anatomy { margin: 6px 0 4px; }
 .an-bar { display: flex; height: 64px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
@@ -140,7 +150,7 @@
 .t-hint b { color: var(--accent-2); font-weight: 600; }
 
 @media (max-width: 700px) {
-  .steps3 { grid-template-columns: 1fr; }
+  .steps3, .values { grid-template-columns: 1fr; }
   .an-prompt { width: 38%; }
 }
 

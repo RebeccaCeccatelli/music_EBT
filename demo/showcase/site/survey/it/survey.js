@@ -260,6 +260,14 @@
         '<div><b>1</b><span>Ascolta</span><small>brevi clip da 3 a 20 secondi</small></div>' +
         '<div><b>2</b><span>Confronta</span><small>qualche versione alla volta</small></div>' +
         '<div><b>3</b><span>Scegli</span><small>clicca la risposta che preferisci, oppure salta</small></div>'),
+      h("div", "values",
+        '<p class="values-title">Una nota su questa ricerca</p>' +
+        '<div class="value"><span class="v-ico" aria-hidden="true">🎼</span><div><b>Addestrati su dati aperti</b>' +
+        '<p>Tutta la musica usata per addestrare questi modelli proviene da raccolte open source, disponibili pubblicamente e legalmente su internet.</p></div></div>' +
+        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>Per chi fa musica, non al suo posto</b>' +
+        '<p>Questo lavoro non vuole sostituire musicisti e artisti. Lo vediamo piuttosto come un passo verso una collaborazione tra chi fa musica e la tecnologia, ' +
+        'come è successo decenni fa con l\'arrivo dei sintetizzatori e degli strumenti elettronici. In particolare, questa tesi studia come rendere questi modelli ' +
+        'più interpretabili e controllabili nei dettagli: idealmente, un primo passo per permettere a chi compone di <i>dipingere</i> la musica con questi strumenti.</p></div></div>'),
     );
     if (CFG.contact) s.append(h("p", "hint contact", `Hai domande sul test? Scrivi a <a href="mailto:${CFG.contact}">${CFG.contact}</a>`));
     s.append(nav("Iniziamo", goto("how")).row);

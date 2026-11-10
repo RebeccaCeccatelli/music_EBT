@@ -239,6 +239,14 @@
         '<div><b>1</b><span>Listen</span><small>short clips of 3–20 seconds</small></div>' +
         '<div><b>2</b><span>Compare</span><small>a few versions at a time</small></div>' +
         '<div><b>3</b><span>Choose</span><small>click what fits best, or skip</small></div>'),
+      h("div", "values",
+        '<p class="values-title">A note on this research</p>' +
+        '<div class="value"><span class="v-ico" aria-hidden="true">🎼</span><div><b>Trained on open data</b>' +
+        '<p>All the music used to train these models comes from open-source collections that are publicly and legally available online.</p></div></div>' +
+        '<div class="value"><span class="v-ico" aria-hidden="true">🤝</span><div><b>Made for musicians, not instead of them</b>' +
+        '<p>This work is not meant to replace musicians and artists. We see it as a step towards a collaboration between musicians and technology, ' +
+        'much as synthesizers and electronic instruments became part of music decades ago. This thesis explores how to make these models easier to ' +
+        'understand and to steer in finer detail: ideally, a first step towards letting composers <i>paint</i> music with them.</p></div></div>'),
     );
     if (CFG.contact) s.append(h("p", "hint contact", `Questions about the study? Write to <a href="mailto:${CFG.contact}">${CFG.contact}</a>`));
     s.append(nav("Let's go", goto("how")).row);
