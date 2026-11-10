@@ -40,12 +40,14 @@ PAGES = {  # out dir -> (source dir, mp3 dir, kind)
     "single-remi": (SURVEY / "guided_pickers_v2/remi", SURVEY / "guided/mp3", "guided"),
     "single-anticipation": (SURVEY / "guided_pickers_v2/ant", SURVEY / "guided/mp3", "guided"),
     "combined-remi": (SURVEY / "combined_pickers/remi", SURVEY / "combined/remi/mp3", "guided"),
+    "combined-anticipation": (SURVEY / "combined_pickers/ant", SURVEY / "combined/ant/mp3", "guided"),
 }
 HUB_LINKS = {
     "https://claude.ai/artifact/AFp5Khpb96uB7VjECoxjVd": "unguided/",
     "https://claude.ai/artifact/6XdgVLkt6zXenTd7qg9eoM": "single-remi/",
     "https://claude.ai/artifact/6VcNq6B9Tu7uuDi7PYp11k": "single-anticipation/",
     "https://claude.ai/artifact/FPDfpVuB7cTm4NtQ9LHcb1": "combined-remi/",
+    "https://claude.ai/artifact/6LGgTSvwzxg6KShVKwYzUG": "combined-anticipation/",
 }
 DROP = {"midi", "prompt_midi", "at", "table"}
 CHUNK = 1_000_000

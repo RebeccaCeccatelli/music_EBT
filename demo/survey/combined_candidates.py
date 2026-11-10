@@ -41,11 +41,22 @@ RUNS = {
         ("llama_bon", "Llama best-of-N", "28462285"),
         ("gpt2_bon", "GPT-2 best-of-N", "28462286"),
     ],
+    # Ant = duration + pitch register (tilt is REMI-only); the shared-λ EBT sweep was split in two λ halves
+    "ant": [
+        ("ebt", "EBT (one shared λ)", "28462287"),          # λ 0.002, 0.004, 0.006
+        ("ebt", "EBT (one shared λ)", "28462288"),          # λ 0.008, 0.010, 0.012
+        ("ebt_pa", "EBT (λ per attribute)", "28472160"),    # held-out operating points 0.005:0.012
+        ("ebt_pa", "EBT (λ per attribute)", "28472162"),    # chosen operating points 0.005:0.005, 0.005:0.006
+        ("llama_pplm", "Llama PPLM", "28462289"),
+        ("llama_pplm", "Llama PPLM", "28472164"),           # per-attribute held-out operating points 16:32
+        ("llama_bon", "Llama best-of-N", "28462290"),
+        ("gpt2_bon", "GPT-2 best-of-N", "28462291"),
+    ],
 }
 ATTRS = {"remi": ["velocity", "duration"], "ant": ["duration", "pitch_register"]}
 # per-attribute EBT pairs to badge: held-out operating points (tune_*.json) and the by-ear ones (ear_operating_points.json)
-OP_PAIRS = {"remi": {"0.05:0.055"}, "ant": {"0.005:0.012"}}
-EAR_PAIRS = {"remi": {"0.03:0.02", "0.04:0.025"}, "ant": {"0.005:0.005", "0.005:0.006"}}
+OP_PAIRS = {"remi": {"ebt_pa": {"0.05:0.055"}}, "ant": {"ebt_pa": {"0.005:0.012"}, "llama_pplm": {"16:32"}}}
+EAR_PAIRS = {"remi": {"ebt_pa": {"0.03:0.02", "0.04:0.025"}}, "ant": {"ebt_pa": {"0.005:0.005", "0.005:0.006"}}}
 GEN_RE = re.compile(r"^p(\d+)_(?:r3|pplm|tilt|best_of_n)([\d.:]+)_c([+-][\d.]+)_([+-][\d.]+)_generated\.mid$")
 
 
@@ -226,9 +237,8 @@ def cmd_pack(args, chunk_bytes=8_000_000):
         cid = f"{section}~{c['id']}"
         index["clips"][cid] = {k: v for k, v in c.items() if k not in ("id", "midi", "run", "sample_id")}
         index["clips"][cid]["section"] = section
-        if c["system"] == "ebt_pa":
-            index["clips"][cid]["op"] = c["strength"] in OP_PAIRS.get(args.tok, set())
-            index["clips"][cid]["ear"] = c["strength"] in EAR_PAIRS.get(args.tok, set())
+        index["clips"][cid]["op"] = c["strength"] in OP_PAIRS.get(args.tok, {}).get(c["system"], set())
+        index["clips"][cid]["ear"] = c["strength"] in EAR_PAIRS.get(args.tok, {}).get(c["system"], set())
         index["clips"][cid]["at"] = [f"data/{args.tok}-combined-{n}.mp3", len(buf), len(b)]
         buf += b
     flush()
