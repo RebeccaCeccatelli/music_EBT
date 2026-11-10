@@ -3483,4 +3483,6 @@ if __name__ == "__main__":
     # "the gauge shows but there's no audio," intermittently, across every
     # section of the demo, exactly matching this failure mode.
     app.launch(server_name="0.0.0.0", server_port=args.port, share=args.share,
-               theme=_THEME, css=_CSS, head=_ROLL_HEAD, allowed_paths=[tempfile.gettempdir()])
+               theme=_THEME, css=_CSS, head=_ROLL_HEAD, allowed_paths=[tempfile.gettempdir()],
+               # Tab icon: the sax from demo/icons/make_icons.py ("demo").
+               favicon_path=str(Path(__file__).resolve().parent / "icons" / "demo.png"))
