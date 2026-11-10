@@ -2369,13 +2369,24 @@ footer { display: none !important; }
 /* Lines the rescan button up with the dropdown's value box rather than its
    label row — see the checkpoint-picker's own comment for why. */
 .ckpt-refresh-row { align-items: flex-end !important; gap: 10px !important; }
-.ckpt-refresh-row button {
-    min-width: fit-content !important;
-    padding: 10px 16px !important;
-    font-size: .9em !important;
-    white-space: nowrap !important;
-    border-radius: 8px !important;
+/* Rescan: a small round ghost button with a thin refresh arrow (the label
+   "Rescan" stays for screen readers; the hover tooltip says what it does). */
+.ckpt-refresh-row button.ckpt-rescan {
+    flex: 0 0 34px !important; width: 34px !important; height: 34px !important;
+    min-width: 34px !important; max-width: 34px !important; padding: 0 !important;
+    margin-bottom: 3px; border-radius: 999px !important;
+    background: transparent !important; border: 1px solid rgba(255,255,255,0.12) !important;
+    box-shadow: none !important; font-size: 0 !important; color: transparent !important;
+    position: relative; transition: border-color .15s;
 }
+.ckpt-refresh-row button.ckpt-rescan::before {
+    content: ""; position: absolute; inset: 0; margin: auto; width: 15px; height: 15px;
+    background: #9298ab; transition: background .15s, transform .4s;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12a8 8 0 1 1-2.34-5.66'/%3E%3Cpath d='M20 4v5h-5'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12a8 8 0 1 1-2.34-5.66'/%3E%3Cpath d='M20 4v5h-5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.ckpt-refresh-row button.ckpt-rescan:hover { border-color: rgba(63,208,201,0.5) !important; }
+.ckpt-refresh-row button.ckpt-rescan:hover::before { background: #3fd0c9; transform: rotate(90deg); }
 
 /* Hero header: previously used the exact same plain-text style as every
    subsection heading below it, so the top of the page had no visual
@@ -2697,7 +2708,10 @@ _ROLL_HEAD = r"""
     }).catch(() => {});
   }
 
-  setInterval(() => { document.querySelectorAll(".play-pause-button").forEach((b) => { const bl = blockOf(b); if (bl) ensure(bl); }); }, 600);
+  setInterval(() => {
+    document.querySelectorAll(".play-pause-button").forEach((b) => { const bl = blockOf(b); if (bl) ensure(bl); });
+    document.querySelectorAll("button.ckpt-rescan:not([title])").forEach((b) => b.title = "Rescan checkpoints on disk");
+  }, 600);
   window.addEventListener("resize", () => recs.forEach((r) => r.data && drawBase(r)));
   (function tick() {
     recs.forEach((r, block) => {
@@ -2758,7 +2772,7 @@ def build_ui():
         with gr.Column(elem_classes="hero-header"):
             gr.Markdown("Interactive demo · live generation · MIT × ETH Zürich master's thesis",
                         elem_classes="app-eyebrow")
-            gr.Markdown("# 🎷 Tonic · Interactive Demo 🎷", elem_classes="app-title")
+            gr.Markdown("# Tonic · Interactive Demo", elem_classes="app-title")
             gr.Markdown(
                 # Same structure as the showcase subtitle: models line, then the "how" line.
                 "**Tonic**, an Energy-Based Transformer (EBT), side by side with two standard "
@@ -2835,7 +2849,7 @@ def build_ui():
                     # as "reset to some fixed default," which this isn't:
                     # there's no fixed default, and a manual pick survives
                     # a rescan as long as it's still on disk.
-                    refresh_btn = gr.Button("↻ Rescan", scale=0, size="sm")
+                    refresh_btn = gr.Button("Rescan", scale=0, size="sm", elem_classes="ckpt-rescan")  # drawn as an icon, see CSS
                 model_controls[model_key][1] = ckpt_dd
                 model_controls[model_key][2] = refresh_btn
         model_controls = {k: tuple(v) for k, v in model_controls.items()}
