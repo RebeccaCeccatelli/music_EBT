@@ -264,7 +264,7 @@ a:hover { text-decoration: underline; }
 .ladder {
   display: grid; column-gap: 14px; row-gap: 12px; align-items: start;
   grid-template-columns: 150px minmax(0, 1fr) minmax(0, .85fr) minmax(0, 1fr);
-  min-width: 720px;
+  min-width: 900px;   /* keeps each cell wide enough for its selector buttons on one row; narrower screens scroll */
 }
 .ladder .colhead {
   display: flex; flex-direction: column; align-items: center; gap: 2px; align-self: end;
@@ -305,8 +305,11 @@ a:hover { text-decoration: underline; }
 .lad-box .clip.playing { box-shadow: inset 0 0 0 1px rgba(139,124,255,.7); }
 .ladder .strength-switch { gap: 4px; }
 .ladder .strength-switch .sw-label { margin-right: 2px; white-space: nowrap; }
-.ladder .strength-switch .st-btn { font-size: 11px; padding: 2px 7px; }
-.strength-switch .st-btn small { font-size: 10px; opacity: .75; margin-left: 3px; }
+/* "asked for" / "push" each stay on one line: compact buttons, the SD value stacked under the target word */
+.ladder .strength-switch { gap: 3px; }
+.ladder .strength-switch .sw-label { flex: 0 0 100%; margin: 0 0 1px; }   /* label above, buttons on one row */
+.ladder .strength-switch .st-btn { flex: none; font: 600 10.5px/1.15 var(--font); padding: 2px 6px; border-radius: 8px; }
+.ladder .strength-switch .st-btn small { display: block; font-size: 9px; opacity: .75; }
 .clip .sdv { opacity: .7; font-size: .92em; }
 .clip .exact { text-decoration: underline dotted; text-underline-offset: 2px; cursor: help; }
 .meter { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }

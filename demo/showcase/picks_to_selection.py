@@ -197,7 +197,7 @@ def main():
             b["title"] = "What do “asked for” and “push” mean?"
             b["teaser"] = "How far each clip is pushed, and how hard"
             b["text"] = (
-                '<span class="nl"><b>Asked for</b> (the target) = <i>where</i> you ask the music to go: “slightly '
+                '<span class="nl"><b>Asked for</b> (the target) = <i>where</i> you ask the music to go: “a bit '
                 'louder” (+0.5 SD), “louder” (+1 SD) or “much louder” (+2 SD), and the same downwards. SD (standard '
                 'deviation) is how much loudness, note length or pitch usually varies between pieces.</span>'
                 '<span class="nl"><b>Push</b> (the strength) = <i>how hard</i> the model is pushed to get there: how '

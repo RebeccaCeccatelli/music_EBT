@@ -249,7 +249,7 @@
     4: ["gentle", "medium", "strong", "very strong"], 5: ["very gentle", "gentle", "medium", "strong", "very strong"] };
   const strengthNames = (n) => RANKS[n] || Array.from({ length: n }, (_, i) => `level ${i + 1}`);
   // Target in the attribute's own words, e.g. −2 SD on velocity -> "much softer".
-  const targetWord = (sd, b) => `${{ 0.5: "slightly ", 1: "", 2: "much " }[Math.abs(sd)] ?? ""}${sd < 0 ? b.down : b.up}`;
+  const targetWord = (sd, b) => `${{ 0.5: "a bit ", 1: "", 2: "much " }[Math.abs(sd)] ?? ""}${sd < 0 ? b.down : b.up}`;
   const fmtSd = (sd) => `${sd > 0 ? "+" : "−"}${Math.abs(sd)} SD`;
 
   function blockCard(b, sub) {
