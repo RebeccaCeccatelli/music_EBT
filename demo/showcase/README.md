@@ -1,7 +1,7 @@
 # Static showcase (listening examples)
 
-A non-interactive page with selected outputs: EBT vs GPT-2 vs Llama
-continuations, EBT vs Llama PPLM attribute steering, and an over-steering
+A non-interactive page with selected outputs: Tonic vs GPT-2 vs Llama
+continuations, Tonic vs Llama PPLM attribute steering, and an over-steering
 example. Published to GitHub Pages by `.github/workflows/showcase-pages.yml`
 on every push to `main` that touches `site/`.
 
@@ -18,21 +18,21 @@ cd demo/showcase/site && $PY -m http.server 8000 # preview at localhost:8000
 
 Page structure (`selection.json` is a tree: section → tokenizer tab →
 attribute/combination tab → blocks):
-1. Unguided Generation: REMI / Anticipation; original vs EBT, Llama, GPT-2.
+1. Unguided Generation: REMI / Anticipation; original vs Tonic, Llama, GPT-2.
 2. Single-Attribute Control: REMI / Anticipation → velocity, duration,
    pitch register. A `steer` block (tilt, best-of-16 on Llama: down / unguided / up)
-   and two `intensity` grids (PPLM, then EBT: strength rows × target columns,
+   and two `intensity` grids (PPLM, then Tonic: strength rows × target columns,
    unguided reference on top; `method`/`model`/`recommended` pick the system).
 3. Combined Control: REMI loudness + note length, one tab per direction
-   combination (4), all on one prompt; a `compose` block (rows = EBT / tilt /
+   combination (4), all on one prompt; a `compose` block (rows = Tonic / tilt /
    best-of-16 / PPLM, columns = unguided, 1 SD, 2 SD each). Runs: `RUNS["remi"]["compose"]`.
-4. Pushing Too Hard: EBT pitch register at operating vs high λ, per tokenizer.
+4. Pushing Too Hard: Tonic pitch register at operating vs high λ, per tokenizer.
 
 Block types: `clips` (explicit list), `steer` (`rows` of method/model/strength;
 an optional `strengths` list puts a low / medium / high switch inside each steered card, e.g. PPLM 8 / 16 / 32),
 `intensity` (`lambdas` × `sds`), `note` (text card), `group` (several blocks in one shaded card, with its own `title`/`blocks`). Optional `role` (`baseline`/`ours`) adds a badge; every block also shows its tab path (e.g. REMI · Velocity) above the title. Clip specs:
 `kind` = ground_truth | unguided (`model`) | guided (`method`, `model`,
-`attribute`, `sd`, `strength`; for EBT the strength is λ). Strengths are
+`attribute`, `sd`, `strength`; for Tonic the strength is λ). Strengths are
 written as in the file names (`pplm16`, `tilt1`, `best_of_n16`, `r30.02`).
 `"placeholder": true` on a clip, row or block plays a stand-in clip tagged
 PLACEHOLDER. A slot whose output doesn't exist also falls back to it and is

@@ -369,7 +369,7 @@
     const table = h("div", "intensity");
     table.style.setProperty("--cols", sds.length);
 
-    const who = b.method === "pplm" ? "PPLM (Llama)" : "the EBT";
+    const who = b.method === "pplm" ? "PPLM (Llama)" : "Tonic";
 
     // Reference first: the unguided continuation every cell is compared to.
     table.append(h("div", "rowhead", `unguided<small>reference</small>`));
@@ -424,7 +424,7 @@
   }
 
   // Curated picks for one prompt. Rows = techniques (EBT, PPLM, Tilt, Best-of-N); columns = ▼ down,
-  // unguided, ▲ up. The one unguided reference (the EBT's) sits in the middle and spans all rows.
+  // unguided, ▲ up. The one unguided reference (Tonic's) sits in the middle and spans all rows.
   // Each down/up cell holds all of that technique's picks in that direction, with selectors for the
   // target (SD) and the strength (λ / baseline strength) when there is more than one choice.
   function ladderBlock(b) {
@@ -449,7 +449,7 @@
     if (ref) refCell.append(makeClip(ref, rangeOf(ref), {
       label: "Unguided", metricHTML: b.metric ? metricCell(b, ref, null) : null,
     }));
-    refCell.append(h("p", "lad-ref-note", "The EBT's unguided continuation: listen to it first, then compare each row."));
+    refCell.append(h("p", "lad-ref-note", "Tonic's unguided continuation: listen to it first, then compare each row."));
     table.append(refCell);
 
     const meter = (c) => c.levels > 1

@@ -27,7 +27,7 @@ from prompt_names import describe  # noqa: E402
 
 ROOT = bs.LOGS.parent
 SYSTEMS = {  # system -> (block title, subtitle, model, method)
-    "ebt": ("EBT", "the regressor's error is added to the energy the EBT minimises; λ = strength", "EBT", "ebt"),
+    "ebt": ("Tonic", "the regressor's error is added to the energy Tonic minimises; λ = strength", "Tonic", "ebt"),
     "llama_pplm": ("PPLM · Llama", "nudges the model's hidden state along the regressor's gradient", "Llama", "pplm"),
     "llama_tilt": ("Tilt · Llama", "reweights the attribute's own tokens (oracle value map)", "Llama", "tilt"),
     "llama_bon": ("Best-of-N · Llama", "keeps the closest of N unguided samples", "Llama", "best_of_n"),
@@ -107,7 +107,7 @@ def main():
 
     # ---------------------------------------------------------------- unguided
     order = {"original": 0, "llama": 1, "gpt2": 2, "ebt": 3}
-    label = {"original": ("Original", "human"), "ebt": ("EBT", "ours"),
+    label = {"original": ("Original", "human"), "ebt": ("Tonic", "ours"),
              "llama": ("Llama", "baseline"), "gpt2": ("GPT-2", "baseline")}
     ung = {"remi": [], "ant": []}
     seen = defaultdict(int)
@@ -133,7 +133,7 @@ def main():
 
     def prompt_card(tok, attr, pid, systems):
         """One 'ladder' card: rows = systems, columns = target SD left to right (reference in the middle).
-        Only the EBT row has the unguided sample: it is the one reference for the whole card."""
+        Only Tonic row has the unguided sample: it is the one reference for the whole card."""
         lab, _, key, mlabel, unit, down, up = ATTR[attr]
         specs = []
         for s in [s for s in sv.SYSTEM_ORDER if s in systems]:
@@ -149,11 +149,11 @@ def main():
                 specs.append({**clip_spec(m, c, strength_text(s, c["strength"]), "ours" if s == "ebt" else "baseline"),
                               **row, "col": "pick", "sd": c["sd"], "strength": c["strength"],
                               "level": lv.index(float(c["strength"])) + 1, "levels": len(lv)})
-        assert specs and specs[0]["col"] == "ref", (tok, attr, pid)  # the reference lives in the EBT row
+        assert specs and specs[0]["col"] == "ref", (tok, attr, pid)  # the reference lives in Tonic row
         return {"type": "ladder", "tok": tok, "prompt": pid, "title": name(tok, pid),
                 "prompt_name": instruments(tok, pid) or f"prompt {pid}",
                 "subtitle": f"one row per technique: ▼ {down} on the left, ▲ {up} on the right; in each cell choose how much "
-                            f"change to ask for and how hard to push · the EBT's unguided sample in the middle is the reference",
+                            f"change to ask for and how hard to push · Tonic's unguided sample in the middle is the reference",
                 "metric": key, "metric_label": mlabel, "metric_unit": unit, "down": down, "up": up,
                 "clips": specs}
 
@@ -184,9 +184,9 @@ def main():
     secs["unguided"]["tabs"] = [{"label": TOK[t], "collapse_after": 5, "numbered": True, "blocks": ung[t]} for t in ("remi", "ant")]
     secs["unguided"]["intro"] = (
         "Each model gets the same short prompt (shaded) and continues it, with no control. All models are small "
-        "and trained on GigaMIDI, once per tokenization; Llama and GPT-2 are trained with the same recipe as the EBT "
+        "and trained on GigaMIDI, once per tokenization; Llama and GPT-2 are trained with the same recipe as Tonic "
         "(same data, context length and number of training tokens). The REMI and Anticipation tabs are two "
-        "tokenizations (see the ? next to Tokenization). The EBT generates each "
+        "tokenizations (see the ? next to Tokenization). Tonic generates each "
         "token by minimising a learned energy with a few gradient steps; Llama and GPT-2 are standard next-token "
         "predictors. Every continuation here was selected by ear.")
     single = secs["single"]
@@ -203,7 +203,7 @@ def main():
                 '<span class="nl"><b>Push</b> (the strength) = <i>how hard</i> the model is pushed to get there: how '
                 'insistently you ask, not what you ask for. Gentle / medium / strong are ranked within each technique, '
                 'so “strong” means the strongest setting shown for that technique, not the same force for all. '
-                'Hover a label for the exact setting (λ for the EBT, a strength value for PPLM and Tilt). '
+                'Hover a label for the exact setting (λ for Tonic, a strength value for PPLM and Tilt). '
                 'Best-of-N keeps its number: “best of 8 tries” draws 8 continuations and keeps the closest.</span>'
                 '<span class="nl">Think of throwing a ball: the target is where you aim, the strength is how hard '
                 'you throw. Too soft and it falls short; too hard and it flies past and goes wild, which is what '
@@ -213,17 +213,17 @@ def main():
                 "<b>Strength</b> (gentle / medium / strong, ranked within each technique)")
     single["intro"] = (
         "With a small regressor that predicts a musical attribute, generation can be steered toward a target "
-        "without retraining. For the EBT, the regressor's error is added to the energy it already minimises, and "
-        "its strength, λ, sets how hard it pushes. The baselines steer Llama and GPT-2 (same training recipe as the EBT) with "
+        "without retraining. For Tonic, the regressor's error is added to the energy it already minimises, and "
+        "its strength, λ, sets how hard it pushes. The baselines steer Llama and GPT-2 (same training recipe as Tonic) with "
         "PPLM, Tilt or Best-of-N. Targets are given in standard deviations (SD) of the corpus, relative to each "
         "system's own unguided level. Every steered version here was selected by ear, at whatever strength and "
-        "target sounded best, so several versions of one system can appear. In each card, the EBT's unguided "
+        "target sounded best, so several versions of one system can appear. In each card, Tonic's unguided "
         "sample is the one reference to listen against.")
     sel["meta"]["disclaimer"] = (
         "These are selected examples. In Unguided Generation and Single-Attribute Control, every clip was selected "
         "by ear by the author from the final evaluation outputs (the same pool as the listening study): they show "
         "what each system does at its best, not on average. The baselines there are Llama and GPT-2 trained with "
-        "the same recipe as the EBT. Combined Control and Pushing Too Hard are not curated: every system gets the "
+        "the same recipe as Tonic. Combined Control and Pushing Too Hard are not curated: every system gets the "
         "same prompt and its first sample, with the earlier Llama baselines. Leading silence is trimmed in the "
         "selected clips. The aggregate results are in the thesis.")
     # Tokenization: label the REMI / Anticipation tabs everywhere, and explain it once in plain words.

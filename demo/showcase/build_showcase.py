@@ -105,8 +105,8 @@ OPERATING = {
 # Played wherever a slot has no real output yet.
 PLACEHOLDER = {"tok": "remi", "kind": "unguided", "model": "ebt", "prompt": 9235}
 
-METHOD_LABEL = {"tilt": "Tilt", "best_of_n": "Best-of-N", "pplm": "PPLM", "ebt": "EBT"}
-MODEL_LABEL = {"ebt": "EBT", "gpt2": "GPT-2", "llama": "Llama"}
+METHOD_LABEL = {"tilt": "Tilt", "best_of_n": "Best-of-N", "pplm": "PPLM", "ebt": "Tonic"}
+MODEL_LABEL = {"ebt": "Tonic", "gpt2": "GPT-2", "llama": "Llama"}
 
 
 # --------------------------------------------------------------------- paths
