@@ -78,9 +78,9 @@ The combined-control write-up is the only gap that blocks a Results section (res
 - [x] Corpus attribute distributions written up in Experiments (`sec:exp-data-attributes`, table + figure, 2026-11-10). Interpretation (skew/floor → up/down asymmetry; σ_a = 2.6× Ant duration's own SD) still to write in `discussion.tex` (TODO comment there).
 - [ ] Regressor held-out accuracy table (Pearson r, MAE per regressor/checkpoint) for Experiments; needs a short eval job per regressor (ask before submitting). TODO comment in `experiments.tex` after "Checkpoint selection".
 - [x] Analyse the listening-survey responses, with and without the flagged respondent 686e30f1 (diary 2026-11-09). First full analysis 2026-11-11 (54 participants); results in diary 2026-11-11 and `music_EBT_logs/survey/analysis/`. Remaining: figures, thesis text.
-- [ ] Run a quick final check that the forked `anticipation` repo is public and citable (URL, licence, README).
-- [ ] Verify the two unchecked citations: Aria harmony steering (arXiv:2610.15957) and the OpenReview tonal-tension paper.
-- [ ] Add the new references to `references.bib`: MIDI-LLM, MusicAOG, CGRNN, dual-level beam search, and the steering papers above.
+- [x] (2026-11-11) Forked `anticipation` repo: public, Apache-2.0, README present.
+- [x] (2026-11-11) Both citations verified online: Silberschein, Wei & Rott Shaham, arXiv:2610.15957 (also ISMIR 2026 accepted list); Ebrahimzadeh, Bernardes & Stober, CMMR 2025, arXiv:2511.19342.
+- [x] (2026-11-11) All in `references.bib` (wu2025midillm, qian2024musicaog, liu2019cgrnn, ebrahimzadeh2025tension, silberschein2026harmonic); build has no undefined citations.
 - [x] (drafted 2026-11-11) Write a short "Training stability" paragraph in Experiments (`sec:exp-models`, TODO comment before "Checkpoint selection"): what went wrong when training the EBTs (early divergence, Anticipation gradient norms) and what fixed it. Contribution 2 in the Introduction promises it.
 - [ ] **Training recipes: where each part goes** (agreed 2026-11-10, do after Method).
   - *Experiments `sec:exp-models`:* **done 2026-11-10** (EBT-recipe main table, three recipes, EBT variants, basis for comparison, why small). Still: Training stability paragraph; VERIFY on "small" reason and AdamW.
