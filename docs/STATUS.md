@@ -1,11 +1,15 @@
 # Project status
 
-_Last updated: 2026-11-10._ Living snapshot of where music-EBT stands; the
+_Last updated: 2026-11-11._ Living snapshot of where music-EBT stands; the
 day-by-day history is in [diary/](diary/README.md), citable results in
 [thesis_findings/](thesis_findings/README.md).
 
 **Phase: wrap-up.** Pretraining is stopped; remaining work is regressors →
 final experiments → demo freeze → writing. Thesis: Intro–Experiments drafted (Experiments: corpus attribute section added 2026-11-10); note σ_a for targets is REMI's, used for both tokenizations. 2026-11-11: Method TODO/VERIFY resolved, PPLM-on-Anticipation + cross-refs fixed; Training-stability paragraph, composition caveat, EBT-vs-diffusion positioning drafted (diary).
+
+**Next (2026-11-12): see "Completeness plan" in [thesis_plan.md](thesis_plan.md).** No new experiments; the
+Results chapter is mostly empty (only the listening study is written). Order: combined-control aggregation →
+check the flattening analysis uses the EBT-recipe baselines → Results figures/tables/text → small checks.
 
 ## Final checkpoints
 Under `~/orcd/scratch/rebcecca/music_EBT_logs/checkpoints/`. "Real best"

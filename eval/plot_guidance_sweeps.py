@@ -53,6 +53,14 @@ INK, INK2, GRID = '#0b0b0b', '#52514e', '#e4e3df'
 ATTR_ORDER = ['velocity', 'duration', 'pitch_register', 'density']
 
 
+
+def _save(fig, path):
+    """PNG for the findings pages, PDF (vector) for the thesis."""
+    path = Path(path)
+    fig.savefig(path, dpi=160)
+    fig.savefig(path.with_suffix('.pdf'))
+
+
 def _style(ax, xlabel, ylabel):
     ax.set_xlabel(xlabel, color=INK2)
     ax.set_ylabel(ylabel, color=INK2)
@@ -127,7 +135,7 @@ def cmd_strength(args):
         ax.set_title(title, color=INK, loc='left')
         ax.legend(frameon=False)
         fig.tight_layout()
-        fig.savefig(out / fname, dpi=160)
+        _save(fig, out / fname)
         plt.close(fig)
 
     fig, axes = plt.subplots(1, len(attrs), figsize=(4.2 * len(attrs), 3.8), sharey=True)
@@ -141,7 +149,7 @@ def cmd_strength(args):
         ax.set_title(a, color=INK, loc='left')
     (axes[0] if len(attrs) > 1 else axes).legend(frameon=False)
     fig.tight_layout()
-    fig.savefig(out / 'guidance_accuracy_by_direction.png', dpi=160)
+    _save(fig, out / 'guidance_accuracy_by_direction.png')
     plt.close(fig)
 
     for a in attrs:
@@ -162,6 +170,10 @@ def cmd_tradeoff(args):
         for attr, by_sys in d.get('_operating_points', {}).items():
             operating.setdefault(attr, {}).update(by_sys)
         systems.update({k: v for k, v in d.items() if not k.startswith('_')})
+    if args.systems:
+        keep = set(args.systems.split(','))
+        systems = {k: v for k, v in systems.items() if k in keep}
+        operating = {a: {k: v for k, v in o.items() if k in keep} for a, o in operating.items()}
     attrs = [a for a in ATTR_ORDER if any(a in v for v in systems.values())]
     names = sorted(systems)
     fig, axes = plt.subplots(1, len(attrs), figsize=(4.4 * len(attrs), 4), sharey=True)
@@ -202,7 +214,7 @@ def cmd_tradeoff(args):
     fig.tight_layout(rect=(0, 0.12, 1, 1))
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out / 'guidance_tradeoff.png', dpi=160)
+    _save(fig, out / 'guidance_tradeoff.png')
     plt.close(fig)
     print(f"→ {out / 'guidance_tradeoff.png'}")
 
@@ -226,9 +238,11 @@ def _boot_mean(pairs, n_boot=1000, seed=0):
 
 
 METHOD_ORDER = ['ebt/r3', 'llama/pplm', 'llama/tilt', 'gpt2/tilt', 'llama/best_of_n', 'gpt2/best_of_n']
-METHOD_LABEL = {'ebt/r3': 'EBT (R³)', 'llama/pplm': 'Llama PPLM', 'llama/tilt': 'Llama tilt',
+METHOD_LABEL_BASE = {'ebt/r3': 'EBT (R³)', 'llama/pplm': 'Llama PPLM', 'llama/tilt': 'Llama tilt',
                 'gpt2/tilt': 'GPT-2 tilt', 'llama/best_of_n': 'Llama best-of-N',
                 'gpt2/best_of_n': 'GPT-2 best-of-N'}
+METHOD_LABEL = dict(METHOD_LABEL_BASE)
+METHOD_LABEL.update({k.replace('/', '-ebtrecipe/', 1): v for k, v in METHOD_LABEL_BASE.items() if k != 'ebt/r3'})
 STRENGTH_LABEL = {'r3': 'λ', 'pplm': 'PPLM step size', 'tilt': 'tilt fraction', 'best_of_n': 'N'}
 
 
@@ -245,14 +259,16 @@ def cmd_steering(args):
     data = defaultdict(lambda: {'progress': defaultdict(lambda: {'up': [], 'down': []}),
                                 'diss': defaultdict(list), 'unguided': []})
     for spec in args.sweep:
-        tables_glob, root = spec.split('::')
+        parts = spec.split('::')
+        tables_glob, root = parts[0], parts[1]
+        label = parts[2] if len(parts) > 2 else None   # model label, e.g. llama-ebtrecipe
         root = Path(root).expanduser()
         scores = score_root(root)
         base_ids = {_sample_base(p) for p in (root / 'baseline').glob('*_generated.mid')}
         unguided = [scores[i]['sharp_dissonance'] for i in base_ids if i in scores]
         for t in sorted(_glob.glob(tables_glob)):
             for r in load_rows(t):
-                key = (f"{r['model']}/{r['method']}", r['attribute'])
+                key = (f"{label or r['model']}/{r['method']}", r['attribute'])
                 d = data[key]
                 if not d['unguided']:
                     d['unguided'] = unguided
@@ -269,8 +285,15 @@ def cmd_steering(args):
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     attrs = [a for a in ATTR_ORDER if any(k[1] == a for k in data)]
+    if args.attributes:
+        attrs = [a for a in attrs if a in args.attributes.split(',')]
     for attr in attrs:
         systems = [m for m in METHOD_ORDER if (m, attr) in data]
+        # EBT-recipe baselines are labelled e.g. llama-ebtrecipe/pplm: same order, same labels
+        systems += [m for m in (o.replace('/', '-ebtrecipe/', 1) for o in METHOD_ORDER[1:]) if (m, attr) in data]
+        if args.systems:
+            keep = args.systems.split(',')
+            systems = [m for m in keep if m in systems]
         fig, axes = plt.subplots(2, len(systems), figsize=(3.6 * len(systems), 6.2),
                                  sharey='row', squeeze=False)
         for c, sysname in enumerate(systems):
@@ -315,7 +338,7 @@ def cmd_steering(args):
                      color=INK, x=0.01, ha='left', fontsize=10)
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         path = out / f'steering_{attr}.png'
-        fig.savefig(path, dpi=160)
+        _save(fig, path)
         plt.close(fig)
         print(f"→ {path}")
 
@@ -327,16 +350,19 @@ def main():
     s.add_argument('tables', nargs='+')
     s.add_argument('--out_dir', required=True)
     st = sub.add_parser('steering')
-    st.add_argument('--sweep', action='append', required=True, help='"<table glob>::<midi root>"')
+    st.add_argument('--sweep', action='append', required=True, help='"<table glob>::<midi root>[::<model label>]"')
     st.add_argument('--ref', required=True, help='real-data reference scores.csv')
     st.add_argument('--out_dir', required=True)
     st.add_argument('--title', default='')
     st.add_argument('--clip', type=float, default=3.0, help='clip per-sample progress to ±clip')
+    st.add_argument('--systems', default='', help='comma list of systems (columns) to plot, in order')
+    st.add_argument('--attributes', default='', help='comma list of attributes to plot (default: all)')
     st.add_argument('--random_level', type=float, default=0.246,
                     help='harsh dissonance of uniformly random notes (synthetic check, 2026-10-05)')
     t = sub.add_parser('tradeoff')
     t.add_argument('results', nargs='+')
     t.add_argument('--out_dir', required=True)
+    t.add_argument('--systems', default='', help='comma list of systems to plot (default: all)')
     args = ap.parse_args()
     {'strength': cmd_strength, 'tradeoff': cmd_tradeoff, 'steering': cmd_steering}[args.cmd](args)
 

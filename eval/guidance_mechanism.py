@@ -102,7 +102,7 @@ def random_token_value(attr: str, tokenizer: str, n: int = 20000, seed: int = 0)
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--sweep', action='append', required=True, help='"<table glob>::<midi root>"')
+    ap.add_argument('--sweep', action='append', required=True, help='"<table glob>::<midi root>[::<model label>]"')
     ap.add_argument('--tokenizer', required=True, choices=['REMI', 'Anticipation-Arrival-Time'])
     ap.add_argument('--out_dir', required=True)
     ap.add_argument('--title', default='')
@@ -112,13 +112,15 @@ def main():
     data = defaultdict(lambda: defaultdict(lambda: {'up': [], 'down': [], 'ent': []}))
     unguided_ent, baseline_val = defaultdict(list), defaultdict(list)
     for spec in args.sweep:
-        tables_glob, root = spec.split('::')
+        parts = spec.split('::')
+        tables_glob, root = parts[0], parts[1]
+        label = parts[2] if len(parts) > 2 else None   # model label, e.g. llama-ebtrecipe
         root = Path(root).expanduser()
         index = {_sample_base(p): p for p in root.rglob('*_generated.mid')}
         for t in sorted(glob.glob(tables_glob)):
             rows = load_rows(t)
             for r in rows:
-                system, attr = f"{r['model']}/{r['method']}", r['attribute']
+                system, attr = f"{label or r['model']}/{r['method']}", r['attribute']
                 sid = r.get('sample_id')
                 if r.get('target_delta') is None:
                     if str(r['condition']).startswith('baseline'):
@@ -134,7 +136,7 @@ def main():
                     if math.isfinite(h):
                         d['ent'].append((r['prompt_id'], h))
             attr = rows[0]['attribute'] if rows else None
-            system = f"{rows[0]['model']}/{rows[0]['method']}" if rows else None
+            system = f"{label or rows[0]['model']}/{rows[0]['method']}" if rows else None
             if attr and not unguided_ent[(system, attr)]:
                 for p in sorted((root / 'baseline').glob('*_generated.mid')):
                     try:
@@ -209,6 +211,7 @@ def main():
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     fig.savefig(out / 'guidance_mechanism.png', dpi=160)
+    fig.savefig(out / 'guidance_mechanism.pdf')
     (out / 'guidance_mechanism.json').write_text(json.dumps(summary, indent=2))
     for attr, s in summary.items():
         ent = [v['entropy'] for v in s['by_lambda'].values()]

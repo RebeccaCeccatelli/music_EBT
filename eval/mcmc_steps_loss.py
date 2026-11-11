@@ -59,6 +59,42 @@ def per_step_loss(model, windows: list[list[int]], batch_size: int, device: str)
     return [s / n for s in ce_sums], [s / n for s in en_sums], [s / n for s in ent_sums]
 
 
+def candidate_selection(model, windows, batch_size, device, n_candidates, seed):
+    """Self-verification: N random starts, the trained K steps each, and per position keep the
+    candidate with the lowest energy (the EBT as its own verifier). The energy of the final
+    prediction is measured by one extra step with step size 0 (energy only, no update).
+    Returns CE of: candidate 1 alone, the mean over candidates, the min-energy choice, and the
+    oracle (lowest CE, an upper bound on what any selection could gain)."""
+    trained = model.hparams.get('mcmc_num_steps', 2)
+    model.hparams['randomize_mcmc_num_steps'] = 1
+    model.hparams['randomize_mcmc_num_steps_final_landscape'] = True
+    model.hparams['extra_step_alpha_scale'] = 0.0
+    sums = {'first': 0.0, 'mean': 0.0, 'min_energy': 0.0, 'oracle': 0.0}
+    n_tok = 0
+    for b, i in enumerate(range(0, len(windows), batch_size)):
+        ids = torch.tensor(windows[i:i + batch_size], dtype=torch.long, device=device)
+        x, targets = ids[:, :-1], ids[:, 1:].reshape(-1)
+        keep = targets != model.pad_token_id
+        ces, ens = [], []
+        for c in range(n_candidates):
+            torch.manual_seed(seed * 100003 + b * 101 + c)
+            dists, energies = model(x, learning=False, return_raw_logits=True, no_randomness=True)
+            final = dists[trained - 1].detach().reshape(-1, model.vocab_size)
+            ce = F.cross_entropy(final.float(), targets, reduction='none', ignore_index=model.pad_token_id)
+            ces.append(ce[keep])
+            ens.append(energies[trained].detach().reshape(-1)[keep])   # energy of the final prediction
+            del dists, energies, final
+        ces, ens = torch.stack(ces), torch.stack(ens)                      # (N, T)
+        pick = ens.argmin(0)
+        sums['first'] += float(ces[0].sum())
+        sums['mean'] += float(ces.mean(0).sum())
+        sums['min_energy'] += float(ces.gather(0, pick.unsqueeze(0)).sum())
+        sums['oracle'] += float(ces.min(0).values.sum())
+        n_tok += int(keep.sum())
+    model.hparams['extra_step_alpha_scale'] = 1.0
+    return {k: v / n_tok for k, v in sums.items()}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--model', action='append', required=True, help='NAME=checkpoint_path')
@@ -69,6 +105,11 @@ def main():
     ap.add_argument('--n_windows', type=int, default=1000)
     ap.add_argument('--batch_size', type=int, default=4)
     ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--alpha_scales', default='1',
+                    help='comma list: step size of the steps beyond the trained ones, as a fraction of '
+                         'the learned one (1 = original behaviour)')
+    ap.add_argument('--n_candidates', type=int, default=0,
+                    help='also run self-verification with this many random starts (0 = skip)')
     ap.add_argument('--out', required=True)
     args = ap.parse_args()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -84,14 +125,27 @@ def main():
         model.hparams['randomize_mcmc_num_steps_final_landscape'] = True
         windows = [w[:args.context] for w in
                    draw_windows(hp.tokenizer_type, args.n_windows, args.window_len, args.seed)]
-        ce, en, ent = per_step_loss(model, windows, args.batch_size, device)
         results[name] = {'checkpoint': path, 'tokenizer_type': hp.tokenizer_type,
                          'trained_mcmc_steps': trained, 'context': args.context,
-                         'n_windows': len(windows), 'loss_per_step': ce, 'energy_per_step': en,
-                         'entropy_per_step': ent}
+                         'n_windows': len(windows), 'by_alpha_scale': {}}
         print(f"{name}  (trained with {trained} steps, {len(windows)} windows)")
-        for k, (c, e, h) in enumerate(zip(ce, en, ent), 1):
-            print(f"  step {k:2d}: loss {c:.4f}  ppl {math.exp(c):.4f}  energy {e:.4f}  entropy {h:.4f}")
+        for scale in [float(a) for a in args.alpha_scales.split(',')]:
+            model.hparams['extra_step_alpha_scale'] = scale
+            torch.manual_seed(args.seed)
+            ce, en, ent = per_step_loss(model, windows, args.batch_size, device)
+            r = {'loss_per_step': ce, 'energy_per_step': en, 'entropy_per_step': ent}
+            results[name]['by_alpha_scale'][str(scale)] = r
+            if scale == 1.0:   # keep the original keys for existing readers
+                results[name].update(r)
+            print(f"  extra-step size = {scale} x learned")
+            for k, (c, e, h) in enumerate(zip(ce, en, ent), 1):
+                print(f"    step {k:2d}: loss {c:.4f}  ppl {math.exp(c):.4f}  energy {e:.4f}  entropy {h:.4f}")
+        model.hparams['extra_step_alpha_scale'] = 1.0
+        if args.n_candidates:
+            sel = candidate_selection(model, windows, args.batch_size, device, args.n_candidates, args.seed)
+            results[name]['self_verification'] = {'n_candidates': args.n_candidates, **sel}
+            print(f"  self-verification, {args.n_candidates} starts: " +
+                  ", ".join(f"{k} {v:.4f}" for k, v in sel.items()))
         del model
         torch.cuda.empty_cache()
 

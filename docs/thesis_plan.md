@@ -88,7 +88,7 @@ The combined-control write-up is the only gap that blocks a Results section (res
   - *Results `sec:res-lm`:* EBT-recipe comparison as headline (ctx-matched 0.683/0.700 vs 0.696; Ant 1.056/1.070 vs 1.102); reference points in one table/sentence: token-matched Llama, 100k baselines, stabilized EBT lineage.
   - *Discussion:* keep the existing Limitations "Scaling" paragraph (100k + token-matched); add why EBT-recipe is the fair comparison and what the 100k runs show; EBTs trained without the regularisers, untested whether they widen the narrow λ window.
   - *Appendix:* full hyperparameter tables for every run incl. unused lineages (from `docs/training_runs.md`); short note on the 2026-09-22 vocabulary-size explanation of Anticipation's higher loss, pointed to from Results.
-- [ ] **Future Work: recipes not tried** (`conclusion.tex`). Candidates, each tied to a limitation:
+- [x] (written 2026-11-11, 8 paragraphs in conclusion.tex sec:future) **Future Work: recipes not tried** (`conclusion.tex`). Candidates, each tied to a limitation:
   - the three EBT regularisers (Langevin noise, randomised step size, replay buffer) on REMI, and on Anticipation with a full-length run (the stabilized lineage stopped at ~44.7k steps); test whether they widen the usable λ window;
   - more refinement steps K at training and/or inference (only K = 2 used), trading compute for quality and controllability;
   - larger models and several sizes, to test the EBT scaling claim (single "small" size only);
@@ -97,9 +97,43 @@ The combined-control write-up is the only gap that blocks a Results section (res
   - **per-voice / per-instrument attributes:** every attribute is currently scored as an average over all notes in the window (mean velocity, mean duration, mean pitch), so a request like "louder" is met on average across instruments. Future work: regressors and targets per voice or per instrument (e.g. louder strings, longer bass notes), which is closer to how musicians think and gives finer-grained control. Motivated by the survey: a couple of participants asked whether they should judge the continuation per instrument or overall (user, 2026-11-10). Also mention this ambiguity in Discussion/Limitations next to the survey (instructions did not say whether to judge per instrument or overall).
 - [ ] **Limitation (Discussion): compute environment.** Single L40S per run on a shared Slurm cluster with per-user GPU caps, job time limits and a preemptable partition (no warning on preemption) → every run spans many jobs; we built checkpoint/auto-resume logic (resume from highest compatible step, self-resubmit, requeue). Consequences worth stating: long wall-clock times, a corrupted checkpoint (stabilized Ant, 44,800), stitched W&B segments, and the limits it put on model size / context (EBT 512) and on the number of runs and seeds. Mechanism itself is described in Experiments `sec:exp-implementation`.
 - [x] **Experiments `sec:exp-survey`:** written 2026-11-11 (only the recruitment/consent sentence left as a TODO).
-- [ ] **Experiments `sec:exp-implementation`:** add W&B link(s) if public, fork URL, per-job time limits, GPU hours.
-- [ ] Fill Future Work in `conclusion.tex`, with each item tied to a limitation in `discussion.tex`.
+- [x] **Experiments `sec:exp-implementation`:** W&B link (public 2026-11-11), fork URL, time limits, GPU hours (per run + project total) all in.
+- [x] Fill Future Work in `conclusion.tex` (done 2026-11-11).
 - [ ] Use the name TONIC consistently, and never cite post-resume validation readings.
+
+## Completeness plan (agreed 2026-11-11, deadline 2026-11-13)
+
+No new experiments: every claim has data. What is missing is analysis and plots from finished runs, and above all
+the Results chapter (`results.tex`): only the listening-study section is written (by the other session, which owns
+the survey). Agree which session writes which Results sections before editing `results.tex`.
+
+**Must do (existing data, no new runs), in this order:**
+1. [x] **Combined-control aggregation** — done 2026-11-11: `thesis_findings/2026-11-11_combined_control.md`,
+   script `attribute_control/aggregate_combined_control.py`. (Was: only real analysis gap; also the `thesis_findings/` entry in Gaps above).
+   EBT joint accuracy known (REMI 0.75 at 0.05:0.055, job 28472156; Ant 0.84 at 0.005:0.012, 28472160; Ant Llama PPLM
+   16:32 0.92, 28472164). Missing: REMI baselines' joint accuracy (PPLM 32, tilt 1.0, best-of-N) + CIs, per-attribute
+   accuracy, progress, quality. Outputs in `music_EBT_logs/attr_control/compose_guidance/`. CPU scoring.
+2. [x] **Flattening mechanism (contribution 6):** done 2026-11-11, conclusion unchanged; final figure `thesis_findings/figures/guidance_final_ebtrecipe/` (update section in 2026-10-09_guidance_ebt_vs_ar.md). Was: check `thesis_findings/figures/guidance_final/*/guidance_mechanism.json`
+   uses the EBT-recipe baselines for the AR side. The 2026-10-09 analysis compared against the old 100k baselines;
+   if not redone, re-analyse saved outputs (no new runs).
+3. [x] **Results sections** — drafted 2026-11-11 (LM, quality, control REMI/Ant, combined, trade-off + flattening); recheck Intro/Discussion numbers against them. Was: thesis figures as PDF (current ones are PNG working figures) + text:
+   - `sec:res-lm`: loss curves + same-context (512) loss table, EBT vs EBT-recipe baselines, references
+     (findings 2026-09-25, 2026-10-05, diary 2026-10-17).
+   - `sec:res-quality`: unguided OA table with CIs (`figures/unguided_quality_ci/*_ebtrecipe.json`).
+   - `sec:res-control-remi` / `-ant`: held-out table, paired Holm tests, compute-matched best-of-4, progress by
+     direction (`figures/guidance_heldout/`, `figures/guidance_final/`). Caveat Ant duration progress/MAE
+     (regressor ⅓-scale bug, `tab:regressor-accuracy`).
+   - `sec:res-tradeoff`: strength vs musicality + flattening (`guidance_tradeoff.png`, `guidance_mechanism.png`).
+   - Combined control (from item 1).
+
+**Small checks (minutes each):**
+- [ ] `anticipation-musicEBT` fork public, licence, README (also in Gaps above).
+- [ ] Verify the two unchecked citations; add missing references (also in Gaps above).
+- [ ] Future Work in `conclusion.tex`; compute-environment limitation in Discussion (writing only).
+
+**Not before the deadline (new runs; already stated as limitations / future work):** fix + retrain the Ant duration
+regressors and rerun those sweeps (few GPU-days); same-gate composition on the final checkpoints (preliminary runs in
+`sec:exp-tried`); more seeds or larger models; activation-steering baseline.
 
 ## Writing order
 

@@ -159,8 +159,13 @@ class EBT_MUS_SYMB(nn.Module):
         absolute_clamp = self.hparams.get('absolute_clamp', 0.0)
         sharpen = self.hparams.get('sharpen_predicted_distribution', 0.0)
 
+        # Evaluation only: steps beyond the trained count can use a scaled step size
+        # (eval/mcmc_steps_loss.py --alpha_scales); 1.0 = unchanged, 0.0 = energy only.
+        extra_alpha_scale = self.hparams.get('extra_step_alpha_scale', 1.0)
+
         with torch.set_grad_enabled(True):
             for i, mcmc_step in enumerate(mcmc_steps):
+                step_alpha = alpha if i < mcmc_num_steps else alpha * extra_alpha_scale
 
                 if no_mcmc_detach:
                     predicted_tokens.requires_grad_()
@@ -221,7 +226,7 @@ class EBT_MUS_SYMB(nn.Module):
                 if torch.isnan(predicted_tokens_grad).any() or torch.isinf(predicted_tokens_grad).any():
                     raise ValueError("NaN or Inf gradients detected during MCMC.")
 
-                predicted_tokens = predicted_tokens - alpha * predicted_tokens_grad
+                predicted_tokens = predicted_tokens - step_alpha * predicted_tokens_grad
 
                 if absolute_clamp != 0.0:
                     predicted_tokens = torch.clamp(predicted_tokens, min=-absolute_clamp, max=absolute_clamp)

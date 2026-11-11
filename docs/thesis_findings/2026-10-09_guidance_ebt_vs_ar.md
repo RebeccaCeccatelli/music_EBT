@@ -172,3 +172,22 @@ Anticipation: ![duration](figures/guidance_final/ant/steering_duration.png)
   best-of-N only.
 - Quality metrics ignore velocity; Anticipation duration down-targets hit
   a floor.
+
+## Update 2026-11-11: flattening re-checked against the EBT-recipe baselines
+The mechanism figure above (`figures/guidance_final/`, 2026-10-09) compared EBT with the old 100k baselines. Rerun of
+`eval/guidance_mechanism.py` (now accepts `tables::midi::label`) with only EBT + EBT-recipe baselines (test prompts;
+same EBT sweeps; AR = `*-ebtrecipe_*_20261019`, Llama PPLM `_20261104` REMI / `_20261105` Ant, which also adds
+Anticipation PPLM). Output: `figures/guidance_final_ebtrecipe/{remi,ant}/guidance_mechanism.{png,json}`.
+
+| tok / attr | baseline → random-token value | easy direction: predicted / observed (at λ max) | entropy: unguided → EBT λ max | AR at max strength (EBT-recipe) |
+|---|---|---|---|---|
+| REMI velocity | 0.674 → 0.509 | down / down (−0.20 vs +0.07) | 0.24 → 0.73 | tilt 0.31–0.32, BoN 0.25–0.28, PPLM 0.43 |
+| REMI duration | 0.047 → 0.498 | up / up (+0.09 vs −0.01) | 0.27 → 0.58 | tilt 0.21–0.23, BoN 0.26, PPLM 0.38 |
+| REMI pitch | 0.356 → 0.511 | up / up (+0.11 vs −0.01) | 0.36 → 0.62 | 0.34–0.39 |
+| Ant duration | 0.025 → 0.502 | up / up (down ends *above* baseline, 0.12) | 0.29 → 0.58 | 0.23–0.28 |
+| Ant pitch | 0.467 → 0.499 (close) | either / both work | 0.47 → 0.76 | 0.44–0.46 |
+
+**Conclusion unchanged.** EBT's value entropy roughly doubles with λ; no AR method raises it much (PPLM most, +0.12
+to +0.19 on REMI; on Anticipation every AR method stays at or below its unguided level). In 4/4 cases where the
+random-token value differs from the baseline, the easy direction points towards it; where the two are close (Ant
+pitch) both directions work. The AR numbers barely change from the 100k baselines (≤ 0.04).
