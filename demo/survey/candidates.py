@@ -43,8 +43,8 @@ UNGUIDED = {
 # (system id, label, run dir or None for EBT, method, {attribute: strength})
 SYSTEMS = {
     "remi": [
-        ("ebt", "EBT", None, "ebt", {"velocity": "0.05", "duration": "0.055", "pitch_register": "0.01"}),
-        ("ebt_l002", "EBT λ 0.02 (sensitivity)", None, "ebt", {"pitch_register": "0.02"}),
+        ("ebt", "Tonic", None, "ebt", {"velocity": "0.05", "duration": "0.055", "pitch_register": "0.01"}),
+        ("ebt_l002", "Tonic λ 0.02 (sensitivity)", None, "ebt", {"pitch_register": "0.02"}),
         ("llama_pplm", "Llama PPLM", AR / "llama-ebtrecipe_pplm_20261104/midi", "pplm",
          {"velocity": "32", "duration": "32", "pitch_register": "16"}),
         ("llama_tilt", "Llama tilt", AR / "llama-ebtrecipe_tilt_20261019/midi", "tilt",
@@ -53,7 +53,7 @@ SYSTEMS = {
          {"velocity": "16", "duration": "8", "pitch_register": "16"}),
     ],
     "ant": [
-        ("ebt", "EBT", None, "ebt", {"duration": "0.005", "pitch_register": "0.012"}),
+        ("ebt", "Tonic", None, "ebt", {"duration": "0.005", "pitch_register": "0.012"}),
         ("llama_pplm", "Llama PPLM", AR / "llama-ebtrecipe_pplm_ant_20261105/midi", "pplm",
          {"duration": "16", "pitch_register": "32"}),
         ("llama_bon", "Llama best-of-N", AR / "llama-ebtrecipe_best_of_n_ant_20261019/midi", "best_of_n",
@@ -150,7 +150,7 @@ def manifest():
                     add(down, **info, cond="down")
                     add(up, **info, cond="up")
             add(bs.ebt_path(tok, "pitch_register", pid, SD, CATCH_LAMBDA[tok]), tok=tok, section="catch",
-                system="ebt", label=f"EBT λ {CATCH_LAMBDA[tok]}", prompt=pid, cond="up",
+                system="ebt", label=f"Tonic λ {CATCH_LAMBDA[tok]}", prompt=pid, cond="up",
                 strength=CATCH_LAMBDA[tok])
         pool_clips(tok, add)
         song_clips(tok, add)
@@ -187,7 +187,7 @@ def song_clips(tok, add):
     for song in sorted(ebt):
         info = dict(tok=tok, section="unguided_songs", prompt=song, cond="song")
         add(base["llama"] / f"sample_{song}_ground_truth.mid", **info, system="original", label="original")
-        add(MQ / f"gen_ebt_{slug}" / "midi" / f"sample_{ebt[song]:03d}_generated.mid", **info, system="ebt", label="EBT")
+        add(MQ / f"gen_ebt_{slug}" / "midi" / f"sample_{ebt[song]:03d}_generated.mid", **info, system="ebt", label="Tonic")
         for m, d in base.items():
             # Baselines save the continuation alone in *_generated.mid; the full clip is this file.
             add(d / f"sample_{song}_prompt_with_generated_continuation.mid", **info, system=m, label=m,

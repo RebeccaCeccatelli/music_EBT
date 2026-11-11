@@ -96,12 +96,12 @@ def manifest():
             if not h or h.group(2) != attr:
                 continue
             pid, lam, sd = int(h.group(1)), num(h.group(3)), to_sd[float(h.group(4))]
-            add(p, tok=tok, split=split, system="ebt", label="EBT", attr=attr, prompt=pid, strength=lam,
+            add(p, tok=tok, split=split, system="ebt", label="Tonic", attr=attr, prompt=pid, strength=lam,
                 sd=sd, cond=f"d{sd:+g}", table=table)
             if (tok, split, "ebt", attr, pid) not in refs:
                 refs.add((tok, split, "ebt", attr, pid))
                 add(run / "baseline" / f"p{pid}_r0_generated.mid", tok=tok, split=split, system="ebt",
-                    label="EBT", attr=attr, prompt=pid, strength="ref", sd=None, cond="reference", table=table)
+                    label="Tonic", attr=attr, prompt=pid, strength="ref", sd=None, cond="reference", table=table)
     for tok, split, model, method, mdir in ar_runs():
         system = f"{model}_{METHOD_SYS[method]}"
         label = f"{'Llama' if model == 'llama' else 'GPT-2'} {METHOD_LABEL[method]}"
@@ -283,7 +283,7 @@ def cmd_pack(args, chunk_bytes=8_000_000):
 
 
 def cmd_explorer(args):
-    """EBT explorer page data: every λ × all six targets + reference, test prompts, both tokenizers.
+    """Tonic explorer page data: every λ × all six targets + reference, test prompts, both tokenizers.
     Sections are the attributes; each λ is a row (same layout as the operating-point tabs)."""
     man = json.loads((OUT / "manifest.json").read_text())
     ops = operating_points()

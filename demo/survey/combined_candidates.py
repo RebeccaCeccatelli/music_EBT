@@ -32,9 +32,9 @@ OUT = LOGS.parent / "survey" / "combined"
 # (tok, system id, label, job id). ebt_pa = EBT with one λ per attribute (strength "a:b").
 RUNS = {
     "remi": [
-        ("ebt", "EBT (one shared λ)", "25416469"),
-        ("ebt_pa", "EBT (λ per attribute)", "28472156"),   # held-out operating points 0.05:0.055
-        ("ebt_pa", "EBT (λ per attribute)", "28472158"),   # chosen operating points 0.03:0.02, 0.04:0.025
+        ("ebt", "Tonic (one shared λ)", "25416469"),
+        ("ebt_pa", "Tonic (λ per attribute)", "28472156"),   # held-out operating points 0.05:0.055
+        ("ebt_pa", "Tonic (λ per attribute)", "28472158"),   # chosen operating points 0.03:0.02, 0.04:0.025
         ("llama_pplm", "Llama PPLM", "28462282"),
         ("llama_tilt", "Llama tilt", "28462283"),
         ("gpt2_tilt", "GPT-2 tilt", "28462284"),
@@ -43,10 +43,10 @@ RUNS = {
     ],
     # Ant = duration + pitch register (tilt is REMI-only); the shared-λ EBT sweep was split in two λ halves
     "ant": [
-        ("ebt", "EBT (one shared λ)", "28462287"),          # λ 0.002, 0.004, 0.006
-        ("ebt", "EBT (one shared λ)", "28462288"),          # λ 0.008, 0.010, 0.012
-        ("ebt_pa", "EBT (λ per attribute)", "28472160"),    # held-out operating points 0.005:0.012
-        ("ebt_pa", "EBT (λ per attribute)", "28472162"),    # chosen operating points 0.005:0.005, 0.005:0.006
+        ("ebt", "Tonic (one shared λ)", "28462287"),          # λ 0.002, 0.004, 0.006
+        ("ebt", "Tonic (one shared λ)", "28462288"),          # λ 0.008, 0.010, 0.012
+        ("ebt_pa", "Tonic (λ per attribute)", "28472160"),    # held-out operating points 0.005:0.012
+        ("ebt_pa", "Tonic (λ per attribute)", "28472162"),    # chosen operating points 0.005:0.005, 0.005:0.006
         ("llama_pplm", "Llama PPLM", "28462289"),
         ("llama_pplm", "Llama PPLM", "28472164"),           # per-attribute held-out operating points 16:32
         ("llama_bon", "Llama best-of-N", "28462290"),
