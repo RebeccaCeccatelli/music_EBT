@@ -5,7 +5,7 @@ day-by-day history is in [diary/](diary/README.md), citable results in
 [thesis_findings/](thesis_findings/README.md).
 
 **Phase: wrap-up.** Pretraining is stopped; remaining work is regressors →
-final experiments → demo freeze → writing. Thesis: Intro–Experiments drafted (Experiments: corpus attribute section added 2026-11-10); note σ_a for targets is REMI's, used for both tokenizations.
+final experiments → demo freeze → writing. Thesis: Intro–Experiments drafted (Experiments: corpus attribute section added 2026-11-10); note σ_a for targets is REMI's, used for both tokenizations. 2026-11-11: Method TODO/VERIFY resolved, PPLM-on-Anticipation + cross-refs fixed; Training-stability paragraph, composition caveat, EBT-vs-diffusion positioning drafted (diary).
 
 ## Final checkpoints
 Under `~/orcd/scratch/rebcecca/music_EBT_logs/checkpoints/`. "Real best"
@@ -107,7 +107,7 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
    Blind listening survey: `demo/survey/` (page at /music_EBT/survey/, test
    mode until the endpoint was connected on 2026-10-09). Responses go to a Google Sheet
    and are emailed to the owner. Italian version at /music_EBT/survey/it/ (same sheet,
-   `lang: "it"`). Remaining: ethics check, pilot, then send.
+   `lang: "it"`). Collected v5 to 2026-11-11 (54 participants after dropping 1 empty); analysed with `demo/survey/analyze_survey.py` (v5 key), outputs in `music_EBT_logs/survey/analysis/`, summary in diary 2026-11-11. Figures (eval/plot_survey.py) and thesis text (sec:exp-survey, sec:res-survey, app:survey, limitation) done 2026-11-11; recruitment sentence filled (people the user knows + group chats).
 4. Writing: thesis sections from `thesis_findings/` + diary, then paper.
    Don't cite post-resume val readings. Thesis source: `eth-mit-master-thesis/` (own git repo,
    ignored here; Overleaf export, ch. 2-4 drafted 2026-10-08; build with

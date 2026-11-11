@@ -609,8 +609,8 @@ def _sigma_annotation_html(attribute: str, target: float) -> str:
     how the project's own sweep scripts (compose_attributes.py's
     --target_deltas_std) reason about targets internally; this surfaces the
     same thing live in the UI instead of requiring a separate lookup.
-    Color tiers match _attribute_gauge_html's existing green/amber/red
-    achieved-vs-target convention, reused here for "how extreme is this ask"
+    Color tiers match the usual green/amber/red
+    convention, reused here for "how extreme is this ask"
     instead of "how close did generation get." Duration and pitch_register
     are both meaningfully skewed (see the corpus-distributions finding), so
     this is a rule-of-thumb flag, not a precise boundary — the note says so
@@ -695,35 +695,52 @@ def _find_attribute_regressor(attribute: str, tokenizer_type: str = "REMI",
     return None, f"No {attribute} regressor found for {tokenizer_type} — train one first."
 
 
-def _attribute_gauge_html(title: str, rows: list[tuple[str, float, float, float]]) -> str:
-    """rows: list of (attribute_name, target, achieved, max_value)."""
-    row_html = []
-    for name, target, achieved, max_v in rows:
-        t_pct = min(target / max_v * 100, 100) if max_v else 0
-        a_pct = min(achieved / max_v * 100, 100) if max_v else 0
-        diff = achieved - target
-        tol = 0.02 * max_v
-        color = "#22c55e" if abs(diff) < tol else "#f59e0b" if abs(diff) < 3 * tol else "#ef4444"
-        sign = "+" if diff >= 0 else ""
-        row_html.append(f"""
-    <div style="margin-bottom:10px">
-      <div style="font-size:.82em;color:var(--body-text-color-subdued,#888);margin-bottom:3px">{name.replace('_', ' ').capitalize()}</div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="flex:1;background:#e5e7eb22;border-radius:6px;height:16px;position:relative;overflow:hidden">
-          <div style="width:{t_pct:.1f}%;background:#6366f1;height:16px;position:absolute;opacity:.35"></div>
-          <div style="width:{a_pct:.1f}%;background:{color};height:16px;position:absolute"></div>
-        </div>
-        <div style="font-size:.8em;white-space:nowrap;min-width:150px">
-          target {target:.3f} → <span style="color:{color};font-weight:600">{achieved:.3f}</span> ({sign}{diff:.3f})
-        </div>
-      </div>
-    </div>""")
-    return f"""
-<div style="font-family:inherit;padding:8px 4px">
-  <b style="font-size:.9em">{title}</b>
-  <div style="margin-top:10px">{''.join(row_html)}</div>
-</div>"""
+def _shift_gauge_html(title: str, rows: list[tuple[str, float, float, float | None]],
+                      baseline_label: str) -> str:
+    """Attribute gauge in corpus standard deviations (σ from
+    attribute_control/corpus_stats.json, the same σ the target sliders and the
+    thesis use), measured from the model's own unguided output.
 
+    rows: (attribute, target, achieved, unguided reference or None). The bar
+    is centred on the reference: the teal marker is the requested shift, the
+    violet bar the achieved one. Without a reference (no main Generate run for
+    that model yet) the corpus mean stands in."""
+    stats = _corpus_stats()
+    parts = []
+    for attr, target, achieved, ref in rows:
+        st = stats.get(attr) or {}
+        sd = st.get("stdev")
+        base, base_name = (ref, baseline_label) if ref is not None else (st.get("mean"), "the corpus mean")
+        name = attr.replace("_", " ").capitalize()
+        raw = f"target {target:.3f} · achieved {achieved:.3f}" + (f" · unguided {ref:.3f}" if ref is not None else "")
+        if not sd or base is None:
+            parts.append(f'<div class="sg-row"><div class="sg-head"><span class="sg-name">{name}</span></div>'
+                         f'<div class="sg-raw">{raw}</div></div>')
+            continue
+        asked, moved = (target - base) / sd, (achieved - base) / sd
+        if abs(asked) < 0.1:
+            verdict, cls = f"no shift requested (moved {moved:+.1f}σ)", "weak"
+        elif moved * asked <= 0:
+            verdict, cls = "wrong direction", "bad"
+        else:
+            pct = moved / asked * 100
+            verdict, cls = f"{pct:.0f}% of the requested shift", ("good" if pct >= 50 else "weak")
+        scale = min(4.0, max(1.0, abs(asked), abs(moved)) * 1.15)
+        pos = lambda z: 50 + 50 * max(-1.0, min(1.0, z / scale))
+        left, right = sorted((50.0, pos(moved)))
+        parts.append(f"""
+  <div class="sg-row">
+    <div class="sg-head"><span class="sg-name">{name}</span>
+      <span>asked <b>{asked:+.1f}σ</b> → moved <b class="{cls}">{moved:+.1f}σ</b> · <span class="{cls}">{verdict}</span></span></div>
+    <div class="sg-track"><div class="sg-zero"></div>
+      <div class="sg-bar" style="left:{left:.1f}%;width:{right - left:.1f}%"></div>
+      <div class="sg-target" style="left:{pos(asked):.1f}%"></div></div>
+    <div class="sg-axis"><span>−{scale:.1f}σ</span><span>{base_name}</span><span>+{scale:.1f}σ</span></div>
+    <div class="sg-raw">{raw}</div>
+  </div>""")
+    key = ('<div class="sg-key"><i style="background:#3fd0c9"></i>requested'
+           '<i style="background:#8b7cff"></i>achieved · σ = corpus standard deviation</div>')
+    return f'<div class="shift-gauge"><div class="sg-title">{title}</div>{"".join(parts)}{key}</div>'
 
 
 def _render_compose_reference_html(ref_velocity: float | None, ref_duration: float | None,
@@ -1258,7 +1275,7 @@ def _clear_generated_results():
     empty_ref_html = _render_compose_reference_html(None, None)
     return (
         *main_slots,
-        gr.update(visible=False, value=None), None, None, None,
+        gr.update(visible=False, value=None), None, None, None, {},
         gr.update(visible=False, value=None),
         *model_cols,
         "",
@@ -1608,7 +1625,7 @@ def _render_prompt_and_gt(tokenizer_type: str, prompt_tokens: list[int], gt_toke
     out_dir = Path(tempfile.mkdtemp(prefix="demo_shared_"))
     gt_combined = prompt_tokens + gt_tokens
     wav_paths = {}
-    for name, toks in [("prompt", prompt_tokens), ("gt_combined", gt_combined)]:
+    for name, toks in [("gt_combined", gt_combined)]:  # the prompt alone is no longer shown in section 03
         wav_path, _err = _synth_with_retry(toks, tokenizer, out_dir, name, prompt_tokens=prompt_tokens)
         wav_paths[name] = wav_path
     return wav_paths
@@ -1637,22 +1654,16 @@ def _log_to_wandb(tag: str, wav_paths: dict, meta: dict):
 # visible at a time; _slot_loading()/_slot_done() build the (placeholder,
 # audio) gr.update() tuple for each state.
 
-_SLOT_KEYS = [
-    "shared_prompt", "shared_gt",
-    "EBT_generated", "EBT_combined",
-    "Llama_generated", "Llama_combined",
-    "GPT-2_generated", "GPT-2_combined",
-]
+# One player per row in section 03: the original continuation, then each
+# model's. Each plays prompt + continuation; the roll shades the prompt, so
+# separate "prompt" / "continuation only" players would just repeat it.
+_SLOT_KEYS = ["shared_gt", "EBT_combined", "Llama_combined", "GPT-2_combined"]
 
 
 def _slot_label(key: str) -> str:
-    if key == "shared_prompt":
-        return "Prompt"
     if key == "shared_gt":
-        return "Prompt + Original Continuation"
-    if key.endswith("_combined"):
-        return "Prompt + Generated Continuation"
-    return "Generated Continuation"
+        return "Prompt + original continuation"
+    return "Prompt + generated continuation"
 
 
 def _slot_idle_text(key: str) -> str:
@@ -1661,7 +1672,7 @@ def _slot_idle_text(key: str) -> str:
     # not on a model producing something — "prompt not chosen yet" says that
     # directly instead of the generic "nothing to display" wording used for
     # the per-model output boxes.
-    if key in ("shared_prompt", "shared_gt"):
+    if key == "shared_gt":
         return "Prompt not chosen yet — click Generate above."
     return _DEFAULT_IDLE_TEXT
 
@@ -1687,6 +1698,20 @@ def _slot_done(wav_path, key: str = ""):
     return gr.update(visible=True, value=_idle_placeholder_html(_slot_idle_text(key))), gr.update(visible=False, value=None)
 
 
+def _measure_attributes(tokens: list[int], tokenizer_type: str) -> dict[str, float]:
+    """Rule-based velocity / duration / pitch register of a generated
+    continuation; attributes that can't be measured (e.g. velocity under
+    Anticipation) are left out."""
+    from attribute_control.attributes import ATTRIBUTES
+    values = {}
+    for attr in ("velocity", "duration", "pitch_register"):
+        try:
+            values[attr] = float(ATTRIBUTES[attr](tokens, tokenizer_type))
+        except Exception:
+            pass
+    return values
+
+
 def generate_all(
     tokenizer_type: str, song_choice: str, start_offset: int,
     temperature: float, top_p: float, generation_length: int,
@@ -1709,7 +1734,6 @@ def generate_all(
     # mark them done-but-empty immediately.
     for model_key, (on, _, _) in enabled.items():
         if not on:
-            slots[f"{model_key}_generated"] = _slot_done(None, f"{model_key}_generated")
             slots[f"{model_key}_combined"] = _slot_done(None, f"{model_key}_combined")
 
     # EBT's "prompt + generated" from this run, surfaced as a reference in the
@@ -1722,6 +1746,10 @@ def generate_all(
     ebt_reference_velocity = None
     ebt_reference_duration = None
     ebt_reference_pitch_register = None
+    # Every model's unguided attribute values from this run, {model: {attr: value}}:
+    # the baseline the attribute sections' shift gauges measure against, so a
+    # Llama/GPT-2 variant is compared with Llama/GPT-2's own default, not EBT's.
+    ref_values: dict[str, dict[str, float]] = {}
 
     # Reveals all three model-comparison columns the moment Generate is
     # clicked (constant for every yield in this run) — they start hidden
@@ -1744,6 +1772,7 @@ def generate_all(
         # component gets its own update instance.
         return (gr.update(visible=bool(ebt_reference_wav), value=ebt_reference_wav),
                 ebt_reference_velocity, ebt_reference_duration, ebt_reference_pitch_register,
+                dict(ref_values),
                 gr.update(visible=bool(ebt_reference_wav), value=ebt_reference_wav))
 
     # Only two yields total: this immediate "Starting…" for instant feedback,
@@ -1771,12 +1800,10 @@ def generate_all(
 
     try:
         shared_wavs = _render_prompt_and_gt(tokenizer_type, prompt_tokens, gt_tokens)
-        slots["shared_prompt"] = _slot_done(shared_wavs.get("prompt"), "shared_prompt")
         slots["shared_gt"] = _slot_done(shared_wavs.get("gt_combined"), "shared_gt")
     except Exception as e:
         status_all.append(f"⚠️ Shared prompt/ground-truth render failed: {e}")
         shared_wavs = {}
-        slots["shared_prompt"] = _slot_done(None, "shared_prompt")
         slots["shared_gt"] = _slot_done(None, "shared_gt")
 
     for model_key, (on, ckpt_display, paths_json) in enabled.items():
@@ -1785,7 +1812,6 @@ def generate_all(
             continue
         if not ckpt_display or not paths_json:
             status_all.append(f"{model_key}: ❌ no checkpoint selected")
-            slots[f"{model_key}_generated"] = _slot_done(None, f"{model_key}_generated")
             slots[f"{model_key}_combined"] = _slot_done(None, f"{model_key}_combined")
             continue
         try:
@@ -1794,8 +1820,8 @@ def generate_all(
                                    prompt_tokens, gt_tokens, temperature, top_p, generation_length)
             status_all.extend(out["status_lines"])
             wp = out["wav_paths"]
-            slots[f"{model_key}_generated"] = _slot_done(wp.get("generated"), f"{model_key}_generated")
             slots[f"{model_key}_combined"] = _slot_done(wp.get("combined"), f"{model_key}_combined")
+            ref_values[model_key] = _measure_attributes(out["generated_tokens"], tokenizer_type)
             if model_key == "EBT":
                 ebt_reference_wav = wp.get("combined")
                 from attribute_control.attributes import ATTRIBUTES
@@ -1824,7 +1850,6 @@ def generate_all(
                            "generation_length": generation_length})
         except Exception as e:
             status_all.append(f"{model_key}: ❌ {e}\n{traceback.format_exc()}")
-            slots[f"{model_key}_generated"] = _slot_done(None, f"{model_key}_generated")
             slots[f"{model_key}_combined"] = _slot_done(None, f"{model_key}_combined")
 
     yield (*flat(slots), *ref_tuple(), *model_col_reveal, "\n".join(status_all))
@@ -1884,6 +1909,7 @@ def _solo_batch_start(
     ebt_ckpt: str, ebt_paths_json: str,
     llama_ckpt: str, llama_paths_json: str,
     gpt2_ckpt: str, gpt2_paths_json: str,
+    refs: dict,
     row_count: int, *row_values,
 ):
     """First step of the Single Attribute batch — click handler. Builds the
@@ -1962,6 +1988,7 @@ def _solo_batch_start(
         "ckpt_path": ckpt_path, "ckpt_paths": ckpt_paths, "tokenizer_type": tokenizer_type,
         "prompt_tokens": prompt_tokens, "gt_tokens": gt_tokens, "prompt_label": prompt_label,
         "temperature": temperature, "top_p": top_p, "generation_length": generation_length,
+        "refs": refs or {},
     }
     return (*flat(slots), f"Prompt: {prompt_label}", state)
 
@@ -2019,13 +2046,15 @@ def _make_solo_row_step(i: int):
             )
             from attribute_control.attributes import ATTRIBUTES
             achieved = ATTRIBUTES[attr](out["generated_tokens"], tokenizer_type)
-            gauge = _attribute_gauge_html(f"{attr.replace('_', ' ').capitalize()} guidance ({_SOLO_METHOD_LABELS[method_key]})",
-                                           [(attr, target, achieved, _ATTRIBUTE_UI[attr]["max"])])
+            ref = state.get("refs", {}).get(model_key, {}).get(attr)
+            gauge = _shift_gauge_html(f"{attr.replace('_', ' ').capitalize()} guidance ({_SOLO_METHOD_LABELS[method_key]})",
+                                      [(attr, target, achieved, ref)], f"{model_key} unguided")
             status_text = status_text + "\n" + "\n".join(out["status_lines"])
             _log_to_wandb(f"demo_{model_key}_{method}_{attr}_{tokenizer_type}", out["wav_paths"],
                           {"attribute": attr, "target": target, "lambda": lam, "method": method_key,
                            "achieved": achieved, "prompt": state.get("prompt_label", "")})
-            return (*done_slot(title, out["wav_paths"].get("generated"), gauge), status_text)
+            # prompt + continuation, like the reference above it: same time axis
+            return (*done_slot(title, out["wav_paths"].get("combined"), gauge), status_text)
         except Exception as e:
             status_text = status_text + f"\nRow {i + 1} ({attr}): ❌ {e}"
             return (*done_slot(title, None, ""), status_text)
@@ -2051,6 +2080,7 @@ def _compose_generate(
     tokenizer_type: str, song_choice: str, start_offset: int,
     temperature: float, top_p: float, generation_length: int,
     ebt_ckpt: str, ebt_paths_json: str,
+    refs: dict,
     lam: float,
     row_count: int, *row_values,
 ):
@@ -2106,15 +2136,15 @@ def _compose_generate(
         wandb_meta = {"lambda": lam, "prompt": prompt_label}
         for attr, target, weight in rows:
             achieved = ATTRIBUTES[attr](gen, tokenizer_type)
-            gauge_rows.append((attr, target, achieved, _ATTRIBUTE_UI[attr]["max"]))
+            gauge_rows.append((attr, target, achieved, (refs or {}).get("EBT", {}).get(attr)))
             wandb_meta[f"{attr}_target"] = target
             wandb_meta[f"{attr}_achieved"] = achieved
             wandb_meta[f"{attr}_weight"] = weight
         title = " + ".join(a.replace('_', ' ') for a, _, _ in rows)
-        gauge = _attribute_gauge_html(f"{title} compose (λ={lam})", gauge_rows)
+        gauge = _shift_gauge_html(f"{title} compose (λ={lam})", gauge_rows, "EBT unguided")
         status = "\n".join(out["status_lines"] + [f"Prompt: {prompt_label}", *reg_statuses])
         wandb_status = _log_to_wandb(f"demo_EBT_compose_{tokenizer_type}", out["wav_paths"], wandb_meta)
-        return gr.update(visible=True, value=out["wav_paths"].get("generated")), status + "\n" + wandb_status, gauge
+        return gr.update(visible=True, value=out["wav_paths"].get("combined")), status + "\n" + wandb_status, gauge
     except Exception as e:
         return gr.update(visible=False, value=None), f"❌ {e}\n{traceback.format_exc()}", ""
 
@@ -2338,6 +2368,43 @@ footer { display: none !important; }
     position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; display: none;
     background: #3fd0c9; box-shadow: 0 0 8px rgba(63,208,201,0.8); pointer-events: none;
 }
+/* "▶ continuation": jumps past the prompt (drawn just right of its dashed edge). */
+.tonic-roll-cont {
+    position: absolute; top: 4px; display: none; pointer-events: auto; cursor: pointer;
+    font: 600 10px/1 ui-monospace, Menlo, monospace; letter-spacing: .02em; color: #e8eaf2;
+    padding: 4px 7px; border-radius: 999px; border: 1px solid rgba(139,124,255,0.55);
+    background: rgba(11,13,20,0.78);
+}
+.tonic-roll-cont:hover { border-color: #a195ff; background: rgba(139,124,255,0.25); }
+
+/* Section 03: one full-width row per system, rolls on a shared time axis. */
+.compare-stack { gap: 10px !important; }
+.compare-stack .model-card .prose h3 { margin: 0 0 4px !important; font-size: 15px; }
+
+/* Attribute shift gauge (see _shift_gauge_html): a diverging bar centred on the
+   unguided reference, in corpus standard deviations. */
+.shift-gauge { padding: 8px 4px; font-size: .86em; }
+.shift-gauge .sg-title { font-weight: 600; margin-bottom: 8px; }
+.shift-gauge .sg-row { margin-bottom: 12px; }
+.shift-gauge .sg-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 5px; }
+.shift-gauge .sg-name { color: #9298ab; }
+.shift-gauge .sg-track {
+    position: relative; height: 14px; border-radius: 7px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+}
+.shift-gauge .sg-zero { position: absolute; top: -3px; bottom: -3px; left: 50%; width: 1px; background: rgba(255,255,255,0.35); }
+.shift-gauge .sg-bar { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; background: #8b7cff; }
+.shift-gauge .sg-target {
+    position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px;
+    border-radius: 2px; background: #3fd0c9; box-shadow: 0 0 6px rgba(63,208,201,0.7);
+}
+.shift-gauge .sg-axis { display: flex; justify-content: space-between; color: #5d6377; font-size: .85em; margin-top: 3px; }
+.shift-gauge .sg-raw { color: #5d6377; font-size: .85em; margin-top: 2px; }
+.shift-gauge .good { color: #3fd0c9; }
+.shift-gauge .weak { color: #f2c14e; }
+.shift-gauge .bad { color: #ff7a8a; }
+.shift-gauge .sg-key { color: #5d6377; font-size: .85em; }
+.shift-gauge .sg-key i { display: inline-block; width: 10px; height: 8px; border-radius: 2px; margin: 0 4px 0 8px; vertical-align: middle; }
 
 .centered-btn-row { display: flex !important; justify-content: center !important; }
 .centered-btn-row button {
@@ -2662,6 +2729,23 @@ _ROLL_HEAD = r"""
     return { tMax: Math.max(d.duration || 0, tEnd, 0.5), pMin: pMin - 2, pMax: pMax + 2 };
   }
 
+  // Rolls inside one .roll-sync container (section 03's stack, the attribute
+  // sections) share a time axis and pitch range, so they compare by eye: each
+  // keeps its own range in r.own, r.range is the group's union.
+  const groupOf = (block) => (block && block.closest) ? block.closest(".roll-sync") : null;
+  function syncGroup(grp) {
+    if (!grp) return;
+    const members = [];
+    recs.forEach((r, b) => { if (r.data && groupOf(b) === grp) members.push([b, r]); });
+    if (!members.length) return;
+    const u = { tMax: 0, pMin: 127, pMax: 0 };
+    for (const [, r] of members) { u.tMax = Math.max(u.tMax, r.own.tMax); u.pMin = Math.min(u.pMin, r.own.pMin); u.pMax = Math.max(u.pMax, r.own.pMax); }
+    for (const [b, r] of members) {
+      if (r.range.tMax === u.tMax && r.range.pMin === u.pMin && r.range.pMax === u.pMax) continue;
+      r.range = { ...u }; place(b, r); drawBase(r);
+    }
+  }
+
   function drawBase(r) {
     const { canvas, data, range } = r;
     const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, hgt = canvas.clientHeight;
@@ -2682,6 +2766,11 @@ _ROLL_HEAD = r"""
       g.beginPath(); g.moveTo(px + 0.5, 0); g.lineTo(px + 0.5, hgt); g.stroke(); g.setLineDash([]);
       g.fillStyle = "rgba(255,255,255,0.45)"; g.font = "600 9px ui-monospace, Menlo, monospace";
       if (px > 46) g.fillText("PROMPT", 6, 12);
+    }
+    if (r.cont) {
+      const show = data.prompt_end > 0 && x(data.prompt_end) < w - 110;
+      r.cont.style.display = show ? "block" : "none";
+      if (show) r.cont.style.left = (x(data.prompt_end) + 6) + "px";
     }
     for (const [t, d, p, vel, drum] of data.notes) {
       const a = 0.25 + 0.75 * Math.pow(vel / 127, 1.4);
@@ -2720,11 +2809,16 @@ _ROLL_HEAD = r"""
     if (r.el.parentElement !== c) c.appendChild(r.el);
     r.el.classList.add("overlay"); block.classList.add("has-roll");
     const wf = c.querySelector("#waveform");
-    if (wf && wf.offsetHeight) { wf.style.transformOrigin = "top"; wf.style.transform = `scaleY(${ROLL_H / wf.offsetHeight})`; }
+    // The invisible waveform takes the clicks, so it must span exactly this
+    // clip's part of the (possibly longer) shared time axis.
+    const sx = (r.own && r.range) ? Math.min(1, r.own.tMax / r.range.tMax) : 1;
+    if (wf && wf.offsetHeight) { wf.style.transformOrigin = "top left"; wf.style.transform = `scale(${sx}, ${ROLL_H / wf.offsetHeight})`; }
   }
   function drop(block, r) {
+    const grp = groupOf(block);
     r.el.remove(); recs.delete(block); block.classList.remove("has-roll");
     const wf = block.querySelector("#waveform"); if (wf) wf.style.transform = "";
+    syncGroup(grp);
   }
 
   function ensure(block) {
@@ -2736,8 +2830,14 @@ _ROLL_HEAD = r"""
     if (r) drop(block, r);
     const el = document.createElement("div"); el.className = "tonic-roll"; el.style.display = "none";
     const canvas = document.createElement("canvas"); const head = document.createElement("div"); head.className = "tonic-roll-head";
-    el.append(canvas, head);
-    r = { url: href, el, canvas, head, data: null, range: null };
+    const cont = document.createElement("button"); cont.type = "button"; cont.className = "tonic-roll-cont";
+    cont.textContent = "▶ continuation"; cont.title = "Play from the end of the prompt";
+    el.append(canvas, head, cont);
+    r = { url: href, el, canvas, head, cont, data: null, range: null, own: null };
+    cont.addEventListener("click", (e) => {
+      e.stopPropagation(); if (!r.data) return;
+      r.clickFrac = r.data.prompt_end / r.range.tMax; seek(block, r, r.clickFrac);
+    });
     recs.set(block, r);
     el.addEventListener("click", (e) => {  // only reachable when the roll is not an overlay
       if (!r.data || el.classList.contains("overlay")) return;
@@ -2745,7 +2845,8 @@ _ROLL_HEAD = r"""
     });
     fetch(href.replace(/[^/]*$/, "roll.json")).then((res) => res.ok ? res.json() : null).then((d) => {
       if (!d || recs.get(block) !== r) return;
-      r.data = d; r.range = rangeOf(d); place(block, r); el.style.display = ""; drawBase(r);
+      r.data = d; r.own = rangeOf(d); r.range = { ...r.own }; place(block, r); el.style.display = ""; drawBase(r);
+      syncGroup(groupOf(block));
     }).catch(() => {});
   }
 
@@ -2937,22 +3038,22 @@ def build_ui():
         gr.Markdown('## <span class="kicker">03</span>Listen to generated outputs', elem_classes="section-title")
         status_box = gr.Textbox(label="Status", lines=8, interactive=False, elem_classes="status-log")
         gr.Markdown(
-            "Prompt and ground-truth continuation are the same across every model, "
-            "shown once here — each model's card below only shows what it generated.",
+            "Every row plays the same prompt (shaded) and then a continuation: first the song's "
+            "original one, then each model's. All rows share one time axis and pitch range, so "
+            "they can be compared by eye. Click a roll to play from there, or "
+            "**▶ continuation** to skip the prompt.",
             elem_classes="section-sub",
         )
-        with gr.Row():
-            with gr.Column(elem_classes="model-card"):
-                shared_prompt_ph, shared_prompt_audio = _audio_slot(
-                    "Prompt", idle_text=_slot_idle_text("shared_prompt"))
-            with gr.Column(elem_classes="model-card"):
-                shared_gt_ph, shared_gt_audio = _audio_slot(
-                    "Prompt + Original Continuation", idle_text=_slot_idle_text("shared_gt"))
-
-        output_slots = {"shared_prompt": (shared_prompt_ph, shared_prompt_audio),
-                         "shared_gt": (shared_gt_ph, shared_gt_audio)}
+        output_slots: dict[str, tuple] = {}
         model_output_cols: dict[str, gr.Column] = {}
-        with gr.Row():
+        # One full-width row per system (not side-by-side columns): the rolls
+        # get the whole width, and .roll-sync puts them on one shared axis
+        # (see syncGroup in _ROLL_HEAD).
+        with gr.Column(elem_classes=["roll-sync", "compare-stack"]):
+            with gr.Column(elem_classes="model-card"):
+                gr.Markdown("### Original")
+                output_slots["shared_gt"] = _audio_slot(
+                    _slot_label("shared_gt"), idle_text=_slot_idle_text("shared_gt"))
             for model_key in _MODEL_KEYS:
                 # Hidden until Generate is actually clicked (see generate_all's
                 # initial reveal) — before that, an empty "Generated
@@ -2961,10 +3062,7 @@ def build_ui():
                 # (those are legitimately "waiting on you to choose a prompt").
                 with gr.Column(elem_classes=_card_classes(False)) as _model_col:
                     gr.Markdown(f"### {model_key}")
-                    gen_ph, gen_audio = _audio_slot("Generated Continuation")
-                    comb_ph, comb_audio = _audio_slot("Prompt + Generated Continuation")
-                    output_slots[f"{model_key}_generated"] = (gen_ph, gen_audio)
-                    output_slots[f"{model_key}_combined"] = (comb_ph, comb_audio)
+                    output_slots[f"{model_key}_combined"] = _audio_slot(_slot_label(f"{model_key}_combined"))
                 model_output_cols[model_key] = _model_col
 
         # ── EBT attribute control ────────────────────────────────────────────
@@ -2980,17 +3078,20 @@ def build_ui():
             "the closest one (N× the compute). All use the checkpoints selected above.",
             elem_classes="section-sub",
         )
-        ebt_reference_audio = gr.Audio(
-            label="Reference: EBT default (unguided, from the last Generate run above)",
-            type="filepath", visible=False,
-            waveform_options=_WAVEFORM,
-        )
-        solo_reference_html = gr.HTML(value=_render_compose_reference_html(None, None))
         ebt_ref_velocity_state = gr.State(None)
         ebt_ref_duration_state = gr.State(None)
         ebt_ref_pitch_register_state = gr.State(None)
+        ref_values_state = gr.State({})
 
-        with gr.Column(elem_classes="attr-window"):
+        # roll-sync: the reference and every variant's output share one time
+        # axis and pitch range (see syncGroup in _ROLL_HEAD).
+        with gr.Column(elem_classes=["attr-window", "roll-sync"]):
+            solo_reference_html = gr.HTML(value=_render_compose_reference_html(None, None))
+            ebt_reference_audio = gr.Audio(
+                label="Reference: EBT default (unguided, from the last Generate run above)",
+                type="filepath", visible=False,
+                waveform_options=_WAVEFORM,
+            )
 
             solo_row_count_state = gr.State(1)
             solo_rows = []
@@ -3196,7 +3297,7 @@ def build_ui():
             "scaled by the one shared λ underneath.",
             elem_classes="section-sub",
         )
-        with gr.Column(elem_classes="attr-window"):
+        with gr.Column(elem_classes=["attr-window", "roll-sync"]):
             compose_reference_html = gr.HTML(value=_render_compose_reference_html(None, None))
             compose_reference_audio = gr.Audio(
                 label="Reference: EBT default (unguided, from the last Generate run above)",
@@ -3415,7 +3516,7 @@ def build_ui():
         _clear_generated_outputs = [
             *(c for key in _SLOT_KEYS for c in output_slots[key]),
             ebt_reference_audio, ebt_ref_velocity_state, ebt_ref_duration_state, ebt_ref_pitch_register_state,
-            compose_reference_audio,
+            ref_values_state, compose_reference_audio,
             *(model_output_cols[k] for k in _MODEL_KEYS),
             status_box,
             solo_reference_html, compose_reference_html,
@@ -3479,7 +3580,7 @@ def build_ui():
             generate_all,
             inputs=[tokenizer_dd, song_dd, start_offset, temperature, top_p, gen_length, *all_ckpt_inputs],
             outputs=[*all_outputs, ebt_reference_audio, ebt_ref_velocity_state, ebt_ref_duration_state,
-                     ebt_ref_pitch_register_state, compose_reference_audio,
+                     ebt_ref_pitch_register_state, ref_values_state, compose_reference_audio,
                      *[model_output_cols[k] for k in _MODEL_KEYS], status_box],
             concurrency_limit=1,
         ).then(
@@ -3530,7 +3631,8 @@ def build_ui():
             _solo_batch_start,
             inputs=[tokenizer_dd, song_dd, start_offset, temperature, top_p, gen_length,
                     ebt_ckpt_dd, ebt_ckpt_state, llama_ckpt_dd, ckpt_states["Llama"],
-                    gpt2_ckpt_dd, ckpt_states["GPT-2"], solo_row_count_state, *solo_row_inputs, *solo_methods],
+                    gpt2_ckpt_dd, ckpt_states["GPT-2"], ref_values_state,
+                    solo_row_count_state, *solo_row_inputs, *solo_methods],
             outputs=[*solo_batch_outputs, solo_status, solo_batch_state],
             **_SOLO_BATCH_CONCURRENCY,
         )
@@ -3555,7 +3657,7 @@ def build_ui():
         ).then(
             _compose_generate,
             inputs=[tokenizer_dd, song_dd, start_offset, temperature, top_p, gen_length,
-                    ebt_ckpt_dd, ebt_ckpt_state, compose_lambda,
+                    ebt_ckpt_dd, ebt_ckpt_state, ref_values_state, compose_lambda,
                     compose_row_count_state, *compose_row_inputs],
             outputs=[compose_audio, compose_status, compose_gauge],
             **_COMPOSE_GEN_CONCURRENCY,
