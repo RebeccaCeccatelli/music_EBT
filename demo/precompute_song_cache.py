@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Fill the interactive demo's song cache (demo/app.py, _SONG_CACHE_DIR) ahead of time.
 
-For every named song x tokenizer: the time map, the full-song render (MP3 +
-piano roll) and the preview at the song's default start point. With the cache
+First copies every song's MIDI, REMI token file and the tokenizer config from
+/orcd/pool to scratch. Then for every named song x tokenizer: the time map, the
+full-song render (MP3 + piano roll) and the preview at the song's default start point. With the cache
 filled, a song change in the demo is a file lookup instead of a ~10 s
 FluidSynth render. Resumable: anything already cached is skipped by the app's
 own cache lookups.
@@ -49,13 +50,40 @@ def _one(job):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def copy_song_data(app):
+    """Copy every song's original MIDI, its REMI token file and the REMI tokenizer
+    config from /orcd/pool to scratch (app._SONG_DATA_DIR), so the demo never
+    reads /orcd/pool on a song change (it has hung on some compute nodes)."""
+    import shutil
+    app._SONG_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    paths = [app.REMI_TOKENIZER_CONFIG]
+    for entry in app._prompts().values():
+        midi = entry["path"] if isinstance(entry, dict) else entry
+        paths += [midi, midi.replace("/midi/", "/tokens/miditok/").replace(".mid", ".json")]
+    copied = missing = 0
+    for src in paths:
+        dst = app._local_copy_path(src)
+        if dst.exists() and dst.stat().st_size == os.path.getsize(src):
+            continue
+        if not os.path.exists(src):
+            missing += 1
+            continue
+        shutil.copy2(src, dst)
+        copied += 1
+    print(f"song data: {len(paths)} files, {copied} copied, {missing} missing -> {app._SONG_DATA_DIR}", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--limit", type=int, default=0, help="only the first N songs (testing)")
+    ap.add_argument("--data_only", action="store_true", help="only copy the song data from /orcd/pool")
     args = ap.parse_args()
 
     from demo import app
+    copy_song_data(app)
+    if args.data_only:
+        return
     songs = [s for s in app._SONG_CHOICES if s != app.RANDOM_SONG_LABEL]
     if args.limit:
         songs = songs[:args.limit]

@@ -39,6 +39,31 @@ import time
 import random
 import tempfile
 import traceback
+import faulthandler
+import signal
+
+# `kill -USR1 <pid>` writes every thread's Python stack to the demo log: the
+# way to see what a hung event is doing (attaching a debugger is not allowed
+# on the cluster nodes).
+try:
+    faulthandler.register(signal.SIGUSR1, all_threads=True)
+except (AttributeError, ValueError):
+    pass
+
+
+def _timed(fn):
+    """Log how long a song-change step takes (they share one queue slot, so a slow one delays the rest)."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        t0 = time.time()
+        print(f"[timing] {fn.__name__} start {args[:2]}", flush=True)
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            print(f"[timing] {fn.__name__} {time.time() - t0:.2f}s", flush=True)
+    return wrapper
 from pathlib import Path
 from argparse import Namespace
 
@@ -68,8 +93,25 @@ _TOK_SLUG = {"REMI": "remi", "Anticipation-Arrival-Time": "ant-at-full"}
 _TOK_PRETTY = {"REMI": "REMI", "Anticipation-Arrival-Time": "Anticipation"}  # names shown in the UI
 
 
+# Song data (original MIDI, REMI token file, tokenizer config) is copied from
+# /orcd/pool to scratch by demo/precompute_song_cache.py: /orcd/pool has hung on
+# some compute nodes (node3003, node3511 on 2026-11-11), and one hung read blocks
+# every later song change. Falls back to the original path when no copy exists.
+_SONG_DATA_DIR = Path(os.environ.get("DEMO_SONG_DATA", str(SCRATCH_DIR / "demo_cache" / "song_data")))
+
+
+def _local_copy_path(path: str) -> Path:
+    import hashlib
+    return _SONG_DATA_DIR / (hashlib.sha1(str(path).encode()).hexdigest()[:20] + Path(path).suffix)
+
+
+def _local(path: str) -> str:
+    local = _local_copy_path(path)
+    return str(local) if local.exists() else path
+
+
 def _tokenizer_config_path(tokenizer_type: str) -> str | None:
-    return REMI_TOKENIZER_CONFIG if tokenizer_type == "REMI" else None
+    return _local(REMI_TOKENIZER_CONFIG) if tokenizer_type == "REMI" else None
 
 
 # ── Model registry ────────────────────────────────────────────────────────────
@@ -212,7 +254,7 @@ def _song_midi_path(song_title: str) -> str | None:
     entry = prompts.get(_song_display_to_raw.get(song_title, song_title))
     if entry is None:
         return None
-    return entry["path"] if isinstance(entry, dict) else entry
+    return _local(entry["path"] if isinstance(entry, dict) else entry)
 
 
 _anticipation_compound_cache: dict[str, list[int]] = {}
@@ -300,7 +342,7 @@ def _tokens_for_song(song_title: str, prompts: dict) -> list[int]:
     tokenization isn't safe for it (see that function's docstring)."""
     entry = prompts[_song_display_to_raw.get(song_title, song_title)]
     midi_path = entry["path"] if isinstance(entry, dict) else entry
-    token_path = midi_path.replace("/midi/", "/tokens/miditok/").replace(".mid", ".json")
+    token_path = _local(midi_path.replace("/midi/", "/tokens/miditok/").replace(".mid", ".json"))
     if token_path not in _song_tokens_cache:
         with open(token_path) as f:
             _song_tokens_cache[token_path] = json.load(f)["ids"]
@@ -384,7 +426,8 @@ def _ckpt_progress_html(step: int, loss: float, tokenizer_type: str = "", note: 
     return f"""
 <div class="ckpt-stats">
   {note_html}
-  <div class="ckpt-chips">{fmt_chip}<span class="ckpt-chip"><b>{step:,}</b> training steps</span><span class="ckpt-chip">val. loss <b>{loss_str}</b></span></div>
+  <div class="ckpt-chips">{fmt_chip}</div>
+  <div class="ckpt-chips ckpt-numbers"><span class="ckpt-chip"><b>{step:,}</b> training steps</span><span class="ckpt-chip">val. loss <b>{loss_str}</b></span></div>
 </div>"""
 
 
@@ -901,13 +944,19 @@ def _minimal_hparams(tokenizer_type: str) -> Namespace:
     )
 
 
+_tokenizer_cache: dict = {}
+
+
 def _get_tokenizer(tokenizer_type: str):
+    if tokenizer_type in _tokenizer_cache:
+        return _tokenizer_cache[tokenizer_type]
     from data.mus.symbolic.tokenization.tokenizer_utils import load_tokenizer
     tokenizer, _, _ = load_tokenizer(
         tokenizer_type=tokenizer_type,
         tokenizer_config_path=_tokenizer_config_path(tokenizer_type),
         dataset_name="giga_midi",
     )
+    _tokenizer_cache[tokenizer_type] = tokenizer
     return tokenizer
 
 
@@ -947,11 +996,13 @@ _time_map_cache: dict[str, list[tuple[int, float]]] = {}
 # _SONG_CACHE_VERSION when the render or roll format changes.
 _SONG_CACHE_DIR = Path(os.environ.get("DEMO_SONG_CACHE", str(SCRATCH_DIR / "demo_cache" / "songs")))
 _SONG_CACHE_VERSION = 1
+_FULL_SONG_CACHE_VERSION = 2  # 2: mono 64 kbps (was -V 4 stereo, ~3x larger over the share link)
 
 
 def _song_cache_base(kind: str, tokenizer_type: str, song_choice: str, extra: str = "") -> Path:
     import hashlib
-    key = hashlib.sha1(f"v{_SONG_CACHE_VERSION}::{tokenizer_type}::{song_choice}::{extra}".encode()).hexdigest()[:20]
+    version = _FULL_SONG_CACHE_VERSION if kind == "full" else _SONG_CACHE_VERSION
+    key = hashlib.sha1(f"v{version}::{tokenizer_type}::{song_choice}::{extra}".encode()).hexdigest()[:20]
     return _SONG_CACHE_DIR / kind / tokenizer_type / key
 
 
@@ -1075,7 +1126,7 @@ def _get_full_song_render(tokenizer_type: str, song_choice: str) -> tuple[str, f
     # Roll under the full-song player; untrimmed: its timeline picks the start.
     # Lower MP3 quality than the clips: this one is only for finding a start point.
     roll = _roll_data(wav_path, midi_path, trim=False)
-    served = _serve_audio(wav_path, roll, quality=_MP3_QUALITY_FULL_SONG)
+    served = _serve_audio(wav_path, roll, quality=_MP3_FULL_SONG_ARGS)
     _store_clip(base, served, roll, duration=duration)
     _full_song_roll[cache_key] = roll
     result = (served, duration)
@@ -1386,6 +1437,7 @@ def max_start_offset(tokenizer_type: str, song_choice: str) -> tuple[float, floa
     return 2000, 0, "tokens"
 
 
+@_timed
 def on_song_or_tokenizer_change(tokenizer_type: str, song_choice: str):
     """Only ever touches start_offset's bounds/label. It used to also
     re-emit song_dd's own value (as a no-op meant to say "leave the current
@@ -1446,10 +1498,13 @@ def _clear_generated_results():
         "",
         empty_ref_html, empty_ref_html,
         *solo_reset, "",
-        *(u for _ in range(_MAX_COMPOSE_OUT) for u in _compose_out_hidden()), "",
+        *(gr.update(elem_classes=_card_classes(False) + ["compose-sys"]) for _ in _COMPOSE_SYSTEMS),
+        *("" for _ in _COMPOSE_SYSTEMS),
+        *(u for _ in range(_N_COMPOSE_CELLS) for u in _card_classes_slot_helpers()[0]()), "",
     )
 
 
+@_timed
 def preview_prompt(tokenizer_type: str, song_choice: str, start_offset: float):
     try:
         token_offset = _offset_to_tokens(tokenizer_type, song_choice, start_offset)
@@ -1467,11 +1522,15 @@ def preview_prompt(tokenizer_type: str, song_choice: str, start_offset: float):
             # start time from token_offset (rather than reusing the slider's
             # raw start_offset) matches exactly what got rendered, including
             # any snap-to-nearest-valid-position adjustment.
+            # Anticipation has no loudness tokens: the prompt (and every continuation)
+            # plays at one fixed velocity, while the full song is the original MIDI.
+            flat = ("<br>Anticipation has no loudness tokens, so every note of the prompt plays at the same "
+                    "volume; the full song above is the original recording." if _is_triplet_tokenizer(tokenizer_type) else "")
             if _is_seconds_mode(tokenizer_type, song_choice):
                 actual_seconds = _token_index_to_seconds(tokenizer_type, song_choice, token_offset)
                 return (f'▶ **Now previewing** “{song_choice}”, from **{actual_seconds:.1f} s** '
-                        f'· {_TOK_PRETTY.get(tokenizer_type, tokenizer_type)} format')
-            return f"▶ **Now previewing** {label} · {_TOK_PRETTY.get(tokenizer_type, tokenizer_type)} format"
+                        f'· {_TOK_PRETTY.get(tokenizer_type, tokenizer_type)} format{flat}')
+            return f"▶ **Now previewing** {label} · {_TOK_PRETTY.get(tokenizer_type, tokenizer_type)} format{flat}"
 
         # Named songs: one cached preview per (song, start token), on disk.
         base = (_song_cache_base("preview", tokenizer_type, song_choice, str(token_offset))
@@ -1508,6 +1567,7 @@ def _wav_duration_seconds(path: str) -> float:
         return w.getnframes() / w.getframerate()
 
 
+@_timed
 def render_full_song(tokenizer_type: str, song_choice: str):
     """Render the entire song (not just a windowed prompt) so it can be
     clicked directly on its waveform to pick a start point. Any named song
@@ -1527,6 +1587,7 @@ def render_full_song(tokenizer_type: str, song_choice: str):
     return gr.update(visible=True), gr.update(value=wav_path)
 
 
+@_timed
 def apply_seek_as_start(tokenizer_type: str, song_choice: str, evt: gr.EventData):
     """Fired directly by ClickAudio's `seek` event — the clicked time (in
     seconds) is exact, unlike the old trim-based back-solve, since the custom
@@ -1589,7 +1650,7 @@ def _trim_wav(wav_path, start_s: float, end_s: float) -> None:
 
 
 _MP3_QUALITY = "2"            # lame -V 2: ~190 kbps VBR, transparent for these renders, ~7x smaller than WAV
-_MP3_QUALITY_FULL_SONG = "4"  # ~165 kbps: the full song is only for finding a start point
+_MP3_FULL_SONG_ARGS = ["-m", "m", "-b", "64"]  # mono 64 kbps: the full song is only for finding a start point
 
 
 def _lame_exe() -> str | None:
@@ -1598,7 +1659,7 @@ def _lame_exe() -> str | None:
     return str(local) if local.exists() else shutil.which("lame")
 
 
-def _encode_mp3(wav_path, quality: str = _MP3_QUALITY) -> Path | None:
+def _encode_mp3(wav_path, quality: str | list[str] = _MP3_QUALITY) -> Path | None:
     """WAV -> MP3 next to it, or None if lame is missing or fails. The WAV is
     kept (wandb logging and any later trimming read it)."""
     exe = _lame_exe()
@@ -1607,7 +1668,8 @@ def _encode_mp3(wav_path, quality: str = _MP3_QUALITY) -> Path | None:
     mp3 = Path(wav_path).with_suffix(".mp3")
     try:
         import subprocess
-        subprocess.run([exe, "--quiet", "-V", quality, str(wav_path), str(mp3)], check=True, timeout=120)
+        args = ["-V", quality] if isinstance(quality, str) else list(quality)
+        subprocess.run([exe, "--quiet", *args, str(wav_path), str(mp3)], check=True, timeout=120)
         return mp3 if mp3.exists() and mp3.stat().st_size > 0 else None
     except Exception as e:
         print(f"[mp3] encoding failed for {wav_path}: {e}")
@@ -1661,7 +1723,7 @@ def _publish_roll(audio_path, roll: dict | None) -> None:
         print(f"[roll] not published for {audio_path}: {e}")
 
 
-def _serve_audio(wav_path, roll: dict | None, quality: str = _MP3_QUALITY) -> str:
+def _serve_audio(wav_path, roll: dict | None, quality: str | list[str] = _MP3_QUALITY) -> str:
     """The file to hand to the player: an MP3 (much less to send over the
     SSH tunnel / share link and for the browser to decode), or the WAV if
     encoding fails. Publishes the roll for whichever file is served."""
@@ -1753,7 +1815,8 @@ def _run_generation(model_key: str, ckpt_path: str, tokenizer_type: str,
                      prompt_tokens: list[int], gt_tokens: list[int],
                      temperature: float, top_p: float, generation_length: int,
                      attribute_overrides: dict | None = None,
-                     logit_processor=None, best_of: tuple | None = None):
+                     logit_processor=None, best_of: tuple | None = None,
+                     synth: bool = True, given_tokens: list[int] | None = None):
     """Returns dict with keys: wav_paths ({"combined": prompt + continuation}),
     generated_tokens, tokenizer, hparams, status_lines. Raises on failure.
 
@@ -1778,6 +1841,7 @@ def _run_generation(model_key: str, ckpt_path: str, tokenizer_type: str,
     hparams.attribute_regressor_ckpts = None
     hparams.attribute_targets = None
     hparams.attribute_weights = None
+    hparams.attribute_lambdas = None  # per-attribute λ (combined control); cached hparams are shared
     if attribute_overrides:
         for k, v in attribute_overrides.items():
             setattr(hparams, k, v)
@@ -1799,7 +1863,9 @@ def _run_generation(model_key: str, ckpt_path: str, tokenizer_type: str,
             return generate_remi(model, batch, hparams)
 
     try:
-        if best_of:
+        if given_tokens is not None:  # already generated (best-of-N pool): only render
+            generated_tokens, outputs = [int(t) for t in given_tokens], {}
+        elif best_of:
             from attribute_control.attributes import ATTRIBUTES
             n, attr, target = best_of
             candidates = []
@@ -1815,6 +1881,9 @@ def _run_generation(model_key: str, ckpt_path: str, tokenizer_type: str,
     finally:
         hparams.logit_processor = None
     status_lines.append(f"{_shown(model_key)}: generated {len(generated_tokens)} tokens")
+    if not synth:
+        return {"wav_paths": {}, "generated_tokens": generated_tokens, "tokenizer": tokenizer,
+                "hparams": hparams, "status_lines": status_lines, "diagnostics": None}
 
     out_dir = Path(tempfile.mkdtemp(prefix=f"demo_{model_key}_"))
     combined = prompt_tokens + generated_tokens
@@ -1895,7 +1964,7 @@ def _slot_idle_text(key: str) -> str:
     # directly instead of the generic "nothing to display" wording used for
     # the per-model output boxes.
     if key == "shared_gt":
-        return "Prompt not chosen yet — click Generate above."
+        return "Nothing here yet. Click <b>Generate</b> above to hear the prompt and how the song really continues."
     return _DEFAULT_IDLE_TEXT
 
 
@@ -2080,17 +2149,94 @@ def generate_all(
 # ── EBT single-attribute generation (batch: N independent runs at once) ─────
 
 _MAX_SOLO_BATCH = 6  # fixed pool of output slots in the UI; extra rows are ignored
-_MAX_COMPOSE_ROWS = len(_SOLO_ATTRIBUTES)  # composing the same attribute twice is meaningless
-_MAX_COMPOSE_OUT = 2 ** _MAX_COMPOSE_ROWS  # "all direction combinations": one result card per sign pattern
+# ── Combined control: as in the thesis sweeps (compose_guidance_sweep.py) and the showcase ──
+# A fixed attribute pair per format, targets ±1 or ±2 SD from each system's own
+# unguided continuation, any of the four direction combinations, each system at
+# its operating point (Tonic: per-attribute λ, the by-ear pair).
+_COMPOSE_PAIR = {"REMI": ("velocity", "duration"), "Anticipation-Arrival-Time": ("duration", "pitch_register")}
+_COMPOSE_DIRS = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+_COMPOSE_SYSTEMS = [("ebt", "EBT", "Tonic · EBT energy guidance"), ("pplm", "Llama", "Llama · PPLM"),
+                    ("tilt", "Llama", "Llama · tilting"), ("bon", "Llama", "Llama · best-of-N")]
+_COMPOSE_DEFAULTS = {  # thesis operating points. Tonic, one λ per attribute: REMI the by-ear pair; Anticipation
+    # each attribute's own best single-attribute λ (duration 0.005, pitch 0.012), also the thesis pair (0.84 joint)
+    "REMI": {"ebt": (0.04, 0.025), "pplm": (32.0, 32.0), "tilt": 1.0, "bon": 16},
+    "Anticipation-Arrival-Time": {"ebt": (0.005, 0.012), "pplm": (16.0, 32.0), "tilt": 1.0, "bon": 8},
+}
+
+_COMPOSE_LAMBDA_HELP = (
+    "Tonic steers each attribute on its own tokens (velocity on velocity tokens, duration on duration tokens), "
+    "so at any moment only one of the two is being pushed, with its own λ. Combined control is then two "
+    "single-attribute controls running together, each at its best strength. One λ shared by both works as well "
+    "on REMI, where both attributes like similar strengths, but not on Anticipation: duration works best near "
+    "0.005 and pitch register near 0.012, so any single value is a compromise (0.72 against 0.84 joint accuracy "
+    "in the thesis). To try a shared λ, set both sliders to the same value.")
+_N_COMPOSE_CELLS = len(_COMPOSE_SYSTEMS) * len(_COMPOSE_DIRS)
+_compose_pool_cache: dict = {}  # best-of-N: one pool of unguided draws per prompt, shared by all directions
 
 
-def _compose_out_hidden():
-    """(group, title, audio, gauge) updates for an unused Combined-Control result card."""
-    return (gr.update(elem_classes=_card_classes(False) + ["compose-out"]), "", gr.update(visible=False, value=None), "")
+def _compose_pair(tokenizer_type: str) -> tuple[str, str]:
+    return _COMPOSE_PAIR.get(tokenizer_type, _COMPOSE_PAIR["REMI"])
 
 
-def _compose_title_html(i: int, text: str) -> str:
-    return f'<div class="variant-head"><span class="vnum">{i:02d}</span><span class="vname">{text}</span></div>'
+def _compose_dir_name(tokenizer_type: str, signs) -> str:
+    return " + ".join(_ATTR_SCALE[a][1 if sg > 0 else 0] for a, sg in zip(_compose_pair(tokenizer_type), signs))
+
+
+def _compose_dir_choices(tokenizer_type: str) -> list[tuple[str, str]]:
+    return [(_compose_dir_name(tokenizer_type, sg), str(i)) for i, sg in enumerate(_COMPOSE_DIRS)]
+
+
+def _compose_system_choices(tokenizer_type: str) -> list[tuple[str, str]]:
+    return [(label, key) for key, _, label in _COMPOSE_SYSTEMS if tokenizer_type == "REMI" or key != "tilt"]
+
+
+_COMPOSE_METHOD_HELP = (
+    '<ul class="qhelp-list">'
+    "<li><b>Tonic · EBT energy guidance.</b> Adds one regressor energy per attribute, each with its own "
+    "strength λ, inside Tonic's energy minimisation.</li>"
+    "<li><b>PPLM.</b> Nudges Llama's next-token scores along the summed gradients of the two attribute "
+    "regressors.</li>"
+    "<li><b>Tilting.</b> Chains two tilts, each on its own attribute's tokens. REMI only.</li>"
+    "<li><b>Best-of-N.</b> Draws N ordinary continuations once and keeps, for each direction, the one closest to "
+    "both targets.</li></ul>")
+
+
+def _compose_key_html(tokenizer_type: str) -> str:
+    help_html = _help_label_html("How each method combines", "How does each method steer two attributes?",
+                                 _COMPOSE_METHOD_HELP)
+    return f'<div class="key-row">{_attr_legend_html(list(_compose_pair(tokenizer_type)))}{help_html}</div>'
+
+
+def _compose_system_head_html(label: str, strength: str) -> str:
+    return f'<div class="compose-sys-head"><span class="vname">{label}</span><span class="cs-strength">{strength}</span></div>'
+
+
+def _compose_cell_title_html(tokenizer_type: str, signs) -> str:
+    arrows = " · ".join(f'{a.replace("_", " ")} {"▲" if sg > 0 else "▼"}'
+                        for a, sg in zip(_compose_pair(tokenizer_type), signs))
+    return (f'<div class="compose-cell-head"><b>{_compose_dir_name(tokenizer_type, signs)}</b>'
+            f'<span>{arrows}</span></div>')
+
+
+def _joint_chip_html(hits: list[bool]) -> str:
+    n = sum(hits)
+    if n == len(hits):
+        return '<div class="joint-chip ok">both attributes moved the requested way</div>'
+    if n == 0:
+        return '<div class="joint-chip bad">neither attribute moved the requested way</div>'
+    return f'<div class="joint-chip warn">{n} of {len(hits)} attributes moved the requested way</div>'
+
+
+class _ChainedTilt:
+    """Several logit processors in turn, each gating itself (as in compose_guidance_sweep.py)."""
+
+    def __init__(self, processors):
+        self.processors = processors
+
+    def __call__(self, context, last_logits):
+        for p in self.processors:
+            last_logits = p(context, last_logits)
+        return last_logits
 
 
 def _card_classes_slot_helpers():
@@ -2296,133 +2442,150 @@ def _make_solo_row_step(i: int):
 
 # ── EBT compose (velocity + duration) generation ─────────────────────────────
 
-def _compose_start():
-    """Immediate "Generating…" feedback, chained before _compose_generate with
-    .then() (a generator's later yields were unreliable here)."""
-    hidden = [u for _ in range(_MAX_COMPOSE_OUT) for u in _compose_out_hidden()]
-    return (*hidden, "⏳ Generating…")
-
-
-def _compose_generate(
+def _compose_start(
     tokenizer_type: str, song_choice: str, start_offset: int,
     temperature: float, top_p: float, generation_length: int,
-    ebt_ckpt: str, ebt_paths_json: str,
-    refs: dict,
-    lam: float,
-    all_dirs: bool,
-    row_count: int, *row_values,
+    ebt_ckpt: str, ebt_paths_json: str, llama_ckpt: str, llama_paths_json: str,
+    refs: dict, dirs: list, size: str, systems: list,
+    ebt_l1: float, ebt_l2: float, pplm_1: float, pplm_2: float, tilt: float, bon: float,
 ):
-    """One EBT generation combining every active row's attribute into a
-    SINGLE guided run — their energies are summed (each scaled by its own
-    row's relative weight), then the combined term is scaled by the one
-    shared λ above. Unlike Single attribute's batch (N independent
-    generations, one per row), Compose always produces exactly one output.
+    """Resolve the prompt and lay out the result grid (one row per system, one
+    cell per direction); the cells are then filled one by one by the chained
+    steps of _make_compose_cell_step, so results appear as they finish."""
+    hidden_slot, pending_slot, failed_slot, _ = _card_classes_slot_helpers()
+    sys_hidden = [gr.update(elem_classes=_card_classes(False) + ["compose-sys"]) for _ in _COMPOSE_SYSTEMS]
+    heads = [""] * len(_COMPOSE_SYSTEMS)
 
-    The backend (generate_remi's attribute_regressor_ckpts/targets/weights
-    lists) already supported composing any number of attributes — see
-    compose_attributes.py, which exercises exactly this — only the demo UI
-    was ever hardcoded to velocity+duration specifically."""
-    hidden = [_compose_out_hidden() for _ in range(_MAX_COMPOSE_OUT)]
-
-    def result(cards, status):
+    def out(sys_updates, heads, cells, status, state):
         flat = []
-        for k in range(_MAX_COMPOSE_OUT):
-            flat.extend(cards[k] if k < len(cards) else hidden[k])
-        return (*flat, status)
+        for c in cells:
+            flat.extend(c)
+        return (*sys_updates, *heads, *flat, status, state)
 
-    rows = []
-    for i in range(min(int(row_count), _MAX_COMPOSE_ROWS)):
-        attr, target, weight = row_values[i * 3], row_values[i * 3 + 1], row_values[i * 3 + 2]
-        if attr in _SOLO_ATTRIBUTES:
-            rows.append((attr, float(target), float(weight)))
+    all_hidden = [hidden_slot() for _ in range(_N_COMPOSE_CELLS)]
+    dir_idx = sorted(int(d) for d in (dirs or []))
+    sys_keys = [k for k, _, _ in _COMPOSE_SYSTEMS if k in (systems or []) and (tokenizer_type == "REMI" or k != "tilt")]
+    if not dir_idx:
+        return out(sys_hidden, heads, all_hidden, "❌ Choose at least one direction.", {"cells": []})
+    if not sys_keys:
+        return out(sys_hidden, heads, all_hidden, "❌ Choose at least one system.", {"cells": []})
 
-    if not rows:
-        return result([], "❌ No valid rows — add at least one attribute.")
-    if len({a for a, _, _ in rows}) != len(rows):
-        return result([], "❌ Each row must use a different attribute.")
-    if not ebt_ckpt or not ebt_paths_json:
-        return result([], "❌ Select a Tonic checkpoint in the panel above first.")
-
-    ref = (refs or {}).get("EBT", {})
-    # Runs to make: the targets as set, or (all_dirs) every combination of
-    # directions, each target mirrored around Tonic's unguided value.
-    if all_dirs:
-        missing = [a for a, _, _ in rows if ref.get(a) is None]
-        if missing:
-            return result([], "❌ Run Generate above with Tonic included first: the directions are mirrored "
-                              "around its unguided values.")
-        flat_rows = [a.replace("_", " ") for a, t, _ in rows if abs(t - ref[a]) < 1e-6]
-        if flat_rows:
-            return result([], f"❌ Move the target of {', '.join(flat_rows)} away from the unguided value first: "
-                              "its distance sets how far each direction goes.")
-        import itertools
-        runs = []
-        for signs in itertools.product((1, -1), repeat=len(rows)):
-            targets = [min(_ATTRIBUTE_UI[a]["max"], max(0.0, ref[a] + sg * abs(t - ref[a])))
-                       for (a, t, _), sg in zip(rows, signs)]
-            runs.append((targets, signs))
-    else:
-        targets = [t for _, t, _ in rows]
-        signs = [(1 if t >= ref[a] else -1) if ref.get(a) is not None else 0 for a, t, _ in rows]
-        runs = [(targets, signs)]
-
-    def run_name(signs):
-        if not any(signs):
-            return " + ".join(a.replace("_", " ") for a, _, _ in rows)
-        return " + ".join(_ATTR_SCALE[a][1 if sg > 0 else 0] for (a, _, _), sg in zip(rows, signs))
+    refs = refs or {}
+    paths = {"EBT": (ebt_ckpt, ebt_paths_json), "Llama": (llama_ckpt, llama_paths_json)}
+    ckpt_paths, problems = {}, []
+    for key, model_key, label in _COMPOSE_SYSTEMS:
+        if key not in sys_keys or model_key in ckpt_paths:
+            continue
+        ckpt, pj = paths[model_key]
+        ckpt_paths[model_key] = json.loads(pj).get(ckpt) if ckpt and pj else None
+        if not ckpt_paths[model_key]:
+            problems.append(f"❌ {_shown(model_key)}: select a checkpoint in 01 first.")
+        if not all(refs.get(model_key, {}).get(a) is not None for a in _compose_pair(tokenizer_type)):
+            problems.append(f"❌ {_shown(model_key)}: run Generate above with {_shown(model_key)} included first. "
+                            "Targets are set from its own unguided continuation.")
+    if problems:
+        return out(sys_hidden, heads, all_hidden, "\n".join(problems), {"cells": []})
 
     try:
-        ckpt_path = json.loads(ebt_paths_json).get(ebt_ckpt)
         token_offset = _offset_to_tokens(tokenizer_type, song_choice, start_offset)
         prompt_tokens, gt_tokens, prompt_label, _ = _resolve_prompt(tokenizer_type, song_choice, token_offset)
-
-        reg_paths, reg_statuses = [], []
-        for attr, _, _ in rows:
-            reg_path, reg_status = _find_attribute_regressor(attr, tokenizer_type, ckpt_path)
-            reg_statuses.append(reg_status)
-            if not reg_path:
-                return result([], "❌ " + "\n".join(reg_statuses))
-            reg_paths.append(reg_path)
     except Exception as e:
-        return result([], f"❌ {e}\n{traceback.format_exc()}")
+        return out(sys_hidden, heads, all_hidden, f"❌ {e}", {"cells": []})
 
-    from attribute_control.attributes import ATTRIBUTES
-    cards, status_lines = [], [f"Prompt: {prompt_label}", *reg_statuses]
-    for n, (targets, signs) in enumerate(runs, 1):
-        name = run_name(signs)
-        title = _compose_title_html(n, name)
+    a1, a2 = (a.replace("_", " ") for a in _compose_pair(tokenizer_type))
+    strengths = {"ebt": (float(ebt_l1), float(ebt_l2)), "pplm": (float(pplm_1), float(pplm_2)),
+                 "tilt": float(tilt), "bon": int(bon)}
+    strength_text = {"ebt": f"λ {a1} {ebt_l1:g} · {a2} {ebt_l2:g}", "pplm": f"strength {a1} {pplm_1:g} · {a2} {pplm_2:g}",
+                     "tilt": f"tilt {tilt:g}", "bon": f"N = {int(bon)}"}
+    sys_updates, cells, todo = [], [], []
+    for s_i, (key, model_key, label) in enumerate(_COMPOSE_SYSTEMS):
+        on = key in sys_keys
+        sys_updates.append(gr.update(elem_classes=_card_classes(on) + ["compose-sys"]))
+        heads[s_i] = _compose_system_head_html(label, strength_text[key]) if on else ""
+        for d_i, signs in enumerate(_COMPOSE_DIRS):
+            if on and d_i in dir_idx:
+                cells.append(pending_slot(_compose_cell_title_html(tokenizer_type, signs)))
+                todo.append(s_i * len(_COMPOSE_DIRS) + d_i)
+            else:
+                cells.append(hidden_slot())
+    state = {"cells": todo, "tokenizer_type": tokenizer_type, "ckpt_paths": ckpt_paths, "refs": refs,
+             "prompt_tokens": prompt_tokens, "gt_tokens": gt_tokens, "prompt_label": prompt_label,
+             "temperature": temperature, "top_p": top_p, "generation_length": generation_length,
+             "size": float(size), "strengths": strengths}
+    n_runs = len(todo)
+    return out(sys_updates, heads, cells, f"Prompt: {prompt_label}\n{n_runs} combined variant(s) to generate…", state)
+
+
+def _make_compose_cell_step(k: int):
+    """Fill cell k (system k // 4, direction k % 4) if this run asked for it."""
+    _, _, failed_slot, done_slot = _card_classes_slot_helpers()
+    s_i, d_i = divmod(k, len(_COMPOSE_DIRS))
+
+    def _step(state: dict, status_text: str):
+        if k not in state.get("cells", []):
+            return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), status_text
+        from attribute_control.attributes import ATTRIBUTES
+        key, model_key, label = _COMPOSE_SYSTEMS[s_i]
+        signs = _COMPOSE_DIRS[d_i]
+        tok = state["tokenizer_type"]
+        pair = _compose_pair(tok)
+        title = _compose_cell_title_html(tok, signs)
+        ckpt = state["ckpt_paths"][model_key]
+        ref = state["refs"][model_key]
+        stats = _corpus_stats()
+        targets = [min(_ATTRIBUTE_UI[a]["max"], max(0.0, ref[a] + sg * state["size"] * stats[a]["stdev"]))
+                   for a, sg in zip(pair, signs)]
+        name = f"{label} · {_compose_dir_name(tok, signs)}"
+        common = (model_key, ckpt, tok, state["prompt_tokens"], state["gt_tokens"],
+                  state["temperature"], state["top_p"], state["generation_length"])
         try:
-            out = _run_generation(
-                "EBT", ckpt_path, tokenizer_type, prompt_tokens, gt_tokens,
-                temperature, top_p, generation_length,
-                attribute_overrides={
-                    "attribute_regressor_ckpts": reg_paths,
-                    "attribute_targets": targets,
-                    "attribute_weights": [w for _, _, w in rows],
-                    "lambda_attribute": lam,
-                },
-            )
+            st = state["strengths"][key]
+            if key in ("ebt", "pplm"):
+                regs = []
+                for a in pair:
+                    reg, msg = (_find_attribute_regressor(a, tok, ckpt) if key == "ebt"
+                                else _find_baseline_regressor(a, tok, model_key, ckpt))
+                    if not reg:
+                        return (*failed_slot(title), status_text + f"\n{name}: ❌ {msg}")
+                    regs.append(reg)
+                out = _run_generation(*common, attribute_overrides={
+                    "attribute_regressor_ckpts": regs, "attribute_targets": targets,
+                    "attribute_weights": [1.0] * len(pair), "attribute_lambdas": list(st),
+                    "lambda_attribute": max(st)})
+            elif key == "tilt":
+                from attribute_control.ar_guidance import ExpectationTilt
+                out = _run_generation(*common, logit_processor=_ChainedTilt(
+                    [ExpectationTilt(a, t, st, state["temperature"]) for a, t in zip(pair, targets)]))
+            else:  # best-of-N: one shared pool per prompt, the closest sample to both targets
+                pool_key = (ckpt, tuple(state["prompt_tokens"]), state["temperature"], state["top_p"],
+                            state["generation_length"])
+                pool = _compose_pool_cache.get(pool_key, [])
+                while len(pool) < st:
+                    pool.append(_run_generation(*common, synth=False)["generated_tokens"])
+                _compose_pool_cache.clear()
+                _compose_pool_cache[pool_key] = pool
+
+                def dist(g):
+                    return sum(abs(ATTRIBUTES[a](g, tok) - t) / stats[a]["stdev"] for a, t in zip(pair, targets))
+                best = min(pool[:st], key=dist)
+                out = _run_generation(*common, given_tokens=best)
             gen = out["generated_tokens"]
-            gauge_rows = []
-            wandb_meta = {"lambda": lam, "prompt": prompt_label, "combination": name}
-            for (attr, _, weight), target in zip(rows, targets):
-                achieved = ATTRIBUTES[attr](gen, tokenizer_type)
-                gauge_rows.append((attr, target, achieved, ref.get(attr)))
-                wandb_meta[f"{attr}_target"] = target
-                wandb_meta[f"{attr}_achieved"] = achieved
-                wandb_meta[f"{attr}_weight"] = weight
-            gauge = _shift_gauge_html(f"{name} (λ={lam})", gauge_rows, "Tonic unguided")
-            status_lines += [f"── {n}. {name}", *out["status_lines"],
-                             _log_to_wandb(f"demo_EBT_compose_{tokenizer_type}", out["wav_paths"], wandb_meta)]
-            audio = out["wav_paths"].get("combined")
-            cards.append((gr.update(elem_classes=_card_classes(True) + ["compose-out"]), title,
-                          gr.update(visible=bool(audio), value=audio), gauge))
+            achieved = [ATTRIBUTES[a](gen, tok) for a in pair]
+            hits = [(v - ref[a]) * sg > 0 for a, v, sg in zip(pair, achieved, signs)]
+            gauge = _joint_chip_html(hits) + _shift_gauge_html(
+                _compose_dir_name(tok, signs), [(a, t, v, ref[a]) for a, t, v in zip(pair, targets, achieved)],
+                f"{_shown(model_key)} unguided")
+            _log_to_wandb(f"demo_{model_key}_{key}_compose_{tok}", out["wav_paths"],
+                          {"system": key, "direction": _compose_dir_name(tok, signs), "size_sd": state["size"],
+                           **{f"{a}_target": t for a, t in zip(pair, targets)},
+                           **{f"{a}_achieved": v for a, v in zip(pair, achieved)},
+                           "prompt": state.get("prompt_label", "")})
+            status_text += f"\n{name}: done ({sum(hits)}/{len(hits)} moved the requested way)"
+            return (*done_slot(title, out["wav_paths"].get("combined"), gauge), status_text)
         except Exception as e:
-            status_lines.append(f"── {n}. {name}: ❌ {e}")
-            cards.append((gr.update(elem_classes=_card_classes(True) + ["compose-out"]), title,
-                          gr.update(visible=False, value=None),
-                          '<div class="reference-box">This combination failed — see Status.</div>'))
-    return result(cards, "\n".join(status_lines))
+            return (*failed_slot(title), status_text + f"\n{name}: ❌ {e}")
+
+    return _step
 
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
@@ -2862,6 +3025,8 @@ body, gradio-app {
 /* Settings accordions: two soft cards; their sliders use the shared slider style. */
 .gradio-container .opt-acc { background: rgba(255,255,255,0.035) !important; border: 1px solid rgba(255,255,255,0.08) !important;
     border-radius: 20px !important; padding: 4px 18px !important; box-shadow: none !important; }
+.gradio-container .opt-acc, .gradio-container .opt-acc > div { overflow: visible !important; }
+.gradio-container .opt-acc .help-label-wrap { margin-bottom: 4px !important; }
 .gradio-container .opt-acc .label-wrap { padding: 12px 0 !important; font-size: 15px !important; font-weight: 600 !important; color: #e8eaf2 !important; }
 .gradio-container .opt-acc .label-wrap .icon { color: #8b7cff !important; }
 .gradio-container .opt-acc .label-wrap:hover { color: #fff !important; }
@@ -2876,11 +3041,24 @@ body, gradio-app {
 /* Preview caption above the preview player (no box). */
 .gradio-container .prompt-card .preview-status:not(:empty) { padding: 0 2px !important; background: transparent !important; border: 0 !important; }
 .gradio-container .prompt-card .preview-status, .gradio-container .prompt-card .preview-status p { font-size: 13.5px !important; }
-/* 05: result cards in a grid, one per direction combination. */
-.attr-window .compose-grid { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(min(100%, 430px), 1fr));
-    gap: 14px !important; align-items: start; border: 0 !important; padding: 0 !important; }
-.gradio-container .dir-toggle { padding: 12px 16px !important; border-radius: 14px !important;
-    background: rgba(255,255,255,0.025) !important; border: 1px solid rgba(255,255,255,0.07) !important; }
+/* 05: setup card (directions, size, systems), then one card per system with one cell per direction. */
+.attr-window .compose-setup .styler { gap: 16px !important; }
+.attr-window .compose-sys { gap: 12px !important; }
+.compose-sys-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.compose-sys-head .vname { font: 650 16px/1.2 Inter, sans-serif; color: #e8eaf2; }
+.compose-sys-head .cs-strength { font: 12px "JetBrains Mono", ui-monospace, monospace; color: #8a90a3; }
+.gradio-container .compose-cells { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+    gap: 12px !important; }
+.attr-window .compose-cells .model-card { background: rgba(255,255,255,0.025) !important; border-radius: 14px !important;
+    padding: 12px !important; }
+.compose-cell-head { display: flex; flex-direction: column; gap: 2px; }
+.compose-cell-head b { font: 600 14px Inter, sans-serif; color: #e8eaf2; }
+.compose-cell-head span { font: 11.5px "JetBrains Mono", ui-monospace, monospace; color: #8a90a3; }
+.joint-chip { display: inline-block; font-size: 12px; padding: 3px 9px; border-radius: 999px; margin-bottom: 6px;
+    border: 1px solid rgba(255,255,255,0.1); }
+.joint-chip.ok { color: #3fd0c9; border-color: rgba(63,208,201,0.4); background: rgba(63,208,201,0.08); }
+.joint-chip.warn { color: #f2c14e; border-color: rgba(242,193,78,0.4); background: rgba(242,193,78,0.08); }
+.joint-chip.bad { color: #ff7a8a; border-color: rgba(255,122,138,0.4); background: rgba(255,122,138,0.08); }
 /* Key row above the 04/05 cards: attribute legend, and the methods "?" on the right. */
 .key-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 18px;
     padding: 10px 14px; border-radius: 14px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.07); }
@@ -2905,8 +3083,13 @@ body, gradio-app {
 @keyframes gen-eq { 0%, 100% { height: 25%; } 50% { height: 100%; } }
 .gradio-container .gen-placeholder .gen-dim { color: #8a90a3; }
 .gradio-container .gen-placeholder .gen-text { color: #c9cddb; font-weight: 500 !important; font-size: 13.5px !important; margin: 0 !important; }
-.gradio-container .gen-placeholder-idle { border: 1px dashed rgba(255,255,255,0.12) !important; opacity: 1 !important; }
-.gradio-container .gen-placeholder-idle .gen-text { color: #8a90a3 !important; }
+.gradio-container .gen-placeholder-idle { border: 1px dashed rgba(139,124,255,0.28) !important; opacity: 1 !important;
+    background: linear-gradient(180deg, rgba(139,124,255,0.045), rgba(255,255,255,0.02)) !important; }
+.gradio-container .gen-placeholder-idle .gen-text { color: #9298ab !important; text-align: center; max-width: 46ch; line-height: 1.5; }
+.gradio-container .gen-placeholder-idle .gen-text b { color: #c7bfff; font-weight: 600; }
+.idle-icon { width: 30px; height: 30px; border-radius: 50%; display: block; border: 1px solid rgba(139,124,255,0.4);
+    background: rgba(139,124,255,0.10) center / 12px no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 1.5l7 4.5-7 4.5z' fill='%23a195ff'/%3E%3C/svg%3E"); }
 @media (prefers-reduced-motion: reduce) { .gen-eq i, .gradio-container .gen-placeholder::after { animation: none !important; } }
 /* Attribute legend above the pills: name, then what its scale runs between. */
 .gradio-container .attr-legend-wrap, .gradio-container .attr-legend-wrap > * { padding: 0 !important; background: transparent !important;
@@ -3025,6 +3208,8 @@ body, gradio-app {
 .ckpt-stats { display: flex; flex-direction: column; gap: 8px; }
 .ckpt-note { color: #9298ab; font-size: 13px; line-height: 1.45; }
 .ckpt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ckpt-chips.ckpt-numbers { flex-wrap: nowrap; }
+.ckpt-chips.ckpt-numbers .ckpt-chip { white-space: nowrap; }
 .ckpt-chip { font: 500 12px/1 "JetBrains Mono", ui-monospace, monospace; padding: 7px 9px; border-radius: 8px;
     border: 1px solid rgba(255,255,255,0.10); color: #9298ab; white-space: nowrap; }
 .ckpt-chip b { color: #c4b5fd; font-weight: 600; }
@@ -3291,7 +3476,23 @@ _ROLL_HEAD = r"""
     document.querySelectorAll("button.ckpt-rescan:not([title])").forEach((b) => b.title = "Rescan checkpoints on disk");
   }, 600);
   window.addEventListener("resize", () => recs.forEach((r) => r.data && drawBase(r)));
+  // The full song's playhead follows the prompt start (seconds), however it
+  // changes: dragging or typing, a song change, or a click snapped to a note.
+  // While paused, the player itself moves there too, so play starts at the prompt.
+  function syncStart() {
+    const ps = document.querySelector("#prompt-start input[type=number]");
+    const fsb = document.getElementById("full-song");
+    const r = fsb && recs.get(fsb);
+    if (!ps || !r || !r.data) return;
+    const sec = parseFloat(ps.value);
+    if (!isFinite(sec) || sec === r.syncSec) return;
+    r.syncSec = sec;
+    r.clickFrac = Math.max(0, Math.min(1, sec / r.range.tMax));
+    const m = fsb.__media;
+    if (m && m.paused) { try { m.currentTime = sec; } catch (e) {} }
+  }
   (function tick() {
+    syncStart();
     recs.forEach((r, block) => {
       const m = block.__media;
       let frac = null;
@@ -3320,11 +3521,12 @@ def _placeholder_html(label: str) -> str:
             f'<div class="gen-text">{label} <span class="gen-dim">· generating…</span></div></div>')
 
 
-_DEFAULT_IDLE_TEXT = "Nothing to display yet — click Generate above."
+_DEFAULT_IDLE_TEXT = "Nothing here yet. Click <b>Generate</b> above."
 
 
 def _idle_placeholder_html(text: str = _DEFAULT_IDLE_TEXT) -> str:
-    return f'<div class="gen-placeholder gen-placeholder-idle"><div class="gen-text">{text}</div></div>'
+    return (f'<div class="gen-placeholder gen-placeholder-idle"><span class="idle-icon" aria-hidden="true"></span>'
+            f'<div class="gen-text">{text}</div></div>')
 
 
 # Player waveform in the showcase palette (Gradio's default progress colour is
@@ -3456,7 +3658,7 @@ def build_ui():
         # hides/shows the section.
         with gr.Group(visible=False) as full_song_group:  # no padded card: the waveform resizes itself wider inside one
             full_song_audio = ClickAudio(
-                label="Full song: click where the prompt should start",
+                label="Full song: click where the prompt should start", elem_id="full-song",
                 type="filepath", interactive=False, visible=True,
                 waveform_options={"waveform_color": "#5d6377", "waveform_progress_color": "#8b7cff"},
             )
@@ -3468,7 +3670,7 @@ def build_ui():
         with gr.Row(equal_height=False, elem_classes="prompt-row"):
             with gr.Column(scale=2, min_width=260, elem_classes="prompt-card"):
                 start_offset = gr.Slider(0, 2000, value=0, step=1, label="Prompt start offset (tokens)",
-                                         elem_classes="nice-slider")
+                                         elem_classes="nice-slider", elem_id="prompt-start")
             with gr.Column(scale=3, min_width=260, elem_classes="prompt-card"):
                 preview_status = gr.Markdown("", elem_classes="preview-status")
                 preview_audio = gr.Audio(label="Prompt preview", type="filepath", waveform_options=_WAVEFORM)
@@ -3748,11 +3950,11 @@ def build_ui():
 
         gr.Markdown('## <span class="kicker">05</span>Combined-Attribute Control', elem_classes="section-title")
         gr.Markdown(
-            "Steer several attributes in one continuation, for example louder *and* with shorter notes "
-            "(Tonic only).\n\n"
-            "Every row acts on the same continuation: their steering terms are added up, each scaled by its "
-            "relative weight, and the total is scaled by the shared strength λ. Turn on **All direction "
-            "combinations** to hear every mix of directions side by side.",
+            "Steer two attributes in the same continuation, as in the thesis experiments: **velocity and "
+            "duration** with REMI, **duration and pitch register** with Anticipation.\n\n"
+            "Pick the directions and how far to push (1 or 2 SD from each model's own unguided continuation "
+            "in 03), then the systems to compare. Each system starts at the strength used in the thesis, Tonic "
+            "with one λ per attribute. Run **Generate** above first, with every model you compare.",
             elem_classes="section-sub",
         )
         with gr.Column(elem_classes=["attr-window", "roll-sync"]):
@@ -3762,130 +3964,76 @@ def build_ui():
                 type="filepath", visible=False,
                 waveform_options=_WAVEFORM,
             )
+            compose_key_html = gr.HTML(_compose_key_html("REMI"), elem_classes="attr-legend-wrap")
+            with gr.Group(elem_classes=["model-card", "compose-setup"]):
+                compose_dirs = gr.CheckboxGroup(choices=_compose_dir_choices("REMI"), value=["0", "1", "2", "3"],
+                                                label="Directions", elem_classes="seg-toggle seg-compact")
+                compose_size = gr.Radio(choices=[("1 SD", "1"), ("2 SD", "2")], value="2",
+                                        label="How far to push both attributes",
+                                        elem_classes="seg-toggle seg-compact")
+                compose_systems = gr.CheckboxGroup(
+                    choices=_compose_system_choices("REMI"), value=["ebt", "pplm"], label="Systems",
+                    info="One generation per system and direction; best-of-N draws its N continuations once "
+                         "and reuses them for every direction.",
+                    elem_classes="seg-toggle seg-compact")
+            _cd = _COMPOSE_DEFAULTS["REMI"]
+            _cl1, _cl2 = _lambda_range("REMI", "velocity"), _lambda_range("REMI", "duration")
+            with gr.Accordion("Strengths (optional)", open=False, elem_classes="opt-acc"):
+                gr.HTML(_help_label_html("Tonic: one λ per attribute", "Why one λ per attribute?", _COMPOSE_LAMBDA_HELP),
+                        elem_classes="help-label-wrap")
+                with gr.Row():
+                    compose_ebt_l1 = gr.Slider(_cl1["min"], _cl1["max"], value=_cd["ebt"][0], step=_cl1["step"],
+                                               label="Tonic λ · velocity", elem_classes="nice-slider")
+                    compose_ebt_l2 = gr.Slider(_cl2["min"], _cl2["max"], value=_cd["ebt"][1], step=_cl2["step"],
+                                               label="Tonic λ · duration", elem_classes="nice-slider")
+                with gr.Row():
+                    compose_pplm_1 = gr.Slider(0.5, 32, value=_cd["pplm"][0], step=0.5,
+                                               label="PPLM strength · velocity", elem_classes="nice-slider")
+                    compose_pplm_2 = gr.Slider(0.5, 32, value=_cd["pplm"][1], step=0.5,
+                                               label="PPLM strength · duration", elem_classes="nice-slider")
+                with gr.Row():
+                    compose_tilt = gr.Slider(0.05, 1.0, value=_cd["tilt"], step=0.05, label="Tilt (0 = none, 1 = full)",
+                                             elem_classes="nice-slider")
+                    compose_bon = gr.Slider(1, 16, value=_cd["bon"], step=1, label="Best-of-N: N",
+                                            elem_classes="nice-slider")
 
-            compose_row_count_state = gr.State(1)
-            compose_rows = []
-            compose_sigma_htmls = []
-            compose_key_html = gr.HTML(_key_row_html(_SOLO_ATTRIBUTES, methods=False), elem_classes="attr-legend-wrap")
-            tokenizer_dd.change(lambda t: _key_row_html(_solo_attribute_choices(t), methods=False),
-                                inputs=[tokenizer_dd], outputs=[compose_key_html])
-            with gr.Column(elem_classes="variants-bundle"):
-                for _i in range(_MAX_COMPOSE_ROWS):
-                    with gr.Group(elem_classes=_card_classes(_i == 0)) as _crow_group:
-                        with gr.Row():
-                            gr.Markdown(f"**Attribute {_i + 1}**")
-                        with gr.Row():
-                            _crow_attr = gr.Radio(
-                                choices=_attr_choice_tuples(_SOLO_ATTRIBUTES),
-                                value=_SOLO_ATTRIBUTES[min(_i, len(_SOLO_ATTRIBUTES) - 1)],
-                                label="Attribute")
-                        with gr.Row():
-                            _crow_target = gr.Slider(0.0, _ATTRIBUTE_UI["velocity"]["max"],
-                                                      value=_ATTRIBUTE_UI["velocity"]["default_target"],
-                                                      step=0.01, label=_ATTRIBUTE_UI["velocity"]["label"], scale=2,
-                                                      elem_classes="nice-slider")
-                            _crow_weight = gr.Slider(0.0, 2.0, value=1.0, step=0.1,
-                                                      label="Relative weight (share of the total push)", scale=1,
-                                                      elem_classes="nice-slider")
-                        _crow_sigma = gr.HTML(value=_sigma_annotation_html(
-                            "velocity", _ATTRIBUTE_UI["velocity"]["default_target"]))
-                    compose_rows.append((_crow_group, _crow_attr, _crow_target, _crow_weight))
-                    compose_sigma_htmls.append(_crow_sigma)
+            def _on_compose_tokenizer_change(tokenizer_type, systems):
+                a1, a2 = _compose_pair(tokenizer_type)
+                d = _COMPOSE_DEFAULTS.get(tokenizer_type, _COMPOSE_DEFAULTS["REMI"])
+                r1, r2 = _lambda_range(tokenizer_type, a1), _lambda_range(tokenizer_type, a2)
+                n1, n2 = a1.replace("_", " "), a2.replace("_", " ")
+                choices = _compose_system_choices(tokenizer_type)
+                keep = [v for v in (systems or []) if v in [k for _, k in choices]] or ["ebt"]
+                return (_compose_key_html(tokenizer_type),
+                        gr.update(choices=_compose_dir_choices(tokenizer_type)),
+                        gr.update(choices=choices, value=keep),
+                        gr.update(minimum=r1["min"], maximum=r1["max"], step=r1["step"], value=d["ebt"][0], label=f"Tonic λ · {n1}"),
+                        gr.update(minimum=r2["min"], maximum=r2["max"], step=r2["step"], value=d["ebt"][1], label=f"Tonic λ · {n2}"),
+                        gr.update(value=d["pplm"][0], label=f"PPLM strength · {n1}"),
+                        gr.update(value=d["pplm"][1], label=f"PPLM strength · {n2}"),
+                        gr.update(value=d["bon"]))
 
-                    def _make_crow_attr_change():
-                        def _on_crow_attr_change(attribute, ref_velocity, ref_duration, ref_pitch_register):
-                            meta = _ATTRIBUTE_UI[attribute]
-                            return gr.update(
-                                minimum=0.0, maximum=meta["max"], label=meta["label"],
-                                value=_target_default_value(attribute, ref_velocity, ref_duration, ref_pitch_register))
-                        return _on_crow_attr_change
-
-                    _crow_attr.change(_make_crow_attr_change(),
-                                       inputs=[_crow_attr, ebt_ref_velocity_state, ebt_ref_duration_state,
-                                               ebt_ref_pitch_register_state],
-                                       outputs=[_crow_target]).then(
-                        _sigma_annotation_html, inputs=[_crow_attr, _crow_target], outputs=[_crow_sigma],
-                    )
-                    _crow_target.change(_sigma_annotation_html, inputs=[_crow_attr, _crow_target],
-                                         outputs=[_crow_sigma])
-
-                    def _make_crow_tokenizer_change():
-                        def _on_crow_tokenizer_change(tokenizer_type, current_attr):
-                            choices = _solo_attribute_choices(tokenizer_type)
-                            value = current_attr if current_attr in choices else choices[0]
-                            return gr.update(choices=_attr_choice_tuples(choices), value=value)
-                        return _on_crow_tokenizer_change
-
-                    tokenizer_dd.change(_make_crow_tokenizer_change(),
-                                         inputs=[tokenizer_dd, _crow_attr], outputs=[_crow_attr])
-
-            with gr.Row(elem_classes="variant-actions"):
-                compose_add_row_btn = gr.Button("+ Add attribute", size="sm", elem_classes="add-variant")
-                compose_remove_row_btn = gr.Button("Remove last", size="sm", elem_classes="remove-variant")
-
-            def _set_compose_row_count(count: int, delta: int):
-                count = max(1, min(_MAX_COMPOSE_ROWS, count + delta))
-                return (count, *[gr.update(elem_classes=_card_classes(i < count)) for i in range(_MAX_COMPOSE_ROWS)])
-
-            _compose_row_groups = [rg for rg, _, _, _ in compose_rows]
-            # Same button-disable + shared-concurrency pattern as the Single
-            # attribute rows above — see _ROW_MUTATION_CONCURRENCY's comment
-            # for why (a Gradio gr.Group visible-toggle bug, not app logic).
-            _COMPOSE_ROW_CONCURRENCY = dict(concurrency_id="compose_row_mutation", concurrency_limit=1)
-            compose_add_row_btn.click(
-                lambda: gr.update(interactive=False, value="Adding…"), outputs=[compose_add_row_btn],
-            ).then(
-                lambda c: _set_compose_row_count(c, 1),
-                inputs=[compose_row_count_state],
-                outputs=[compose_row_count_state, *_compose_row_groups],
-                **_COMPOSE_ROW_CONCURRENCY,
-            ).then(
-                lambda: gr.update(interactive=True, value="+ Add attribute"), outputs=[compose_add_row_btn],
-            )
-            compose_remove_row_btn.click(
-                lambda: gr.update(interactive=False, value="Removing…"), outputs=[compose_remove_row_btn],
-            ).then(
-                lambda c: _set_compose_row_count(c, -1),
-                inputs=[compose_row_count_state],
-                outputs=[compose_row_count_state, *_compose_row_groups],
-                **_COMPOSE_ROW_CONCURRENCY,
-            ).then(
-                lambda: gr.update(interactive=True, value="Remove last"), outputs=[compose_remove_row_btn],
-            )
-
-            # One shared λ drives every active row (each row's own Relative
-            # weight tunes its mix) — spans the union of every attribute's own
-            # tuned range rather than any single one alone, since which
-            # attributes are active can change row to row.
-            _cl = _COMPOSE_LAMBDA_BY_TOK["REMI"]
-            compose_lambda = gr.Slider(_cl["min"], _cl["max"], value=_cl["default"], step=_cl["step"],
-                                       label="Steering strength λ (shared by all rows)", elem_classes="nice-slider")
-
-            def _on_compose_tokenizer_change(tokenizer_type):
-                c = _COMPOSE_LAMBDA_BY_TOK.get(tokenizer_type, _COMPOSE_LAMBDA_BY_TOK["REMI"])
-                return gr.update(minimum=c["min"], maximum=c["max"], step=c["step"], value=c["default"])
-
-            tokenizer_dd.change(_on_compose_tokenizer_change, inputs=[tokenizer_dd], outputs=[compose_lambda])
-            compose_all_dirs = gr.Checkbox(
-                value=False, label="All direction combinations", elem_classes="pick-toggle dir-toggle",
-                info="Also generate every mix of directions, each target mirrored around Tonic's unguided value: "
-                     "2 attributes give 4 runs (e.g. forte + legato, forte + staccato, piano + legato, piano + staccato), "
-                     "3 give 8. Each run takes as long as one generation.")
+            tokenizer_dd.change(_on_compose_tokenizer_change, inputs=[tokenizer_dd, compose_systems],
+                                outputs=[compose_key_html, compose_dirs, compose_systems, compose_ebt_l1, compose_ebt_l2,
+                                         compose_pplm_1, compose_pplm_2, compose_bon])
             with gr.Row(elem_classes="centered-btn-row gen-cta"):
-                compose_btn = gr.Button("Generate combined", variant="primary", size="lg", elem_classes="gen-btn")
+                compose_btn = gr.Button("Generate combined variants", variant="primary", size="lg", elem_classes="gen-btn")
             compose_status = gr.Textbox(label="Status", lines=4, interactive=False, placeholder=" ", elem_classes="status-log")
-            # Result cards, hidden until a run fills them (one per direction
-            # combination; a single run uses the first).
-            compose_out = []
-            with gr.Column(elem_classes=["variants-bundle", "compose-grid"]):
-                for _k in range(_MAX_COMPOSE_OUT):
-                    with gr.Group(elem_classes=_card_classes(False) + ["compose-out"]) as _co_group:
-                        _co_title = gr.HTML("")
-                        _co_audio = gr.Audio(label="Prompt + steered continuation", type="filepath", visible=False,
-                                             waveform_options=_WAVEFORM)
-                        _co_gauge = gr.HTML("", elem_classes="attr-gauge-slot")
-                    compose_out.append((_co_group, _co_title, _co_audio, _co_gauge))
-            compose_out_flat = [c for slot in compose_out for c in slot]
+            # Results: one card per system, one cell per direction, filled as each run finishes.
+            compose_sys_cols, compose_sys_heads, compose_cells = [], [], []
+            for _key, _mk, _label in _COMPOSE_SYSTEMS:
+                with gr.Column(elem_classes=_card_classes(False) + ["compose-sys"]) as _sys_col:
+                    _sys_head = gr.HTML("")
+                    with gr.Row(elem_classes="compose-cells"):
+                        for _d in range(len(_COMPOSE_DIRS)):
+                            with gr.Group(elem_classes=_card_classes(False)) as _cell:
+                                _cell_title = gr.HTML("")
+                                _cell_ph, _cell_audio = _audio_slot("Prompt + steered continuation")
+                                _cell_gauge = gr.HTML("", elem_classes="attr-gauge-slot")
+                            compose_cells.append((_cell, _cell_title, _cell_ph, _cell_audio, _cell_gauge))
+                compose_sys_cols.append(_sys_col)
+                compose_sys_heads.append(_sys_head)
+            compose_out_flat = [*compose_sys_cols, *compose_sys_heads, *(c for cell in compose_cells for c in cell)]
 
         # ── Event wiring ──────────────────────────────────────────────────────
 
@@ -4082,12 +4230,6 @@ def build_ui():
                 inputs=[_r_attr, ebt_ref_velocity_state, ebt_ref_duration_state, ebt_ref_pitch_register_state],
                 outputs=[_r_target],
             )
-        for _crg, _cr_attr, _cr_target, _cr_weight in compose_rows:
-            generate_call = generate_call.then(
-                lambda attribute, rv, rd, rp: gr.update(value=_target_default_value(attribute, rv, rd, rp)),
-                inputs=[_cr_attr, ebt_ref_velocity_state, ebt_ref_duration_state, ebt_ref_pitch_register_state],
-                outputs=[_cr_target],
-            )
 
         ebt_on_cb, ebt_ckpt_dd, _ = model_controls["EBT"]
         ebt_ckpt_state = ckpt_states["EBT"]
@@ -4124,24 +4266,24 @@ def build_ui():
                 **_SOLO_BATCH_CONCURRENCY,
             )
 
-        compose_row_inputs = []
-        for _crg, _cr_attr, _cr_target, _cr_weight in compose_rows:
-            compose_row_inputs += [_cr_attr, _cr_target, _cr_weight]
-
         _COMPOSE_GEN_CONCURRENCY = dict(concurrency_id="compose_generation", concurrency_limit=1)
-        compose_btn.click(
+        compose_state = gr.State({})
+        _compose_chain = compose_btn.click(
             _compose_start,
-            inputs=[],
-            outputs=[*compose_out_flat, compose_status],
-            **_COMPOSE_GEN_CONCURRENCY,
-        ).then(
-            _compose_generate,
             inputs=[tokenizer_dd, song_dd, start_offset, temperature, top_p, gen_length,
-                    ebt_ckpt_dd, ebt_ckpt_state, ref_values_state, compose_lambda,
-                    compose_all_dirs, compose_row_count_state, *compose_row_inputs],
-            outputs=[*compose_out_flat, compose_status],
+                    ebt_ckpt_dd, ebt_ckpt_state, llama_ckpt_dd, ckpt_states["Llama"],
+                    ref_values_state, compose_dirs, compose_size, compose_systems,
+                    compose_ebt_l1, compose_ebt_l2, compose_pplm_1, compose_pplm_2, compose_tilt, compose_bon],
+            outputs=[*compose_out_flat, compose_status, compose_state],
             **_COMPOSE_GEN_CONCURRENCY,
         )
+        for _k, (_cell, _cell_title, _cell_ph, _cell_audio, _cell_gauge) in enumerate(compose_cells):
+            _compose_chain = _compose_chain.then(
+                _make_compose_cell_step(_k),
+                inputs=[compose_state, compose_status],
+                outputs=[_cell, _cell_title, _cell_ph, _cell_audio, _cell_gauge, compose_status],
+                **_COMPOSE_GEN_CONCURRENCY,
+            )
 
         # Initial load: populate all checkpoints and preview the default song.
         # show_progress="hidden" here for the same reason as the

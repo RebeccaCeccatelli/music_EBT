@@ -80,7 +80,14 @@ done
 SCRIPT="$(realpath "$0")"
 export EBT_PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "Requesting GPU node (partition: mit_normal_gpu)…"
-srun --gpus=l40s:1 --mem=40GB --time=3:00:00 \
+# 4 CPUs by default: with one, Gradio, the share relay, FluidSynth and the MP3
+# encoder all queue on a single core. Override with DEMO_CPUS=<n>.
+DEMO_CPUS="${DEMO_CPUS:-4}"
+export DEMO_NUM_THREADS="${DEMO_NUM_THREADS:-${DEMO_CPUS}}"
+echo "Requesting GPU node (partition: mit_normal_gpu, ${DEMO_CPUS} CPUs)…"
+# DEMO_EXCLUDE=<node[,node]> keeps the demo off nodes with a hung /orcd/pool mount
+# (song loading reads GigaMIDI tokens from pool; 2026-11-11: node3511).
+srun --gpus=l40s:1 --cpus-per-task="${DEMO_CPUS}" --mem=40GB --time=3:00:00 \
+     ${DEMO_EXCLUDE:+--exclude="${DEMO_EXCLUDE}"} \
      --partition=mit_normal_gpu --account=mit_general \
      bash "${SCRIPT}"
