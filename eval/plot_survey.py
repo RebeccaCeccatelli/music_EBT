@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 INK, MUTED, GRID = "#1f1f1e", "#6b6a64", "#e4e3de"
 EBT_C, AR_C = "#2a78d6", "#8d8c85"
 
-NAMES = {"original": "Human original", "ebt": "EBT", "llama": "Llama", "gpt2": "GPT-2",
+NAMES = {"original": "Human original", "ebt": "Tonic", "llama": "Llama", "gpt2": "GPT-2",
          "llama_pplm": "Llama PPLM", "llama_tilt": "Llama tilting", "llama_bon": "Llama best-of-$N$",
          "gpt2_tilt": "GPT-2 tilting", "gpt2_bon": "GPT-2 best-of-$N$"}
 TEX_NAMES = {k: v for k, v in NAMES.items()}
@@ -79,7 +79,7 @@ def fig_part2(main, out):
     fig, axes = plt.subplots(2, 3, figsize=(6.3, 3.6), sharex=True, constrained_layout=True)
     for ax, p in zip(axes.flat, panels):
         if p is None:   # pooled panel: EBT vs AR per tokenizer
-            rows = [(f"{TOK[t]} {f}", fam[(t, f)], EBT_C if f == "EBT" else AR_C)
+            rows = [(f"{TOK[t]} {'Tonic' if f == 'EBT' else f}", fam[(t, f)], EBT_C if f == "EBT" else AR_C)
                     for t in ("remi", "ant") for f in ("EBT", "AR")]
             title = "Pooled over attributes"
         else:
@@ -193,7 +193,7 @@ def tab_robust(variants, path):
         for s in ("original", "ebt", "llama", "gpt2"):
             rows.append((f"Part 1 {TOK[tok]}, {NAMES[s]}", lambda j, tok=tok, s=s: f"${p1(j, tok, s):+.2f}$"))
     rows.append(("Part 2 right direction, all", lambda j: pct(p2(j, "overall", "all"))))
-    rows.append(("Part 2 right direction, EBT", lambda j: pct(p2(j, "system family", "EBT"))))
+    rows.append(("Part 2 right direction, Tonic", lambda j: pct(p2(j, "system family", "EBT"))))
     rows.append(("Part 2 right direction, AR", lambda j: pct(p2(j, "system family", "AR baselines"))))
     lines = [r"\begin{tabular}{l" + "r" * len(variants) + "}", r"\toprule",
              " & " + " & ".join(lab for lab, _ in variants) + r" \\", r"\midrule"]
@@ -211,7 +211,7 @@ def tab_training(bt, path):
             ("catch_change 'no difference'", "Identical pair: ``no difference''"),
             ("P2 right direction (all)", "Part 2: requested direction"),
             ("P1 best-worst remi original", "Part 1: REMI original score"),
-            ("P1 best-worst remi ebt", "Part 1: REMI EBT score")]
+            ("P1 best-worst remi ebt", "Part 1: REMI Tonic score")]
     rows = {r["metric"]: r for r in bt["rows"]}
     c = bt["counts"]
     lines = [r"\begin{tabular}{lrrrr}", r"\toprule",
@@ -225,6 +225,20 @@ def tab_training(bt, path):
         dfmt = (f"${d[0]:+.2f}$ [${d[1]:+.2f}$, ${d[2]:+.2f}$]" if score
                 else f"${100 * d[0]:+.0f}$ [${100 * d[1]:+.0f}$, ${100 * d[2]:+.0f}$]").replace("-0$", "0$").replace("+0$", "0$")
         lines.append(f"{lab} & {f(r['None'][0])} & {f(r['Some'][0])} & {f(r['Extensive'][0])} & {dfmt} \\\\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    path.write_text("\n".join(lines) + "\n")
+
+
+def tab_measured(main, path):
+    rows = sorted(main["part2_measured"], key=lambda r: (r["tok"] != "remi", r["attribute"]))
+    lines = [r"\begin{tabular}{llrrrrr}", r"\toprule",
+             r"Tokenizer & Attribute & $\rho$ & $n$ & Moved \% & Heard if moved \% & Heard if not \% \\",
+             r"\midrule"]
+    for r in rows:
+        star = "$^{*}$" if r["p"] < 0.05 else ""
+        not_ = f"{pct(r['right_if_not'])} ({r['n_not']})" if r["n_not"] >= 5 else f"-- ({r['n_not']})"
+        lines.append(f"{TOK[r['tok']]} & {ATTR[r['attribute']]} & ${r['rho']:+.2f}${star} & {r['n']} & "
+                     f"{pct(r['moved_share'])} & {pct(r['right_if_moved'])} & {not_} \\\\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     path.write_text("\n".join(lines) + "\n")
 
@@ -251,6 +265,7 @@ def main():
         variants.append(("Without 686e30f1", json.loads(no686.read_text())))
     tab_robust(variants, args.tables / "robustness.tex")
     tab_training(bt, args.tables / "training.tex")
+    tab_measured(main_, args.tables / "measured.tex")
     print("wrote", sorted(p.name for p in args.out.glob("survey_*.pdf")), sorted(p.name for p in args.tables.glob("*.tex")))
 
 
