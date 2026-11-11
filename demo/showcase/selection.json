@@ -1,7 +1,7 @@
 {
  "meta": {
   "title": "Tonic · Showcase",
-  "subtitle": "<strong>Tonic</strong>, an Energy-Based Transformer (EBT), side by side with two standard language models, <strong>Llama</strong> and <strong>GPT-2</strong>.<span class=\"lede-2\">Each one continues the same short piece of music: first freely, then steered towards a chosen attribute.</span>",
+  "subtitle": "<strong>Tonic</strong>, an Energy-Based Transformer (EBT), side by side with two standard next-token models, <strong>Llama</strong> and <strong>GPT-2</strong>.<span class=\"lede-2\">Each one continues the same short piece of music: first freely, then steered towards a chosen attribute.</span>",
   "author": "Rebecca Ceccatelli",
   "affiliation": "MIT × ETH Zürich",
   "home": "https://rebeccaceccatelli.github.io/tonic/",
