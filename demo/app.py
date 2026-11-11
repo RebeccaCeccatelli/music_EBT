@@ -495,15 +495,20 @@ def _attr_choice_tuples(attrs: list[str]) -> list[tuple[str, str]]:
 #   Ant duration 0.005: 0.78 acc. Collapses toward chance above ~0.01.
 #   Ant pitch_register 0.01: 0.76 acc. Leaves the budget at ~0.012-0.015.
 # Anticipation needs ~4x less λ than REMI.
+# Defaults (2026-11-11) are the by-ear operating points from the showcase picks
+# (docs/thesis_findings/2026-11-11_ear_operating_points.md,
+# demo/survey/ear_operating_points.json), not the held-out rule above.
+# "default_down" applies when the target is below the unguided reference;
+# "default" otherwise (see _direction_lambda).
 _LAMBDA_RANGES_BY_TOK = {
     "REMI": {
-        "velocity":       {"min": 0.02,  "max": 0.07,  "default": 0.03,  "step": 0.005},
+        "velocity":       {"min": 0.02,  "max": 0.07,  "default": 0.04,  "step": 0.005},
         "duration":       {"min": 0.01,  "max": 0.055, "default": 0.02,  "step": 0.005},
-        "pitch_register": {"min": 0.01,  "max": 0.03,  "default": 0.02,  "step": 0.0025},
+        "pitch_register": {"min": 0.01,  "max": 0.03,  "default": 0.02,  "default_down": 0.01, "step": 0.0025},
     },
     "Anticipation-Arrival-Time": {
         "duration":       {"min": 0.002, "max": 0.008, "default": 0.005, "step": 0.001},
-        "pitch_register": {"min": 0.004, "max": 0.015, "default": 0.01,  "step": 0.001},
+        "pitch_register": {"min": 0.004, "max": 0.015, "default": 0.005, "default_down": 0.006, "step": 0.001},
     },
 }
 # Compose (one shared λ over all active attributes) was never swept: start from
@@ -517,6 +522,21 @@ _COMPOSE_LAMBDA_BY_TOK = {
 def _lambda_range(tokenizer_type: str, attribute: str) -> dict:
     by_attr = _LAMBDA_RANGES_BY_TOK.get(tokenizer_type, _LAMBDA_RANGES_BY_TOK["REMI"])
     return by_attr.get(attribute) or _LAMBDA_RANGES_BY_TOK["REMI"][attribute]
+
+
+def _direction_lambda(tokenizer_type: str, attribute: str, target, reference, current):
+    """By-ear EBT λ for the target's direction, or None to leave the slider alone.
+
+    Only for attributes with a "default_down", and only while the slider still
+    sits on one of the two defaults, so a λ the user set by hand is kept.
+    """
+    lam = _lambda_range(tokenizer_type, attribute)
+    down = lam.get("default_down")
+    if down is None or target is None or reference is None or current is None:
+        return None
+    if not any(abs(float(current) - v) < 1e-9 for v in (lam["default"], down)):
+        return None
+    return down if float(target) < float(reference) else lam["default"]
 
 
 # REMI ranges, kept under the old name for code that predates per-tokenizer ranges.
@@ -3161,6 +3181,23 @@ def build_ui():
                     )
                     _row_target.change(_sigma_annotation_html, inputs=[_row_attr, _row_target],
                                         outputs=[_row_sigma])
+
+                    # EBT pitch register: switch λ between the by-ear "down" and
+                    # "up" operating points as the target crosses the reference.
+                    def _on_row_target_direction(attribute, method_key, tokenizer_type, target, current,
+                                                 ref_velocity, ref_duration, ref_pitch_register):
+                        if _SOLO_METHODS.get(method_key, ("EBT", "energy"))[1] != "energy":
+                            return gr.update()
+                        ref = {"velocity": ref_velocity, "duration": ref_duration,
+                               "pitch_register": ref_pitch_register}.get(attribute)
+                        value = _direction_lambda(tokenizer_type, attribute, target, ref, current)
+                        return gr.update() if value is None else gr.update(value=value)
+
+                    _row_target.change(_on_row_target_direction,
+                                        inputs=[_row_attr, _row_method, tokenizer_dd, _row_target, _row_lambda,
+                                                ebt_ref_velocity_state, ebt_ref_duration_state,
+                                                ebt_ref_pitch_register_state],
+                                        outputs=[_row_lambda])
 
                     def _make_row_tokenizer_change():
                         def _on_row_tokenizer_change(tokenizer_type, current_attr, method_key):

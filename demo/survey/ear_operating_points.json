@@ -1,12 +1,49 @@
 {
-  "_about": "The user's by-ear EBT operating points (λ), set 2026-11-09 from their notes: diary 2026-09-23 (REMI velocity 0.03, pitch 0.02), diary 2026-11-06 (Ant pitch 0.005-0.006), the user on 2026-11-09 (REMI velocity 0.03-0.04), and the survey picks of 2026-11-06 for duration (never written down before). Every grid λ listed is marked in the single-attribute pickers. Listening reference only: the thesis accuracy numbers keep the held-out rule's operating points (music_quality/sweeps/tune_*.json). Baselines: no by-ear values, the held-out rule applies.",
+  "_about": "The user's by-ear EBT operating points (λ), set 2026-11-09 from their notes: diary 2026-09-23 (REMI velocity 0.03, pitch 0.02), diary 2026-11-06 (Ant pitch 0.005-0.006), the user on 2026-11-09 (REMI velocity 0.03-0.04), and the survey picks of 2026-11-06 for duration. Updated 2026-11-11 from the showcase single-attribute picks (docs/thesis_findings/2026-11-11_ear_operating_points.md): REMI pitch adds 0.01 (lower pitch). Every grid λ listed is marked in the single-attribute pickers. 'demo_defaults' = the interactive demo's EBT slider defaults (demo/app.py _LAMBDA_RANGES_BY_TOK; 'down' applies when the target is below the unguided reference). Listening reference only: the thesis accuracy numbers keep the held-out rule's operating points. Baselines: no by-ear values, the held-out rule applies.",
   "remi": {
-    "velocity": ["0.03", "0.04"],
-    "duration": ["0.02", "0.025"],
-    "pitch_register": ["0.02"]
+    "velocity": [
+      "0.03",
+      "0.04"
+    ],
+    "duration": [
+      "0.02",
+      "0.025"
+    ],
+    "pitch_register": [
+      "0.01",
+      "0.02"
+    ]
   },
   "ant": {
-    "duration": ["0.005"],
-    "pitch_register": ["0.005", "0.006"]
+    "duration": [
+      "0.005"
+    ],
+    "pitch_register": [
+      "0.005",
+      "0.006"
+    ]
+  },
+  "demo_defaults": {
+    "remi": {
+      "velocity": {
+        "default": 0.04
+      },
+      "duration": {
+        "default": 0.02
+      },
+      "pitch_register": {
+        "up": 0.02,
+        "down": 0.01
+      }
+    },
+    "ant": {
+      "duration": {
+        "default": 0.005
+      },
+      "pitch_register": {
+        "up": 0.005,
+        "down": 0.006
+      }
+    }
   }
 }
