@@ -41,6 +41,7 @@ def _one(job):
         full = app._get_full_song_render(tok, song)
         slider_max, default_offset, _ = app.max_start_offset(tok, song)
         audio, status = app.preview_prompt(tok, song, min(default_offset, slider_max))
+        audio = audio.get("value") if isinstance(audio, dict) else audio
         ok = bool(full) and bool(audio) and str(audio).endswith(".mp3")
         return tok, song, ok, time.time() - t0, "" if ok else f"full={full} preview={status[:120]}"
     except Exception as e:

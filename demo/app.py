@@ -702,6 +702,15 @@ def _card_classes(visible: bool) -> list[str]:
     return ["model-card"] if visible else ["model-card", "hidden-variant"]
 
 
+def _clip_card_classes(visible: bool, model_key: str) -> list[str]:
+    """Section 03 card classes: showcase-style clip card, Tonic outlined."""
+    return _card_classes(visible) + ["clip-card"] + (["ours"] if model_key == "EBT" else [])
+
+
+def _clip_head_html(name: str, tag: str) -> str:
+    """Card header as in the showcase: name, then a tag pill (human / ours / baseline)."""
+    return f'<div class="clip-head"><span class="clip-name">{name}</span><span class="tag {tag}">{tag}</span></div>'
+
 def _target_default_value(attribute: str, ref_velocity: float | None, ref_duration: float | None,
                            ref_pitch_register: float | None = None) -> float:
     """Before the user deliberately moves the target slider, it should read
@@ -945,6 +954,29 @@ def _minimal_hparams(tokenizer_type: str) -> Namespace:
 
 
 _tokenizer_cache: dict = {}
+
+# Anticipation tokens carry no loudness and the anticipation library decodes
+# every note at velocity 72, about 5 dB quieter than the original recordings
+# (2026-11-11: -27.9 vs -22.8 dB over 3 songs). The demo renders them at 104,
+# which matches (-22.7 dB). Demo audio only; the thesis/archive renders keep 72.
+_ANT_RENDER_VELOCITY = 104
+
+
+def _render_midi_bytes(tokens: list[int], tokenizer) -> bytes:
+    from inference.mus.tokens_to_midi import tokens_to_midi
+    raw = tokens_to_midi(tokens, tokenizer)
+    if type(tokenizer).__name__ != "AnticipationTokenizerWrapper":
+        return raw
+    import io
+    import mido
+    mid = mido.MidiFile(file=io.BytesIO(raw))
+    for track in mid.tracks:
+        for msg in track:
+            if msg.type == "note_on" and msg.velocity > 0:
+                msg.velocity = _ANT_RENDER_VELOCITY
+    buf = io.BytesIO()
+    mid.save(file=buf)
+    return buf.getvalue()
 
 
 def _get_tokenizer(tokenizer_type: str):
@@ -1484,7 +1516,7 @@ def _clear_generated_results():
     main_slots = []
     for key in _SLOT_KEYS:
         main_slots.extend(_slot_done(None, key))
-    model_cols = tuple(gr.update(elem_classes=_card_classes(False)) for _ in _MODEL_KEYS)
+    model_cols = tuple(gr.update(elem_classes=_clip_card_classes(False, k)) for k in _MODEL_KEYS)
     solo_reset = []
     for _ in range(_MAX_SOLO_BATCH):
         solo_reset.extend((gr.update(), "", gr.update(visible=True, value=_idle_placeholder_html()),
@@ -1524,8 +1556,8 @@ def preview_prompt(tokenizer_type: str, song_choice: str, start_offset: float):
             # any snap-to-nearest-valid-position adjustment.
             # Anticipation has no loudness tokens: the prompt (and every continuation)
             # plays at one fixed velocity, while the full song is the original MIDI.
-            flat = ("<br>Anticipation has no loudness tokens, so every note of the prompt plays at the same "
-                    "volume; the full song above is the original recording." if _is_triplet_tokenizer(tokenizer_type) else "")
+            flat = ("<br>Anticipation has no loudness tokens, so every note plays at the same loudness; "
+                    "the full song above is the original recording." if _is_triplet_tokenizer(tokenizer_type) else "")
             if _is_seconds_mode(tokenizer_type, song_choice):
                 actual_seconds = _token_index_to_seconds(tokenizer_type, song_choice, token_offset)
                 return (f'▶ **Now previewing** “{song_choice}”, from **{actual_seconds:.1f} s** '
@@ -1533,11 +1565,12 @@ def preview_prompt(tokenizer_type: str, song_choice: str, start_offset: float):
             return f"▶ **Now previewing** {label} · {_TOK_PRETTY.get(tokenizer_type, tokenizer_type)} format{flat}"
 
         # Named songs: one cached preview per (song, start token), on disk.
-        base = (_song_cache_base("preview", tokenizer_type, song_choice, str(token_offset))
+        vel_tag = f":v{_ANT_RENDER_VELOCITY}" if _is_triplet_tokenizer(tokenizer_type) else ""
+        base = (_song_cache_base("preview", tokenizer_type, song_choice, f"{token_offset}{vel_tag}")
                 if _is_seconds_mode(tokenizer_type, song_choice) else None)
         hit = _cached_clip(base) if base else None
         if hit:
-            return hit, _status(song_choice)
+            return gr.update(value=hit, playback_position=0), _status(song_choice)
 
         tokens, _, label, _ = _resolve_prompt(tokenizer_type, song_choice, token_offset)
         tokenizer = _get_tokenizer(tokenizer_type)
@@ -1548,14 +1581,14 @@ def preview_prompt(tokenizer_type: str, song_choice: str, start_offset: float):
         out_dir = Path(tempfile.mkdtemp(prefix="demo_preview_"))
         midi_path = out_dir / "preview.mid"
         wav_path  = out_dir / "preview.wav"
-        midi_path.write_bytes(tokens_to_midi(tokens, tokenizer))
+        midi_path.write_bytes(_render_midi_bytes(tokens, tokenizer))
         simple_synth(str(midi_path), str(wav_path))
         if wav_path.exists():
             roll = _roll_data(wav_path, midi_path, prompt_only=True)
             served = _serve_audio(wav_path, roll)
             if base:
                 _store_clip(base, served, roll)
-            return served, _status(label)
+            return gr.update(value=served, playback_position=0), _status(label)
         return None, "⚠️ WAV synthesis failed."
     except Exception as e:
         return None, f"❌ Preview failed:\n{e}\n{traceback.format_exc()}"
@@ -1584,7 +1617,7 @@ def render_full_song(tokenizer_type: str, song_choice: str):
     if not rendered:
         return gr.update(visible=False), gr.update(value=None)
     wav_path, _ = rendered
-    return gr.update(visible=True), gr.update(value=wav_path)
+    return gr.update(visible=True), gr.update(value=wav_path, playback_position=0)
 
 
 @_timed
@@ -1759,7 +1792,7 @@ def _synth_with_retry(tokens: list[int], tokenizer, out_dir: Path, name: str, at
         try:
             midi_path = out_dir / f"{name}.mid"
             wav_path = out_dir / f"{name}.wav"
-            midi_path.write_bytes(tokens_to_midi(tokens, tokenizer))
+            midi_path.write_bytes(_render_midi_bytes(tokens, tokenizer))
             simple_synth(str(midi_path), str(wav_path))
             # Also guard against a truncated/zero-byte file from a render
             # that was killed or interrupted mid-write under load —
@@ -1770,7 +1803,7 @@ def _synth_with_retry(tokens: list[int], tokenizer, out_dir: Path, name: str, at
                 prompt_midi = None
                 if prompt_tokens is not None and prompt_tokens is not tokens:
                     prompt_midi = out_dir / f"{name}_prompt_only.mid"
-                    prompt_midi.write_bytes(tokens_to_midi(prompt_tokens, tokenizer))
+                    prompt_midi.write_bytes(_render_midi_bytes(prompt_tokens, tokenizer))
                 return _write_roll(wav_path, midi_path, prompt_midi, prompt_only=prompt_tokens is tokens), None
             last_err = "synthesis produced an empty file"
         except Exception as e:
@@ -1983,7 +2016,7 @@ def _slot_done(wav_path, key: str = ""):
     # once shown). Clearing the value alongside visible=False is what actually
     # hides it.
     if wav_path:
-        return gr.update(visible=False, value=""), gr.update(visible=True, value=wav_path)
+        return gr.update(visible=False, value=""), gr.update(visible=True, value=wav_path, playback_position=0)
     # Nothing was produced (skipped model, missing checkpoint, or an error) —
     # show the idle message instead of an empty audio player.
     return gr.update(visible=True, value=_idle_placeholder_html(_slot_idle_text(key))), gr.update(visible=False, value=None)
@@ -2048,7 +2081,7 @@ def generate_all(
     # doesn't show three empty "nothing yet" boxes before you've asked for
     # anything, unlike the shared prompt/ground-truth boxes above them,
     # which stay visible since "waiting on a prompt choice" is real state.
-    model_col_reveal = tuple(gr.update(elem_classes=_card_classes(True)) for _ in _MODEL_KEYS)
+    model_col_reveal = tuple(gr.update(elem_classes=_clip_card_classes(True, k)) for k in _MODEL_KEYS)
 
     def ref_tuple():
         # Plain values here leave the Audio component's own `visible` prop
@@ -2061,10 +2094,10 @@ def generate_all(
         # text without scrolling back up to the shared copy above. Two
         # separate gr.update() calls (not one object reused) so each output
         # component gets its own update instance.
-        return (gr.update(visible=bool(ebt_reference_wav), value=ebt_reference_wav),
+        return (gr.update(visible=bool(ebt_reference_wav), value=ebt_reference_wav, playback_position=0),
                 ebt_reference_velocity, ebt_reference_duration, ebt_reference_pitch_register,
                 dict(ref_values),
-                gr.update(visible=bool(ebt_reference_wav), value=ebt_reference_wav))
+                gr.update(visible=bool(ebt_reference_wav), value=ebt_reference_wav, playback_position=0))
 
     # Only two yields total: this immediate "Starting…" for instant feedback,
     # then one single final yield with the complete result. Used to yield
@@ -2275,7 +2308,7 @@ def _card_classes_slot_helpers():
         # visible=False is what actually hides it.
         if wav_path:
             return (gr.update(elem_classes=_card_classes(True)), title, gr.update(visible=False, value=""),
-                    gr.update(visible=True, value=wav_path), gauge)
+                    gr.update(visible=True, value=wav_path, playback_position=0), gauge)
         return failed_slot(title, gauge)
 
     return hidden_slot, pending_slot, failed_slot, done_slot
@@ -2816,8 +2849,22 @@ footer { display: none !important; }
 }
 .tonic-roll-cont:hover { border-color: #a195ff; background: rgba(139,124,255,0.25); }
 
-/* Section 03: one full-width row per system, rolls on a shared time axis. */
+/* Section 03: clip cards side by side (showcase style), rolls on a shared time axis. */
 .compare-stack { gap: 10px !important; }
+.gradio-container .compare-stack { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+    gap: 12px !important; align-items: start; }
+.gradio-container .compare-stack > .hidden-variant { display: none !important; }
+.gradio-container .clip-card { padding: 12px 14px !important; gap: 8px !important; min-width: 0 !important; }
+.gradio-container .clip-card .block:has(> .clip-head), .gradio-container .clip-card .html-container:has(.clip-head) {
+    padding: 0 !important; background: transparent !important; border: 0 !important; }
+.clip-head { display: flex; align-items: center; gap: 10px; }
+.clip-head .clip-name { font: 650 15px/1.2 Inter, sans-serif; color: #e8eaf2; }
+.clip-head .tag { margin-left: auto; padding: 3px 9px; border-radius: 999px; font: 600 10.5px "JetBrains Mono", ui-monospace, monospace;
+    letter-spacing: .06em; text-transform: uppercase; color: #9298ab; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.04); }
+.clip-head .tag.ours { color: #d6d0ff; border-color: rgba(139,124,255,.5); background: rgba(139,124,255,.15); }
+.clip-head .tag.human { color: #bfeee9; border-color: rgba(63,208,201,.45); background: rgba(63,208,201,.1); }
+.compare-stack .tonic-roll-cont { display: none !important; }
+.compare-stack .gen-placeholder .gen-text { font-size: 12.5px !important; padding: 0 8px; text-align: center; }
 .compare-stack .model-card .prose h3 { margin: 0 0 4px !important; font-size: 15px; }
 
 /* Attribute shift gauge (see _shift_gauge_html): a diverging bar centred on the
@@ -3224,6 +3271,8 @@ body, gradio-app {
     border-radius: 20px !important; padding: 14px !important; gap: 10px !important; }
 .prompt-row { gap: 14px !important; align-items: flex-start !important; }
 .gradio-container .hint-wrap { background: transparent !important; border: 0 !important; padding: 6px 4px 2px !important; }
+.gradio-container .section-hint { padding: 0 0 8px 38px !important; max-width: calc(78ch + 38px); }
+.section-hint .hint b { color: #c9cddb; font-weight: 600; }
 .hint { display: flex; gap: 10px; align-items: flex-start; color: #8a90a3; font-size: 13px; line-height: 1.5; }
 .hint .i { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; margin-top: 1px;
     font: 700 11px/1 Inter, sans-serif; color: #3fd0c9; border: 1px solid rgba(63,208,201,0.5); }
@@ -3496,7 +3545,9 @@ _ROLL_HEAD = r"""
     recs.forEach((r, block) => {
       const m = block.__media;
       let frac = null;
-      if (r.data && m && !(m.paused && !m.currentTime)) frac = m.currentTime / r.range.tMax;
+      const startHead = block.id === "full-song" && r.clickFrac != null && (!m || m.paused);
+      if (r.data && startHead) frac = r.clickFrac;  // paused full song: show the prompt start
+      else if (r.data && m && !(m.paused && !m.currentTime)) frac = m.currentTime / r.range.tMax;
       else if (r.data && r.clickFrac != null) frac = r.clickFrac;
       if (frac == null) { r.head.style.display = "none"; return; }
       r.head.style.display = "block";
@@ -3679,22 +3730,23 @@ def build_ui():
             generate_btn = gr.Button("Generate", variant="primary", size="lg", elem_classes="gen-btn")
 
         gr.Markdown('## <span class="kicker">03</span>Listen to the unguided generations', elem_classes="section-title")
-        status_box = gr.Textbox(label="Status", lines=8, interactive=False, placeholder=" ", elem_classes="status-log")
         gr.Markdown(
-            "Each row plays the same prompt (shaded) followed by a continuation: first how the song "
-            "really goes on, then each model's version. All rows share one time axis and pitch range, "
-            "so you can compare them by eye. Click a roll to play from that point, or "
-            "**▶ continuation** to skip the prompt.",
+            "Every row starts with the same prompt (shaded), then continues: first how the song really "
+            "goes on, then each model's version.",
             elem_classes="section-sub",
         )
+        gr.HTML('<div class="hint"><span class="i">i</span><span>All rows share one time axis and pitch range, so '
+                'you can compare them by eye. <b>Click a roll</b> to play from that point.</span></div>',
+                elem_classes="hint-wrap section-hint")
+        status_box = gr.Textbox(label="Status", lines=8, interactive=False, placeholder=" ", elem_classes="status-log")
         output_slots: dict[str, tuple] = {}
         model_output_cols: dict[str, gr.Column] = {}
-        # One full-width row per system (not side-by-side columns): the rolls
-        # get the whole width, and .roll-sync puts them on one shared axis
-        # (see syncGroup in _ROLL_HEAD).
+        # Clip cards side by side, as in the showcase (name + tag; Tonic outlined),
+        # wrapping on narrow screens; .roll-sync keeps one shared time axis and
+        # pitch range (see syncGroup in _ROLL_HEAD).
         with gr.Column(elem_classes=["roll-sync", "compare-stack"]):
-            with gr.Column(elem_classes="model-card"):
-                gr.Markdown("### Original")
+            with gr.Column(elem_classes=["model-card", "clip-card"]):
+                gr.HTML(_clip_head_html("Original", "human"))
                 output_slots["shared_gt"] = _audio_slot(
                     _slot_label("shared_gt"), idle_text=_slot_idle_text("shared_gt"))
             for model_key in _MODEL_KEYS:
@@ -3703,8 +3755,8 @@ def build_ui():
                 # Continuation" box for a model you haven't run yet is just
                 # clutter, unlike the shared prompt/ground-truth boxes above
                 # (those are legitimately "waiting on you to choose a prompt").
-                with gr.Column(elem_classes=_card_classes(False)) as _model_col:
-                    gr.Markdown(f"### {_shown(model_key)}")
+                with gr.Column(elem_classes=_card_classes(False) + ["clip-card"] + (["ours"] if model_key == "EBT" else [])) as _model_col:
+                    gr.HTML(_clip_head_html(_shown(model_key), "ours" if model_key == "EBT" else "baseline"))
                     output_slots[f"{model_key}_combined"] = _audio_slot(_slot_label(f"{model_key}_combined"))
                 model_output_cols[model_key] = _model_col
 
