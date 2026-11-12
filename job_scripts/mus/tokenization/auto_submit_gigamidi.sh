@@ -236,13 +236,8 @@ run_download_and_preprocessing() {
         export_cmd="$export_cmd && export REMOTE_DATA_STORAGE='$CUSTOM_STORAGE_PATH'"
     fi
     
-    if [ -n "${WANDB_API_KEY:-}" ]; then
-        export_cmd="$export_cmd && export WANDB_API_KEY='${WANDB_API_KEY}'"
-    fi
-    
-    if [ -n "${HUGGING_FACE_HUB_TOKEN:-}" ]; then
-        export_cmd="$export_cmd && export HUGGING_FACE_HUB_TOKEN='${HUGGING_FACE_HUB_TOKEN}'"
-    fi
+    # Secrets (WANDB_API_KEY, HUGGING_FACE_HUB_TOKEN) reach the job through
+    # --export=ALL; never put them in --wrap, where other cluster users can see them.
     
     # Build preprocessing commands (download + extract + convert MIDI to .compound.txt, NO tokenization)
     # Step 1: Download and extract GigaMIDI
@@ -277,7 +272,7 @@ run_download_and_preprocessing() {
     fi
     
     print_success "Preprocessing job submitted with ID: $job_id"
-    print_info "Logs: $job_log"
+    print_info "SLURM output is discarded; progress is logged to W&B (Giga-Midi-Tokenization)."
     
     # Monitor preprocessing job
     print_info "Monitoring preprocessing job..."
@@ -295,7 +290,7 @@ run_download_and_preprocessing() {
             return 0
         elif [ "$job_status" = "FAILED" ]; then
             print_error "Preprocessing job FAILED"
-            print_error "Check logs: $job_log"
+            print_error "Check: sacct -j $job_id"
             return 1
         elif [ "$job_status" = "TIMEOUT" ]; then
             print_error "Preprocessing job TIMEOUT"
@@ -355,6 +350,7 @@ submit_job() {
     [ "$VANILLA" -eq 1 ] && job_name="${job_name}-vanilla"
     [ "$resume" -eq 1 ] && job_name="${job_name}-resume-${attempt}"
     
+    # Only the job ID goes to stdout (the caller captures it); messages go to stderr.
     # Build sbatch command that will run tokenize_gigaMIDI.py directly
     # We avoid custom.sh because it runs full pipeline; we want checkpoint-aware tokenization
     local root_dir="$GIGAMIDI_ROOT"
@@ -372,13 +368,11 @@ submit_job() {
     export_cmd="$export_cmd export TQDM_MININTERVAL=0.1 && "
     export_cmd="$export_cmd export WANDB_CONSOLE=wrap_raw && "
     export_cmd="$export_cmd export REMOTE_DATA_STORAGE='${CUSTOM_STORAGE_PATH:-}'"
-    if [ -n "${WANDB_API_KEY:-}" ]; then
-        export_cmd="$export_cmd && export WANDB_API_KEY='${WANDB_API_KEY}'"
-    fi
+    # WANDB_API_KEY reaches the job through --export=ALL (not via --wrap).
     
     # Logs are tracked in wandb instead of local files
     
-    print_info "Submitting: sbatch --job-name='$job_name' --partition=$TOK_PARTITION -c $TOK_CPUS --mem=$TOK_MEM --time=$TOK_TIME ..."
+    print_info "Submitting: sbatch --job-name='$job_name' --partition=$TOK_PARTITION -c $TOK_CPUS --mem=$TOK_MEM --time=$TOK_TIME ..." >&2
 
     local output=$( \
         sbatch --job-name="$job_name" \
@@ -396,10 +390,10 @@ submit_job() {
     local job_id=$(echo "$output" | grep -oP 'Submitted batch job \K[0-9]+' || echo "")
 
     if [ -n "$job_id" ]; then
-        print_success "Job submitted with ID: $job_id (split: $split, attempt: $attempt/$MAX_ATTEMPTS)"
+        print_success "Job submitted with ID: $job_id (split: $split, attempt: $attempt/$MAX_ATTEMPTS)" >&2
         echo "$job_id"
     else
-        print_error "Failed to submit job"
+        print_error "Failed to submit job" >&2
         echo "$output" >&2
         echo ""
     fi
