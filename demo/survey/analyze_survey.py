@@ -200,6 +200,8 @@ def main():
             out["part2"].append(dict(grouping=gname, group=g, signed=m, lo=lo, hi=hi, right=right, right_lo=rlo,
                                      right_hi=rhi, wrong=wrong, none=none, n=len(vals), people=len(by_pid)))
 
+    part2_extra(subs, key, out)
+
     report_bw("Part 3: steered versions by tokenizer", "part3_tok", {"compare"}, lambda k: k["tok"])
     report_bw("Part 3: steered versions by tokenizer x attribute", "part3", {"compare"},
               lambda k: (k["tok"], k["attribute"]))
@@ -236,6 +238,58 @@ def main():
     if args.json:
         args.json.write_text(json.dumps(out, indent=1, default=str))
         print(f"\nwrote {args.json}")
+
+
+METRIC = {"velocity": "velocity", "duration": "note_beats", "pitch_register": "pitch"}
+
+
+def part2_extra(subs, key, out):
+    """Part 2 checks: sign test vs chance, target size, listening device, and
+    perceived vs measured change (attribute of the steered clip minus that of
+    its reference, from the key's metrics, signed by the requested direction)."""
+    from scipy.stats import binomtest, spearmanr
+    T = []
+    for s in subs:
+        for r in s["responses"]:
+            if r["kind"] != "change" or r["answer"].get("skipped"):
+                continue
+            pool = key["pool"]["change"][r["pool_index"]]
+            ref, test = key["clips"][pool["reference"]], key["clips"][pool["test"]]
+            m = METRIC[pool["attribute"]]
+            T.append(dict(pid=s["id"], tok=pool["tok"], attr=pool["attribute"], sd=abs(test.get("sd", 0)),
+                          device=s.get("background", {}).get("device") or "n/a",
+                          v=pool["direction"] * r["answer"]["scale"],
+                          d=pool["direction"] * (test["metrics"][m] - ref["metrics"][m])))
+    right, opp = sum(t["v"] > 0 for t in T), sum(t["v"] < 0 for t in T)
+    p = binomtest(right, right + opp).pvalue
+    print(f"\n== Part 2 sign test: {right} requested vs {opp} opposite direction, p = {p:.1e}")
+    out["part2_sign"] = dict(right=right, opposite=opp, p=p)
+    out["part2_by"] = []
+    for field in ("sd", "device"):
+        print(f"  -- by {field}")
+        for g in sorted({t[field] for t in T}, key=str):
+            by_pid = defaultdict(list)
+            for t in T:
+                if t[field] == g:
+                    by_pid[t["pid"]].append(t["v"] > 0)
+            m, lo, hi = boot(by_pid, mean)
+            n = sum(map(len, by_pid.values()))
+            print(f"  {str(g):24s} right {m:.2f} [{lo:.2f}, {hi:.2f}]  n={n}")
+            out["part2_by"].append(dict(field=field, group=g, right=m, lo=lo, hi=hi, n=n))
+    print("\n== Part 2 perceived vs measured change (Spearman; right-direction share split by measured change)")
+    out["part2_measured"] = []
+    for tok, attr in sorted({(t["tok"], t["attr"]) for t in T}):
+        x = [t for t in T if (t["tok"], t["attr"]) == (tok, attr)]
+        rho, prho = spearmanr([t["d"] for t in x], [t["v"] for t in x])
+        moved = [t["v"] > 0 for t in x if t["d"] > 0]
+        not_moved = [t["v"] > 0 for t in x if t["d"] <= 0]
+        row = dict(tok=tok, attribute=attr, rho=rho, p=prho, n=len(x), moved_share=len(moved) / len(x),
+                   right_if_moved=mean(moved), n_moved=len(moved),
+                   right_if_not=mean(not_moved), n_not=len(not_moved))
+        print(f"  {tok:5s} {attr:15s} rho {rho:+.2f} (p {prho:.3f}) n={len(x)}  measured moved as requested "
+              f"{row['moved_share']:.2f}; heard right {row['right_if_moved']:.2f} if moved (n={len(moved)}), "
+              f"{row['right_if_not']:.2f} if not (n={len(not_moved)})")
+        out["part2_measured"].append(row)
 
 
 def cacophony(subs, key):
