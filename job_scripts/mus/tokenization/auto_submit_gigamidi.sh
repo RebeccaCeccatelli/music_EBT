@@ -48,6 +48,7 @@ DOWNLOAD_ONLY=0
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
+
 # Load .env for wandb and other environment variables
 ENV_PATH="$PROJECT_ROOT/.env"
 if [ -f "$ENV_PATH" ]; then
@@ -59,6 +60,14 @@ if [ -f "$ENV_PATH" ]; then
 else
     echo "⚠️  Warning: .env file not found at $ENV_PATH"
 fi
+
+# Site-specific settings: override with environment variables on other clusters.
+# GIGAMIDI_ROOT holds midi/ (input) and tokens/ (output).
+GIGAMIDI_ROOT="${GIGAMIDI_ROOT:-${CUSTOM_STORAGE_PATH:-$HOME/orcd/pool/music_datasets}/giga-midi}"
+TOK_PARTITION="${TOK_PARTITION:-mit_normal}"   # SLURM partition
+TOK_TIME="${TOK_TIME:-12:00:00}"               # wall-clock limit per job
+TOK_CPUS="${TOK_CPUS:-16}"
+TOK_MEM="${TOK_MEM:-32G}"
 
 # ============================================================================
 # FUNCTIONS
@@ -153,6 +162,12 @@ Options:
   --augment N             Augmentation factor: 1=plain AR, 10=AMT with controls (default: 10)
   --splits SPLIT1 SPLIT2  Process specific splits (default: train test validation)
   --max-attempts N        Max resume attempts per split (default: 5)
+
+Environment (site-specific, with defaults for the MIT ORCD cluster):
+  GIGAMIDI_ROOT           Dataset root with midi/ and tokens/
+  TOK_PARTITION           SLURM partition (default: mit_normal)
+  TOK_TIME                Wall-clock limit per job (default: 12:00:00)
+  TOK_CPUS, TOK_MEM       CPUs and memory per job (default: 16, 32G)
   --poll-interval N       Seconds between status checks (default: 30)
   --detach                Submit job and return immediately (no monitoring)
   --skip-download         Skip download/preprocessing step, only tokenize
@@ -233,20 +248,20 @@ run_download_and_preprocessing() {
     # Step 1: Download and extract GigaMIDI
     # Step 2: Run midi_preprocess.py to convert all MIDI files to .compound.txt format
     local preprocess_cmd="python3 -m dataloaders.giga_midi_dataloader && "
-    preprocess_cmd="$preprocess_cmd python3 data/mus/symbolic/tokenization/anticipation/train/midi_preprocess.py /home/rebcecca/orcd/pool/music_datasets/giga-midi/midi"
+    preprocess_cmd="$preprocess_cmd python3 data/mus/symbolic/tokenization/anticipation/train/midi_preprocess.py '$GIGAMIDI_ROOT/midi'"
     
     # Logs are tracked in wandb instead of local files
     
-    print_info "Submitting: sbatch --job-name='$job_name' -c 16 --mem=32G --time=12:00:00 ..."
+    print_info "Submitting: sbatch --job-name='$job_name' --partition=$TOK_PARTITION -c $TOK_CPUS --mem=$TOK_MEM --time=$TOK_TIME ..."
     print_info "SLURM logs will be discarded. Metrics logged to wandb."
     
     local output=$( \
         sbatch --job-name="$job_name" \
-               --partition=mit_normal \
+               --partition="$TOK_PARTITION" \
                --export=ALL \
-               -c 16 \
-               --mem=32G \
-               --time=12:00:00 \
+               -c "$TOK_CPUS" \
+               --mem="$TOK_MEM" \
+               --time="$TOK_TIME" \
                --output=/dev/null \
                --error=/dev/null \
                --wrap="$export_cmd && $preprocess_cmd" \
@@ -342,7 +357,7 @@ submit_job() {
     
     # Build sbatch command that will run tokenize_gigaMIDI.py directly
     # We avoid custom.sh because it runs full pipeline; we want checkpoint-aware tokenization
-    local root_dir="${CUSTOM_STORAGE_PATH:-/home/rebcecca/orcd/pool/music_datasets}/giga-midi"
+    local root_dir="$GIGAMIDI_ROOT"
     local python_cmd="cd '$PROJECT_ROOT' && python3 data/mus/symbolic/tokenization/anticipation/train/tokenize_gigaMIDI.py"
     python_cmd="$python_cmd --root_dir '$root_dir'"
     python_cmd="$python_cmd --split '$split'"
@@ -363,15 +378,15 @@ submit_job() {
     
     # Logs are tracked in wandb instead of local files
     
-    print_info "Submitting: sbatch --job-name='$job_name' --partition=mit_normal -c 16 --mem=32G --time=12:00:00 ..."
+    print_info "Submitting: sbatch --job-name='$job_name' --partition=$TOK_PARTITION -c $TOK_CPUS --mem=$TOK_MEM --time=$TOK_TIME ..."
 
     local output=$( \
         sbatch --job-name="$job_name" \
-               --partition=mit_normal \
+               --partition="$TOK_PARTITION" \
                --export=ALL \
-               -c 16 \
-               --mem=32G \
-               --time=12:00:00 \
+               -c "$TOK_CPUS" \
+               --mem="$TOK_MEM" \
+               --time="$TOK_TIME" \
                --output=/dev/null \
                --error=/dev/null \
                --wrap="$export_cmd && $python_cmd" \
@@ -398,7 +413,7 @@ get_token_dir() {
     else
         folder_name="anticipation"
     fi
-    echo "${CUSTOM_STORAGE_PATH:-/home/rebcecca/orcd/pool/music_datasets}/giga-midi/tokens/$folder_name"
+    echo "$GIGAMIDI_ROOT/tokens/$folder_name"
 }
 
 # Load checkpoint and get progress info
