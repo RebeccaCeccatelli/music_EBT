@@ -17,7 +17,7 @@
       eyebrow: "A note on ethics, from the author",
       title: "A tool for musicians to work with",
       personal: [
-        "This work is <b>not</b> meant to replace musicians and artists. It is about giving them better tools.",
+        "This work is <b>not</b> meant to replace musicians and artists. It aims to give them better tools.",
         "I have been a musician all my life, and many of my friends make their living from music. I know how much effort, love and passion go into it.",
       ],
       h1: "What this work does",
