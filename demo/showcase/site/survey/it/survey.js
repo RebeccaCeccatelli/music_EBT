@@ -499,18 +499,26 @@
     // Optional: which versions sounded cacophonous? (multi-select, per clip)
     const cacoClips = t.order || [pool.reference, pool.test];
     const cacoNames = t.order ? t.order.map((_, i) => LETTERS[i]) : ["Riferimento", "Seconda versione"];
-    if (t.order === null && pool.reference === pool.test) cacoClips.pop();   // same clip twice
+    // Every version always gets its own tick box, even when the "second
+    // version" is the reference clip itself (a no-change trial) or a clip
+    // repeats: hiding a box would give the trial away. Ticks are kept per box
+    // (caco_ticks, by position); cacophonous stays the list of ticked clips.
     answer.cacophonous = answer.cacophonous || [];
+    if (!answer.caco_ticks) answer.caco_ticks = cacoClips.flatMap((hash, i) => answer.cacophonous.includes(hash) ? [i] : []);
+    const syncCaco = () => {
+      answer.cacophonous = [...new Set(answer.caco_ticks.map((i) => cacoClips[i]))];
+    };
     const caco = h("fieldset", "q caco");
     caco.append(h("legend", null, "Facoltativo: qualche versione ti è sembrata <b>cacofonica</b> (stridente, caotica, con note quasi a caso)? Selezionala."));
     const cacoRow = h("div", "chips");
-    cacoClips.forEach((hash, i) => {
+    cacoClips.forEach((_, i) => {
       const b = h("button", "chip tick", cacoNames[i]);
       b.type = "button";
-      if (answer.cacophonous.includes(hash)) b.classList.add("on");
+      if (answer.caco_ticks.includes(i)) b.classList.add("on");
       b.addEventListener("click", () => {
-        const on = !answer.cacophonous.includes(hash);
-        answer.cacophonous = on ? [...answer.cacophonous, hash] : answer.cacophonous.filter((x) => x !== hash);
+        const on = !answer.caco_ticks.includes(i);
+        answer.caco_ticks = on ? [...answer.caco_ticks, i] : answer.caco_ticks.filter((x) => x !== i);
+        syncCaco();
         b.classList.toggle("on", on);
       });
       cacoRow.append(b);
