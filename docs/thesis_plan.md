@@ -127,9 +127,9 @@ the survey). Agree which session writes which Results sections before editing `r
    - Combined control (from item 1).
 
 **Small checks (minutes each):**
-- [ ] `anticipation-musicEBT` fork public, licence, README (also in Gaps above).
-- [ ] Verify the two unchecked citations; add missing references (also in Gaps above).
-- [ ] Future Work in `conclusion.tex`; compute-environment limitation in Discussion (writing only).
+- [x] (done 2026-11-11) `anticipation-musicEBT` fork public, licence, README (also in Gaps above).
+- [x] (done 2026-11-11) Verify the two unchecked citations; add missing references (also in Gaps above).
+- [x] (done 2026-11-11) Future Work in `conclusion.tex`; compute-environment limitation in Discussion (writing only).
 
 **Not before the deadline (new runs; already stated as limitations / future work):** fix + retrain the Ant duration
 regressors and rerun those sweeps (few GPU-days); same-gate composition on the final checkpoints (preliminary runs in
