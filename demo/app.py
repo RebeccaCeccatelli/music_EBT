@@ -75,6 +75,37 @@ from gradio_clickaudio import ClickAudio
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+
+def _import_wandb_off_root():
+    """The repo root holds a `wandb` symlink to W&B run storage on /orcd/pool, and
+    the root is on sys.path, so every lookup of the wandb package (Lightning /
+    accelerate probe for it when a model first loads) stats that symlink first.
+    On nodes where /orcd/pool hangs the stat never returns (2026-11-11, node4200:
+    the first Generate stuck in accelerate's is_wandb_available, GPU idle).
+    Import the real package once with the root off sys.path; later lookups,
+    importlib.util.find_spec included, then find it in sys.modules."""
+    root = os.path.realpath(ROOT)
+    saved = list(sys.path)
+    try:
+        sys.path[:] = [p for p in sys.path if os.path.realpath(p or os.getcwd()) != root]
+        import wandb  # noqa: F401
+    except Exception as e:
+        print(f"[startup] wandb not preloaded: {e}", flush=True)
+    finally:
+        sys.path[:] = saved
+
+
+# W&B keeps its settings and run files under <WANDB_DIR>/wandb, by default the
+# working directory, i.e. the repo root's `wandb` symlink into /orcd/pool:
+# wandb.init then hung on nodes where pool hangs (2026-11-11, node4105).
+os.environ.setdefault("WANDB_DIR", str(Path.home() / "orcd/scratch/rebcecca/music_EBT_logs/wandb_demo"))
+Path(os.environ["WANDB_DIR"]).mkdir(parents=True, exist_ok=True)
+# Logging every clip to W&B is opt-in (DEMO_WANDB=1): it ran inside each
+# generation and added a network round trip per clip.
+_DEMO_WANDB = os.environ.get("DEMO_WANDB", "0") == "1"
+
+_import_wandb_off_root()
+
 SCRATCH_DIR = Path.home() / "orcd/scratch/rebcecca/music_EBT_logs"
 PROMPTS_FILE = ROOT / "demo/selected_prompts.json"
 WANDB_PROJECT = "music_inference_ebt"
@@ -108,6 +139,28 @@ def _local_copy_path(path: str) -> Path:
 def _local(path: str) -> str:
     local = _local_copy_path(path)
     return str(local) if local.exists() else path
+
+
+def _redirect_tokenizer_config_to_local():
+    """Model classes and load_checkpoint read the tokenizer config through the path
+    stored in the checkpoint, which is on /orcd/pool. Point every load_tokenizer
+    call at the scratch copy instead; this must run before the model modules are
+    imported (they bind load_tokenizer when a model first loads)."""
+    import data.mus.symbolic.tokenization.tokenizer_utils as tu
+    if getattr(tu.load_tokenizer, "_demo_local", False):
+        return
+    original = tu.load_tokenizer
+
+    def load_tokenizer(tokenizer_type, tokenizer_config_path=None, *args, **kwargs):
+        if tokenizer_config_path:
+            tokenizer_config_path = _local(tokenizer_config_path)
+        return original(tokenizer_type, tokenizer_config_path, *args, **kwargs)
+
+    load_tokenizer._demo_local = True
+    tu.load_tokenizer = load_tokenizer
+
+
+_redirect_tokenizer_config_to_local()
 
 
 def _tokenizer_config_path(tokenizer_type: str) -> str | None:
@@ -928,7 +981,8 @@ def _load(model_key: str, ckpt_path: str, device: str):
     from data.mus.symbolic.tokenization.tokenizer_utils import load_tokenizer
     tokenizer, _, pad_id = load_tokenizer(
         tokenizer_type=hparams.tokenizer_type,
-        tokenizer_config_path=getattr(hparams, 'tokenizer_config_path', None),
+        tokenizer_config_path=(_local(hparams.tokenizer_config_path)  # scratch copy, not /orcd/pool
+                               if getattr(hparams, 'tokenizer_config_path', None) else None),
         dataset_name=getattr(hparams, 'dataset_name', 'giga_midi'),
     )
     _model_cache[ckpt_path] = (model, hparams, tokenizer)
@@ -1770,6 +1824,46 @@ def _write_roll(wav_path, midi_path, prompt_midi=None, prompt_only: bool = False
     return _serve_audio(wav_path, _roll_data(wav_path, midi_path, prompt_midi, prompt_only, trim))
 
 
+_MAX_SILENCE_S = 1.0   # a rest longer than this (nothing sounding) in a rendered result ...
+_KEEP_SILENCE_S = 0.5  # ... is shortened to this
+
+
+def _close_silences(midi_path, after_s: float = 0.0) -> float:
+    """Shorten every stretch where nothing sounds and that is longer than
+    _MAX_SILENCE_S to _KEEP_SILENCE_S, after `after_s` (the prompt's end), by
+    moving everything after it earlier. Generated continuations sometimes
+    contain empty bars; left in, they are odd to hear and leave the roll
+    blank. Notes are never changed, only the time between them. Returns the
+    seconds removed. Never raises."""
+    try:
+        import symusic
+        sc = symusic.Score(str(midi_path)).to("second")
+        spans = sorted((float(n.time), float(n.time + n.duration)) for t in sc.tracks for n in t.notes)
+        cuts, covered = [], None
+        for start, end in spans:
+            if covered is not None and start >= after_s and start - covered > _MAX_SILENCE_S:
+                cuts.append((start, start - covered - _KEEP_SILENCE_S))
+            covered = end if covered is None else max(covered, end)
+        if not cuts:
+            return 0.0
+
+        def shift(t: float) -> float:
+            return t - sum(amount for point, amount in cuts if t >= point)
+
+        for track in sc.tracks:
+            for seq in (track.notes, track.controls, track.pedals, track.pitch_bends):
+                for e in seq:
+                    e.time = shift(float(e.time))
+        for seq in (sc.tempos, sc.time_signatures, sc.key_signatures):
+            for e in seq:
+                e.time = shift(float(e.time))
+        sc.to("tick").dump_midi(str(midi_path))
+        return sum(amount for _, amount in cuts)
+    except Exception as e:
+        print(f"[silence] not closed for {midi_path}: {e}")
+        return 0.0
+
+
 def _synth_with_retry(tokens: list[int], tokenizer, out_dir: Path, name: str, attempts: int = 2,
                       prompt_tokens: list[int] | None = None):
     """tokens_to_midi + simple_synth, retried once on any failure before
@@ -1793,6 +1887,13 @@ def _synth_with_retry(tokens: list[int], tokenizer, out_dir: Path, name: str, at
             midi_path = out_dir / f"{name}.mid"
             wav_path = out_dir / f"{name}.wav"
             midi_path.write_bytes(_render_midi_bytes(tokens, tokenizer))
+            prompt_midi = None
+            if prompt_tokens is not None and prompt_tokens is not tokens:
+                prompt_midi = out_dir / f"{name}_prompt_only.mid"
+                prompt_midi.write_bytes(_render_midi_bytes(prompt_tokens, tokenizer))
+                prompt_notes = _note_list(prompt_midi)
+                prompt_end_s = max((n[0] + n[1] for n in prompt_notes), default=0.0)
+                _close_silences(midi_path, after_s=prompt_end_s)
             simple_synth(str(midi_path), str(wav_path))
             # Also guard against a truncated/zero-byte file from a render
             # that was killed or interrupted mid-write under load —
@@ -1800,10 +1901,6 @@ def _synth_with_retry(tokens: list[int], tokenizer, out_dir: Path, name: str, at
             if wav_path.exists() and wav_path.stat().st_size > 0:
                 # Piano roll for the player. prompt_tokens marks where the
                 # prompt ends; passing the clip's own tokens marks it all prompt.
-                prompt_midi = None
-                if prompt_tokens is not None and prompt_tokens is not tokens:
-                    prompt_midi = out_dir / f"{name}_prompt_only.mid"
-                    prompt_midi.write_bytes(_render_midi_bytes(prompt_tokens, tokenizer))
                 return _write_roll(wav_path, midi_path, prompt_midi, prompt_only=prompt_tokens is tokens), None
             last_err = "synthesis produced an empty file"
         except Exception as e:
@@ -1956,6 +2053,8 @@ def _render_prompt_and_gt(tokenizer_type: str, prompt_tokens: list[int], gt_toke
 
 
 def _log_to_wandb(tag: str, wav_paths: dict, meta: dict):
+    if not _DEMO_WANDB:
+        return "W&B logging off (set DEMO_WANDB=1 to log clips)"
     try:
         import wandb
         wandb.init(project=WANDB_PROJECT, entity=WANDB_ENTITY, name=tag, reinit=True)
@@ -2483,8 +2582,8 @@ def _compose_start(
     ebt_l1: float, ebt_l2: float, pplm_1: float, pplm_2: float, tilt: float, bon: float,
 ):
     """Resolve the prompt and lay out the result grid (one row per system, one
-    cell per direction); the cells are then filled one by one by the chained
-    steps of _make_compose_cell_step, so results appear as they finish."""
+    cell per direction, loading panels); _compose_run_all then fills every
+    cell and releases them together."""
     hidden_slot, pending_slot, failed_slot, _ = _card_classes_slot_helpers()
     sys_hidden = [gr.update(elem_classes=_card_classes(False) + ["compose-sys"]) for _ in _COMPOSE_SYSTEMS]
     heads = [""] * len(_COMPOSE_SYSTEMS)
@@ -2546,7 +2645,20 @@ def _compose_start(
              "temperature": temperature, "top_p": top_p, "generation_length": generation_length,
              "size": float(size), "strengths": strengths}
     n_runs = len(todo)
-    return out(sys_updates, heads, cells, f"Prompt: {prompt_label}\n{n_runs} combined variant(s) to generate…", state)
+    return out(sys_updates, heads, cells,
+               f"Prompt: {prompt_label}\n{n_runs} combined variant(s); they appear together when all are done.", state)
+
+
+def _compose_run_all(state: dict, status_text: str):
+    """Run every requested cell, then release them all at once (like 03): filling
+    the grid cell by cell re-scaled the shared roll axis on every arrival, so the
+    cells already shown kept redrawing (flicker)."""
+    outs = []
+    for k in range(_N_COMPOSE_CELLS):
+        r = _make_compose_cell_step(k)(state, status_text)
+        status_text = r[-1]
+        outs.extend(r[:-1])
+    return (*outs, status_text)
 
 
 def _make_compose_cell_step(k: int):
@@ -2829,13 +2941,16 @@ footer { display: none !important; }
 .has-roll .waveform-container { position: relative !important; height: 96px !important; }
 .has-roll #waveform { opacity: 0 !important; }
 .tonic-roll.overlay { position: absolute; inset: 0; margin: 0; pointer-events: none; }
-/* Download/share icons sit over the roll's top-right corner: smaller and faint
-   until hovered, on a small dark pill so they stay legible over notes. */
-.has-roll .icon-button-wrapper.top-panel {
-    transform: scale(0.72); transform-origin: top right; opacity: 0.55;
-    background: rgba(11,13,20,0.75) !important; border-radius: 0 0 0 8px; transition: opacity .15s;
+/* Download icon (the only button kept; share removed): small and faint in the
+   player's label line, above the roll instead of over its notes. */
+.gradio-container .icon-button-wrapper.top-panel {
+    top: 2px !important; right: 4px !important; padding: 0 !important; border: 0 !important; box-shadow: none !important;
+    background: transparent !important; opacity: 0.5; transition: opacity .15s;
 }
-.has-roll .icon-button-wrapper.top-panel:hover { opacity: 1; }
+.gradio-container .icon-button-wrapper.top-panel:hover { opacity: 1; }
+.gradio-container .icon-button-wrapper.top-panel .icon-button { padding: 3px !important; }
+.gradio-container .icon-button-wrapper.top-panel .icon-button svg { width: 14px !important; height: 14px !important; }
+.has-roll .waveform-container { margin-top: 6px; }
 .tonic-roll-head {
     position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; display: none;
     background: #3fd0c9; box-shadow: 0 0 8px rgba(63,208,201,0.8); pointer-events: none;
@@ -3094,8 +3209,13 @@ body, gradio-app {
 .compose-sys-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
 .compose-sys-head .vname { font: 650 16px/1.2 Inter, sans-serif; color: #e8eaf2; }
 .compose-sys-head .cs-strength { font: 12px "JetBrains Mono", ui-monospace, monospace; color: #8a90a3; }
-.gradio-container .compose-cells { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
-    gap: 12px !important; }
+/* One variant per row, stacked like 04's results: side-by-side audio players reflowed whenever a
+   waveform or the page scrollbar changed size, and redrew every cell (flicker). */
+.gradio-container .compose-cells { display: flex !important; flex-direction: column !important; flex-wrap: nowrap !important;
+    gap: 10px !important; }
+.gradio-container .compose-cells > * { width: 100% !important; min-width: 0 !important; }
+/* A fixed scrollbar gutter: the page width no longer changes when the scrollbar appears. */
+html { scrollbar-gutter: stable; }
 .attr-window .compose-cells .model-card { background: rgba(255,255,255,0.025) !important; border-radius: 14px !important;
     padding: 12px !important; }
 .compose-cell-head { display: flex; flex-direction: column; gap: 2px; }
@@ -3399,20 +3519,22 @@ _ROLL_HEAD = r"""
     return { tMax: Math.max(d.duration || 0, tEnd, 0.5), pMin: pMin - 2, pMax: pMax + 2 };
   }
 
-  // Rolls inside one .roll-sync container (section 03's stack, the attribute
-  // sections) share a time axis and pitch range, so they compare by eye: each
-  // keeps its own range in r.own, r.range is the group's union.
+  // Rolls inside one .roll-sync container (section 03's clips, the attribute
+  // sections) share a pitch range; each keeps its own time axis (r.own.tMax).
   const groupOf = (block) => (block && block.closest) ? block.closest(".roll-sync") : null;
   function syncGroup(grp) {
     if (!grp) return;
     const members = [];
     recs.forEach((r, b) => { if (r.data && groupOf(b) === grp) members.push([b, r]); });
     if (!members.length) return;
-    const u = { tMax: 0, pMin: 127, pMax: 0 };
-    for (const [, r] of members) { u.tMax = Math.max(u.tMax, r.own.tMax); u.pMin = Math.min(u.pMin, r.own.pMin); u.pMax = Math.max(u.pMax, r.own.pMax); }
+    // Shared pitch range only: each roll spans its own clip in time, so a
+    // shorter clip is not drawn with an empty stretch at the end.
+    const u = { pMin: 127, pMax: 0 };
+    for (const [, r] of members) { u.pMin = Math.min(u.pMin, r.own.pMin); u.pMax = Math.max(u.pMax, r.own.pMax); }
     for (const [b, r] of members) {
-      if (r.range.tMax === u.tMax && r.range.pMin === u.pMin && r.range.pMax === u.pMax) continue;
-      r.range = { ...u }; place(b, r); drawBase(r);
+      const want = { tMax: r.own.tMax, pMin: u.pMin, pMax: u.pMax };
+      if (r.range.tMax === want.tMax && r.range.pMin === want.pMin && r.range.pMax === want.pMax) continue;
+      r.range = want; place(b, r); drawBase(r);
     }
   }
 
@@ -3569,7 +3691,7 @@ def _placeholder_html(label: str) -> str:
     # {label}…" read as "Generating Generated…" when label was just
     # "Generated".
     return ('<div class="gen-placeholder"><div class="gen-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>'
-            f'<div class="gen-text">{label} <span class="gen-dim">· generating…</span></div></div>')
+            f'<div class="gen-text">{label}</div></div>')
 
 
 _DEFAULT_IDLE_TEXT = "Nothing here yet. Click <b>Generate</b> above."
@@ -3593,7 +3715,7 @@ def _audio_slot(label: str, idle_text: str = _DEFAULT_IDLE_TEXT):
     default spinner) so it's unmistakable when something in that exact spot
     is being generated, and so the audio player never sits there empty."""
     placeholder = gr.HTML(value=_idle_placeholder_html(idle_text), visible=True)
-    audio = gr.Audio(label=label, type="filepath", visible=False, elem_classes="gen-audio-slot",
+    audio = gr.Audio(label=label, type="filepath", visible=False, elem_classes="gen-audio-slot", buttons=["download"],
                      waveform_options=_WAVEFORM)
     return placeholder, audio
 
@@ -3709,7 +3831,7 @@ def build_ui():
         # hides/shows the section.
         with gr.Group(visible=False) as full_song_group:  # no padded card: the waveform resizes itself wider inside one
             full_song_audio = ClickAudio(
-                label="Full song: click where the prompt should start", elem_id="full-song",
+                label="Full song: click where the prompt should start", elem_id="full-song", buttons=[],
                 type="filepath", interactive=False, visible=True,
                 waveform_options={"waveform_color": "#5d6377", "waveform_progress_color": "#8b7cff"},
             )
@@ -3724,19 +3846,21 @@ def build_ui():
                                          elem_classes="nice-slider", elem_id="prompt-start")
             with gr.Column(scale=3, min_width=260, elem_classes="prompt-card"):
                 preview_status = gr.Markdown("", elem_classes="preview-status")
-                preview_audio = gr.Audio(label="Prompt preview", type="filepath", waveform_options=_WAVEFORM)
+                preview_audio = gr.Audio(label="Prompt preview", type="filepath", waveform_options=_WAVEFORM,
+                                         buttons=["download"])
 
         with gr.Row(elem_classes="centered-btn-row gen-cta"):
             generate_btn = gr.Button("Generate", variant="primary", size="lg", elem_classes="gen-btn")
 
         gr.Markdown('## <span class="kicker">03</span>Listen to the unguided generations', elem_classes="section-title")
         gr.Markdown(
-            "Every row starts with the same prompt (shaded), then continues: first how the song really "
+            "Every clip starts with the same prompt (shaded), then continues: first how the song really "
             "goes on, then each model's version.",
             elem_classes="section-sub",
         )
-        gr.HTML('<div class="hint"><span class="i">i</span><span>All rows share one time axis and pitch range, so '
-                'you can compare them by eye. <b>Click a roll</b> to play from that point.</span></div>',
+        gr.HTML('<div class="hint"><span class="i">i</span><span>All clips share one pitch range, so you can '
+                'compare them by eye; each roll spans its own clip, and rests longer than a second are shortened '
+                'to half a second. <b>Click a roll</b> to play from that point.</span></div>',
                 elem_classes="hint-wrap section-hint")
         status_box = gr.Textbox(label="Status", lines=8, interactive=False, placeholder=" ", elem_classes="status-log")
         output_slots: dict[str, tuple] = {}
@@ -3781,7 +3905,7 @@ def build_ui():
             ebt_reference_audio = gr.Audio(
                 label="Unguided Tonic continuation (from your last Generate run)",
                 type="filepath", visible=False,
-                waveform_options=_WAVEFORM,
+                waveform_options=_WAVEFORM, buttons=["download"],
             )
 
             solo_key_html = gr.HTML(_key_row_html(_SOLO_ATTRIBUTES, methods=True), elem_classes="attr-legend-wrap")
@@ -4014,7 +4138,7 @@ def build_ui():
             compose_reference_audio = gr.Audio(
                 label="Unguided Tonic continuation (from your last Generate run)",
                 type="filepath", visible=False,
-                waveform_options=_WAVEFORM,
+                waveform_options=_WAVEFORM, buttons=["download"],
             )
             compose_key_html = gr.HTML(_compose_key_html("REMI"), elem_classes="attr-legend-wrap")
             with gr.Group(elem_classes=["model-card", "compose-setup"]):
@@ -4300,7 +4424,9 @@ def build_ui():
         # per-row step, so a second click can't interleave its own rows with
         # an in-flight batch's (which would corrupt the shared status text
         # and could apply one run's row to another's slot).
-        _SOLO_BATCH_CONCURRENCY = dict(concurrency_id="solo_batch_generation", concurrency_limit=1)
+        # show_progress="hidden": the loading panels show progress, as in 03; Gradio's own
+        # overlay (moving purple diamonds) otherwise covers every output of each step.
+        _SOLO_BATCH_CONCURRENCY = dict(concurrency_id="solo_batch_generation", concurrency_limit=1, show_progress="hidden")
         _solo_chain = solo_btn.click(
             _solo_batch_start,
             inputs=[tokenizer_dd, song_dd, start_offset, temperature, top_p, gen_length,
@@ -4318,7 +4444,7 @@ def build_ui():
                 **_SOLO_BATCH_CONCURRENCY,
             )
 
-        _COMPOSE_GEN_CONCURRENCY = dict(concurrency_id="compose_generation", concurrency_limit=1)
+        _COMPOSE_GEN_CONCURRENCY = dict(concurrency_id="compose_generation", concurrency_limit=1, show_progress="hidden")
         compose_state = gr.State({})
         _compose_chain = compose_btn.click(
             _compose_start,
@@ -4329,13 +4455,12 @@ def build_ui():
             outputs=[*compose_out_flat, compose_status, compose_state],
             **_COMPOSE_GEN_CONCURRENCY,
         )
-        for _k, (_cell, _cell_title, _cell_ph, _cell_audio, _cell_gauge) in enumerate(compose_cells):
-            _compose_chain = _compose_chain.then(
-                _make_compose_cell_step(_k),
-                inputs=[compose_state, compose_status],
-                outputs=[_cell, _cell_title, _cell_ph, _cell_audio, _cell_gauge, compose_status],
-                **_COMPOSE_GEN_CONCURRENCY,
-            )
+        _compose_chain.then(
+            _compose_run_all,
+            inputs=[compose_state, compose_status],
+            outputs=[*(c for cell in compose_cells for c in cell), compose_status],
+            **_COMPOSE_GEN_CONCURRENCY,
+        )
 
         # Initial load: populate all checkpoints and preview the default song.
         # show_progress="hidden" here for the same reason as the
