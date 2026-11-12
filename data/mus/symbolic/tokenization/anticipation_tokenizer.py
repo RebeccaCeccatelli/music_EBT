@@ -170,7 +170,16 @@ class AnticipationTokenizer:
 
         if self.dataset_type == DatasetType.GIGA_MIDI:
             print(f"Using GigaMIDI-specific tokenization...")
-            giga_main(token_args)
+            # The GigaMIDI driver takes the dataset root (with midi/ and tokens/)
+            # and processes all splits from scratch.
+            giga_main(Namespace(
+                root_dir=get_dataset_path(self.dataset_name),
+                augment=self.augment,
+                interarrival=self.interarrival,
+                vanilla=self.use_vanilla,
+                split=None,
+                resume=False,
+            ))
         elif self.dataset_type == DatasetType.CUSTOM:
             print(f"Using simple folder-based logic...")
             custom_main(token_args)
