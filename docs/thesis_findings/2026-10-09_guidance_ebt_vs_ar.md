@@ -8,7 +8,7 @@ Llama final steps). Tools: `eval/score_sweep_quality.py`,
 ## Protocol
 - Frozen models; guidance only at generation time. Same 16 prompts per
   tokenizer (REMI: the `sweep_tables/` ids; Anticipation: 16 control-free
-  validation windows, commit 1802c3f), targets ±0.5/1/2 corpus SD around a
+  validation windows, commit bbc56b1), targets ±0.5/1/2 corpus SD around a
   3-draw per-prompt unguided baseline, T=0.7, top-p 0.9, 64-token prompt,
   256 generated.
 - Methods: **EBT R³** (regressor energy added to EBT's MCMC refinement),

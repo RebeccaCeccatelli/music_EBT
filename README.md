@@ -1,10 +1,10 @@
-# 🎹 Towards Controllable Symbolic Music Generation with Energy-Based Transformers
+# 🎹 Tonic: Energy-Based Transformers for Symbolic Music Generation and Single- and Multi-Attribute Control
 
-**Tonic vs. autoregressive Transformers · single- and multi-attribute control**
+**A systematic comparison with autoregressive Transformers and alternative steering methods**
 
-🏠 [Tonic](https://rebeccaceccatelli.github.io/tonic/) | 🎧 [Showcase](https://rebeccaceccatelli.github.io/music_EBT/) | 🗂️ [Code structure](docs/CODE_STRUCTURE.md) | 📊 [Findings](docs/thesis_findings/README.md) | 🧭 [Project status](docs/STATUS.md)
+🏠 [Tonic](https://rebeccaceccatelli.github.io/tonic/) | 📖 [Thesis (PDF)](https://rebeccaceccatelli.github.io/tonic/thesis/Tonic_thesis.pdf) | 🎧 [Showcase](https://rebeccaceccatelli.github.io/music_EBT/) | 🗂️ [Code structure](docs/CODE_STRUCTURE.md) | 📊 [Findings](docs/thesis_findings/README.md) | 🧭 [Project status](docs/STATUS.md)
 
-This is the codebase of an ETH Zürich / MIT master's thesis. The thesis covers three things:
+This is the codebase of an ETH Zürich / MIT Media Lab master's thesis (submitted November 2026). The thesis covers three things:
 - **Tonic**, the first Energy-Based Transformer (EBT) for symbolic music, to our knowledge.
 - **A comparison** between Tonic and autoregressive Llama and GPT-2 models of the same size, trained on the same data with the same recipe.
 - **Attribute control**: steering a frozen model towards requested values of musical attributes (loudness, note length, pitch register), one at a time or several combined. Tonic's energy-based control is compared with established plug-and-play methods for the AR models.
@@ -42,8 +42,8 @@ Everything runs with two tokenizations:
 
 - **Unguided quality.** All models get close to the real-data reference on REMI. Tonic scores slightly lowest. Its typical failure is safe, repetitive music, not cacophony. → [findings](docs/thesis_findings/2026-10-06_unguided_music_quality.md)
 - **Single-attribute control.** On REMI, Tonic's guidance is statistically tied with Llama + PPLM. On Anticipation, PPLM and best-of-N come out ahead. Tonic's guidance only works in a narrow strength (λ) window, and pushing harder flattens the music into cacophony. → [findings](docs/thesis_findings/2026-11-05_heldout_guidance.md)
-- **Multi-attribute control.** Combined requests (e.g. loudness + note length) are evaluated for Tonic and every AR method. See the thesis for results.
-- **Demos.** The [Tonic front page](https://rebeccaceccatelli.github.io/tonic/), a static [showcase](https://rebeccaceccatelli.github.io/music_EBT/) of curated clips, a blind listening survey, and an interactive Gradio app (*Tonic · Interactive Demo*). The app puts Tonic, Llama and GPT-2 side by side, with live attribute control.
+- **Multi-attribute control.** Combined requests (e.g. loudness + note length) are evaluated for Tonic and every AR method. See the [thesis](https://rebeccaceccatelli.github.io/tonic/thesis/Tonic_thesis.pdf) for results.
+- **Demos.** The [Tonic front page](https://rebeccaceccatelli.github.io/tonic/), a static [showcase](https://rebeccaceccatelli.github.io/music_EBT/) of curated clips, a blind listening survey with its [results](https://rebeccaceccatelli.github.io/tonic/survey-results/), the [Listening Archive](https://rebeccaceccatelli.github.io/listening-archive/) (~20,000 clips from the final runs), and an interactive Gradio app (*Tonic · Interactive Demo*). The app puts Tonic, Llama and GPT-2 side by side, with live attribute control.
 
 For how guidance works in detail (gating, λ, targets), see [docs/attribute_control_mechanism.md](docs/attribute_control_mechanism.md).
 
