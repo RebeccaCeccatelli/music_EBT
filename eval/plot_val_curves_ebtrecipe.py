@@ -1,7 +1,8 @@
 """
 Thesis figure: validation loss vs tokens seen, EBT vs the EBT-recipe baselines.
 
-Left (REMI): logged validation loss over training (REMI runs validate on the
+Left (REMI): logged validation loss over training, raw (faint) and as a centred
+running mean over 0.2B training tokens (bold), (REMI runs validate on the
 full validation set, so the logged curves are comparable). EBT = valid_final_loss
 (last MCMC step), baselines = valid_loss. Runs per model come from the
 wandb_run_id.txt files of the checkpoint dirs, merged with "latest run wins",
@@ -10,8 +11,8 @@ and isolated post-resume artefacts are dropped (eval/plot_tokens_matched_curves.
 Right (Anticipation): logged Anticipation validation losses are NOT comparable
 across runs (each scores a different slice, diary 2026-10-17), so this panel
 uses the shared-window evaluations instead (1,000 random windows, context 512):
-several checkpoints of each baseline and the EBT's final checkpoint (its
-intermediate checkpoints were deleted).
+several checkpoints of each model (for the EBT: two saved checkpoints plus
+five auto-resume states of the same run).
 
 All runs here share context 512 and the effective batch of their EBT, so
 tokens = step x batch x 512.
@@ -38,13 +39,26 @@ REMI = {  # name: (checkpoint-dir prefix, W&B project, logged key, tokens per st
 TONIC_REMI_RUNS = ['ofef9iwj', '35138ouc', 'euk233f2', 'n2gs5f6c', 'nm7ytdln', 'dxopdzcp', 'txnl0pye', '8wffvj5k']
 # Shared-window losses (diary 2026-10-17, job 26152811): step -> loss.
 ANT = {
-    'Tonic (EBT)': {88800: 1.1024},
+    # Tonic: 55,500 job 28881992; 12,263-77,424 are Lightning auto-resume states of the same run
+    # (hpc_autoresume/, each <=65 steps past the training path), job 28883262 (2026-11-12).
+    # 88,800 (the checkpoint used) re-scored in both jobs as 1.1024.
+    'Tonic (EBT)': {12263: 1.3422, 26865: 1.1803, 48347: 1.1205, 55500: 1.1167, 70158: 1.0955, 77424: 1.0879, 88800: 1.1024},
     'Llama (EBT recipe)': {24300: 1.2121, 48400: 1.1257, 73000: 1.0744, 88500: 1.0563},
     'GPT-2 (EBT recipe)': {25000: 1.2104, 42100: 1.1412, 59700: 1.1014, 76200: 1.0807, 87900: 1.0704},
 }
 ANT_TOKENS_PER_STEP = 64 * 512
 COLORS = {'Tonic (EBT)': '#2a6fdb', 'Llama (EBT recipe)': '#e8603c', 'GPT-2 (EBT recipe)': '#1aa37a'}
 MARKERS = {'Tonic (EBT)': 'o', 'Llama (EBT recipe)': 's', 'GPT-2 (EBT recipe)': '^'}
+
+
+SMOOTH_TOKENS = 0.2  # billions of tokens per centred running-mean window (REMI panel)
+
+
+def running_mean(x: np.ndarray, v: np.ndarray, width: float) -> np.ndarray:
+    """Mean of the readings within width/2 on either side of each point, in the
+    units of x (training tokens), so every model is smoothed over the same span
+    whatever its validation frequency."""
+    return np.array([v[np.abs(x - xi) <= width / 2].mean() for xi in x])
 
 
 def main():
@@ -68,7 +82,9 @@ def main():
             m = steps <= 33732   # the checkpoint used in the thesis
             steps, vals = steps[m], vals[m]
         tok = steps * tps / 1e9
-        a1.plot(tok, vals, color=COLORS[name], lw=1.6, label=name)
+        # Raw readings faint; centred running mean over SMOOTH_TOKENS bold (same span for all models).
+        a1.plot(tok, vals, color=COLORS[name], lw=0.8, alpha=0.25)
+        a1.plot(tok, running_mean(tok, vals, SMOOTH_TOKENS), color=COLORS[name], lw=1.6, label=name)
         print(f"   last: step {steps[-1]}  loss {vals[-1]:.4f}  ({tok[-1]:.2f}B tokens)")
     a1.set_xlabel('training tokens (billions)')
     a1.set_ylabel('validation loss (nats per token)')
@@ -82,7 +98,7 @@ def main():
         a2.plot(tok, [pts[s] for s in st], color=COLORS[name], marker=MARKERS[name], lw=1.4 if len(st) > 1 else 0,
                 ms=6, label=name)
     a2.set_xlabel('training tokens (billions)')
-    a2.set_title('Anticipation (1,000 shared windows)', loc='left', fontsize=10)
+    a2.set_title('Anticipation (context-matched loss)', loc='left', fontsize=10)
     a2.legend(frameon=False, fontsize=8)
     for ax in (a1, a2):
         ax.grid(alpha=0.3)

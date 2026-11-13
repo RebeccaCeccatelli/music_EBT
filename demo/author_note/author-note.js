@@ -18,7 +18,7 @@
       title: "A tool for musicians to work with",
       personal: [
         "This work is <b>not</b> meant to replace musicians and artists. It aims to give them better tools.",
-        "I have been a musician all my life, and many of my friends make their living from music. I know how much effort, love and passion go into it.",
+        "I am a musician, and many of my friends make their living from music. I know how much effort and passion go into it.",
       ],
       h1: "What this work does",
       p1: "Most models that generate music today work like a black box: you get a result, but little say in how it turns out. " +
@@ -42,7 +42,7 @@
       title: "Uno strumento al servizio dei musicisti",
       personal: [
         "Questo lavoro <b>non</b> vuole sostituire musicisti e artisti: vuole dare loro strumenti migliori.",
-        "Sono musicista da tutta la vita, e molti miei amici vivono di musica. So quanto impegno, amore e passione ci siano dietro.",
+        "Sono musicista, e molti miei amici vivono di musica. So quanto impegno e passione ci siano dietro.",
       ],
       h1: "Cosa fa questo lavoro",
       p1: "Oggi la maggior parte dei modelli che generano musica funziona come una scatola chiusa: si ottiene un risultato, ma si può decidere " +

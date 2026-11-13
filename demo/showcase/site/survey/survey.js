@@ -261,7 +261,7 @@
       h("h2", "s-title", "A tool for musicians to work with"),
       h("div", "r-personal",
         "<p>This work is <b>not</b> meant to replace musicians and artists. It aims to give them better tools.</p>" +
-        "<p>I have been a musician all my life, and many of my friends make their living from music. I know how much effort, love and passion go into it.</p>"),
+        "<p>I am a musician, and many of my friends make their living from music. I know how much effort and passion go into it.</p>"),
       h("div", "r-blocks",
         '<div class="r-block"><span class="r-num">01</span><h3>What this work does</h3>' +
         '<p>Most models that generate music today work like a black box: you get a result, but little say in how it turns out. ' +

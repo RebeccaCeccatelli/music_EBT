@@ -246,19 +246,21 @@ METHOD_LABEL.update({k.replace('/', '-ebtrecipe/', 1): v for k, v in METHOD_LABE
 STRENGTH_LABEL = {'r3': 'λ', 'pplm': 'PPLM step size', 'tilt': 'tilt fraction', 'best_of_n': 'N'}
 
 
-def cmd_steering(args):
+def collect_steering(sweeps, ref_csv, clip=3.0):
+    """Per (system, attribute): progress by direction and harsh dissonance per strength,
+    as (prompt_id, value) pairs, plus the real-music dissonance mean and SD."""
     import glob as _glob
     import numpy as np
     from eval.music_quality import _read_csv, _sample_base
     from eval.score_sweep_quality import score_root
 
-    ref = _read_csv(Path(args.ref))
+    ref = _read_csv(Path(ref_csv))
     real = ref['sharp_dissonance'][np.isfinite(ref['sharp_dissonance'])]
     real_mean, real_sd = float(real.mean()), float(real.std())
 
     data = defaultdict(lambda: {'progress': defaultdict(lambda: {'up': [], 'down': []}),
                                 'diss': defaultdict(list), 'unguided': []})
-    for spec in args.sweep:
+    for spec in sweeps:
         parts = spec.split('::')
         tables_glob, root = parts[0], parts[1]
         label = parts[2] if len(parts) > 2 else None   # model label, e.g. llama-ebtrecipe
@@ -276,11 +278,17 @@ def cmd_steering(args):
                     continue
                 lam = r['lambda']
                 prog = (r['achieved_value'] - r['baseline_value']) / r['target_delta']
-                prog = float(np.clip(prog, -args.clip, args.clip))  # tiny targets → huge ratios
+                prog = float(np.clip(prog, -clip, clip))  # tiny targets → huge ratios
                 d['progress'][lam]['up' if r['target_delta'] > 0 else 'down'].append((r['prompt_id'], prog))
                 sc = scores.get(r.get('sample_id'))
                 if sc is not None and np.isfinite(sc.get('sharp_dissonance', np.nan)):
                     d['diss'][lam].append((r['prompt_id'], sc['sharp_dissonance']))
+    return data, real_mean, real_sd
+
+
+def cmd_steering(args):
+    import numpy as np
+    data, real_mean, real_sd = collect_steering(args.sweep, args.ref, args.clip)
 
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)

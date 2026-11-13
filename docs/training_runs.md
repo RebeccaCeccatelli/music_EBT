@@ -246,8 +246,11 @@ diary, 2026-09-24). As of this writing:
 - **Anticipation regressors** (duration, pitch_register only — Anticipation's
   vocabulary has no velocity field): matched to
   `ebt-symb-small-ant-at-full-s1-job21959744`, step 55,500, valid_loss
-  0.3335 — from a separate, earlier Anticipation checkpoint lineage not
-  listed in the table above (predates both lineages there).
+  0.3335. [Correction 2026-11-12: this is NOT a separate lineage. W&B run
+  9w9rtvhm runs continuously from step 0 to 99,999, and step 55,500 is an
+  earlier checkpoint of the same original (s1) run; 0.3335 is a spurious
+  post-resume reading (the regular one at 55,499 is 1.008). Context-matched
+  loss at 55,500: 1.1167 (job 28881992), vs 1.1024 at 88,800.]
 
 ## How to reproduce this doc / re-pull current values
 
