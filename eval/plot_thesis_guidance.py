@@ -72,61 +72,54 @@ def order(s):
     return (1 + list(METHOD_COLOR).index(method), 0 if model.startswith('llama') else 1)
 
 
-def tradeoff(final, tune, out, notes=None):
-    """One full-width row per attribute: accuracy against how much the music changed
-    (1 - overlap with the same model's unguided output), one line per method through
-    its strengths. Error bars only at the operating points, to keep the curves legible."""
+def smooth(v):
+    """Three-point moving average along the strength axis (ends kept), to tame sampling noise."""
+    return [v[0]] + [(v[i - 1] + v[i] + v[i + 1]) / 3 for i in range(1, len(v) - 1)] + [v[-1]] if len(v) > 2 else list(v)
+
+
+def tradeoff(final, tune, out):
+    """One panel per attribute, side by side: accuracy against how much the music changed
+    (1 - overlap with the same model's unguided output). Faint dots: one per strength;
+    line: the same points in order of strength, smoothed over neighbouring strengths
+    (the raw path zig-zags with sampling noise); rings: operating points with 95% CIs."""
     d = json.loads((FIG / 'guidance_heldout' / final).read_text())
     ops = json.loads((FIG / 'guidance_heldout' / tune).read_text())['_operating_points']
     # GPT-2 behaves like Llama under every method; leaving it out halves the clutter.
     systems = sorted((s for s in d if not s.startswith('_') and keep(s) and not s.startswith('gpt2')), key=order)
     attrs = [a for a in ATTR_ORDER if any(a in d[s] for s in systems)]
-    fig, axes = plt.subplots(len(attrs), 1, figsize=(WIDTH, 1.75 * len(attrs) + 0.9), squeeze=False,
-                             layout='constrained')
-    for ax, a in zip(axes[:, 0], attrs):
-        xmin, xmax = 1, 0
+    fig, axes = plt.subplots(1, len(attrs), figsize=(WIDTH, 2.55 if len(attrs) == 3 else 2.7), sharey=True,
+                             squeeze=False, layout='constrained')
+    for ax, a in zip(axes[0], attrs):
         for s in systems:
-            st = style(s)
-            pts = sorted((float(k), v) for k, v in d[s].get(a, {}).items()
+            st, tonic = style(s), s == 'ebt/r3'
+            pts = sorted((float(k), 1 - v['oa_unguided'], v['accuracy']) for k, v in d[s].get(a, {}).items()
                          if k != 'none' and v.get('accuracy') is not None and v.get('oa_unguided') is not None)
             if not pts:
                 continue
-            xs = [1 - v['oa_unguided'] for _, v in pts]
-            ys = [v['accuracy'] for _, v in pts]
-            xmin, xmax = min(xmin, min(xs)), max(xmax, max(xs))
-            tonic = s == 'ebt/r3'
-            ax.plot(xs, ys, color=st['color'], ls=st['ls'], lw=st['lw'] if tonic else 1.2,
-                    marker=st['marker'], ms=4 if tonic else 3.2, mfc=st['mfc'], mec=st['color'], mew=1,
-                    alpha=1 if tonic else 0.85, zorder=st['z'])
+            _, xs, ys = zip(*pts)
+            ax.scatter(xs, ys, s=9 if tonic else 7, color=st['color'], alpha=0.35, lw=0, zorder=2)
+            ax.plot(smooth(xs), smooth(ys), color=st['color'], lw=2.2 if tonic else 1.4,
+                    solid_capstyle='round', zorder=st['z'])
             op = ops.get(a, {}).get(s)
             v = d[s][a].get(op['strength']) if op else None
             if v and v.get('accuracy') is not None:
                 x, y = 1 - v['oa_unguided'], v['accuracy']
                 ax.errorbar([x], [y], yerr=[[y - v['acc_lo']], [v['acc_hi'] - y]], fmt='none',
-                            ecolor=st['color'], elinewidth=1, capsize=2, zorder=st['z'] + 1)
-                ax.plot([x], [y], marker='o', ms=10, mfc='none', mec=st['color'], mew=1.6,
+                            ecolor=st['color'], elinewidth=0.9, capsize=1.8, zorder=st['z'] + 1)
+                ax.plot([x], [y], marker='o', ms=6.5, mfc='white', mec=st['color'], mew=1.6,
                         zorder=st['z'] + 2)
-        ax.axhline(0.5, color=INK2, lw=0.9, ls=':')
+        ax.axhline(0.5, color=INK2, lw=0.8, ls=':')
         ax.set_ylim(0.3, 1.04)
-        pad = 0.03 * (xmax - xmin)
-        ax.set_xlim(xmin - pad, xmax + pad)
         ax.set_title(ATTR_NAME[a], loc='left')
-        ax.set_ylabel('accuracy')
-        if notes and a in notes:
-            ax.text(0.98, 0.08, notes[a], transform=ax.transAxes, ha='right', va='bottom',
-                    fontsize=7.5, color=TONIC, style='italic')
         grid(ax)
-    axes[-1][0].set_xlabel('how much the music changed  (1 − overlap with the same model\'s unguided output)')
-    handles = []
-    for s in systems:
-        st = style(s)
-        handles.append(Line2D([], [], color=st['color'], ls=st['ls'], lw=st['lw'] if s == 'ebt/r3' else 1.2,
-                              marker=st['marker'], ms=4, mfc=st['mfc'], mec=st['color'], label=st['label']))
-    handles += [Line2D([], [], ls='none', marker='o', ms=9, mfc='none', mec=INK2, mew=1.4,
-                       label='operating point (± 95% CI)'),
-                Line2D([], [], color=INK2, ls=':', lw=0.9, label='chance (0.5)')]
-    fig.legend(handles=handles, loc='outside upper center', ncol=3, frameon=False,
-               columnspacing=1.3, handlelength=2.0, fontsize=7.5)
+    axes[0][0].set_ylabel('accuracy')
+    fig.supxlabel("how much the music changed (1 − overlap with the same model's unguided output)", fontsize=8.5)
+    handles = [Line2D([], [], color=style(s)['color'], lw=2.2 if s == 'ebt/r3' else 1.4,
+                      label=style(s)['label'].replace(' · ', ' ')) for s in systems]
+    handles += [Line2D([], [], ls='none', marker='o', ms=6, mfc='white', mec=INK2, mew=1.4, label='operating point'),
+                Line2D([], [], color=INK2, ls=':', lw=0.8, label='chance')]
+    fig.legend(handles=handles, loc='outside upper center', ncol=6, frameon=False,
+               columnspacing=1.1, handlelength=1.6, fontsize=7.5)
     fig.savefig(out)
     plt.close(fig)
     print('→', out)
@@ -280,8 +273,7 @@ def steering(out):
 
 
 if __name__ == '__main__':
-    tradeoff('final_remi_ebtrecipe.json', 'tune_remi.json', OUT / 'tradeoff_remi.pdf',
-             notes={'pitch_register': 'Tonic gains accuracy only by changing the music strongly'})
+    tradeoff('final_remi_ebtrecipe.json', 'tune_remi.json', OUT / 'tradeoff_remi.pdf')
     tradeoff('final_ant_ar_ebtrecipe.json', 'tune_ant_ar.json', OUT / 'tradeoff_ant.pdf')
     mechanism('remi', OUT / 'mechanism_remi.pdf')
     mechanism('ant', OUT / 'mechanism_ant.pdf')
