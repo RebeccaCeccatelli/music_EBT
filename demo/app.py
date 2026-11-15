@@ -3723,7 +3723,7 @@ def _audio_slot(label: str, idle_text: str = _DEFAULT_IDLE_TEXT):
 def build_ui():
     with gr.Blocks(title="Tonic · Interactive Demo") as demo:
         with gr.Column(elem_classes="hero-header"):
-            gr.Markdown("Interactive demo · live generation · MIT × ETH Zürich master's thesis",
+            gr.Markdown("Interactive demo · MIT × ETH Zürich master's thesis",
                         elem_classes="app-eyebrow")
             gr.Markdown("# Tonic · Interactive Demo", elem_classes="app-title")
             gr.Markdown(
