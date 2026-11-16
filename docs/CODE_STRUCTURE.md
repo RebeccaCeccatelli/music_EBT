@@ -1,6 +1,6 @@
 # Code structure
 
-A file-level map of the Tonic repository. For what the project is and how to run it, see the [README](../README.md). The NLP / image / video code inherited from upstream EBT is listed only briefly at the end.
+A file-level map of the Tonic repository. For what the project is and how to run it, see the [README](../README.md). The text / image / video code inherited from upstream EBT was removed after the thesis; it is still at the `thesis-submission` tag.
 
 ## How a run flows
 
@@ -120,4 +120,4 @@ How it works: [attribute_control_mechanism.md](attribute_control_mechanism.md).
 - `setup_env.sh`, `requirements.txt`, `environment.yml`, `utils/verify_env.py`: environment setup
 - `utils/`: metrics, logging, data debugging
 - Local only, git-ignored: `eth-mit-master-thesis/` (thesis LaTeX, its own repo), `papers/`, `listening/`, `logs/`, `wandb/`
-- Upstream EBT modalities kept for reference: `model/{nlp,img,vid,diffusion}`, `data/{nlp,img,vid}`, `inference/{nlp,img,vid}`, `job_scripts/{nlp,img,vid}`
+- Upstream EBT text / image / video code (`model/{nlp,img,vid,diffusion}`, `data/{nlp,img,vid}`, `inference/{nlp,img,vid}`, `job_scripts/{nlp,img,vid}`): removed from `main` on 2026-11-16, available at the `thesis-submission` tag

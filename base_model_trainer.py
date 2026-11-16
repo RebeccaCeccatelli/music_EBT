@@ -443,21 +443,6 @@ class ModelTrainer(L.LightningModule):
                 wandb_image = wandb.Image(image, mode="RGB")
                 self.logger.experiment.log({f'{phase}_{key}': wandb_image})
 
-            elif 'video' in key: # videos
-                video_np = value.cpu().numpy()
-                assert video_np.ndim != 5, "video should not include batch dimension, either fix that or add support"
-                if video_np.shape[1] in [1, 3]:
-                    pass  # Axes are already correct
-                elif video_np.shape[-1] in [1, 3]:
-                    # If video_np is (frames, height, width, channels), transpose axes
-                    video_np = video_np.transpose(0, 3, 1, 2)
-                else:
-                    raise ValueError(f"Unexpected video shape: {video_np.shape}")
-                if video_np.dtype != np.uint8:
-                    video_np = (video_np * 255).astype(np.uint8)
-                wandb_video = wandb.Video(video_np, fps=4, format="mp4")
-                self.logger.experiment.log({f'{phase}_{key}': wandb_video})
-
             elif 'audio' in key and self.hparams.modality == "MUS_NEUR":  # audio for neural music modality only
                 audio_np = value.cpu().numpy() if isinstance(value, torch.Tensor) else value
                 sample_rate = self.hparams.get('audio_sample_rate', 16000)

@@ -45,39 +45,42 @@ git -C data/mus/symbolic/tokenization/anticipation branch -D backup-before-rewri
 Check first: `git stash list` still shows only that entry (other sessions share the stash), and
 `git worktree list` shows nothing else in use.
 
-## 3. Code: remaining leftovers from the original EBT codebase
+## 3. Code: remaining leftovers from the original EBT codebase (done 2026-11-16, except where noted)
 
-Same procedure as d5bbf69 (remove, then old-vs-new regression test).
+Same procedure as d5bbf69 (remove, then old-vs-new regression test: identical on all 12 demo checkpoints
+and 4 training setups).
 
-- [ ] `model/model_utils.py`: image/video helpers (`save_frames`, `denormalize`, `load_image_encoder`,
-      `call_style_gan_fvd`, `center_crop_arr`, the DiT/bidirectional-EBT builders around lines 600–650).
-- [ ] Files only those helpers use: `model/diffusion/`, `model/diffusion_transformer.py`, `model/bi_ebt_adaln.py`.
-- [ ] `base_model_trainer.py`: video branch in `log_metrics`; `self.to_pil` if unused.
-- [ ] `train_model.py`: argparse flags that only applied to image/video/text (`--image_task`, `--backbone_type`,
-      `--infer_generate_video`, `--debug_dataloader`, ...). **Keep them parseable**: old checkpoints store these
-      hparams, so either keep the flags or make loading tolerate unknown keys. Low value, moderate risk.
-- [ ] `docs/CODE_INFO.md`: rewrite for the music-only repo (or fold into README) instead of the inherited note.
-- [ ] Decide on `MUS_NEUR` / `model/mus/ebt_neural.py` (neural-audio EBT, never used in the thesis): keep as
-      future work or remove.
+- [x] `model/model_utils.py`: image/video/text helpers removed (`modulate` kept: used by `ar_ebt_adaln.py`);
+      `diffusers` import dropped (still in requirements.txt, harmless).
+- [x] `model/diffusion/`, `model/diffusion_transformer.py`, `model/bi_ebt_adaln.py` removed.
+- [x] `base_model_trainer.py`: video branch in `log_metrics` removed (`self.to_pil` kept for the image branch).
+- [x] `docs/CODE_INFO.md` and `docs/CODE_STRUCTURE.md` updated for the music-only repo.
+- [ ] **Left as is on purpose:** `train_model.py` argparse flags for image/video/text. Old checkpoints store
+      these hparams; removing them gains nothing and risks breaking loading.
+- [ ] **Your decision:** `MUS_NEUR` / `model/mus/ebt_neural.py` (neural-audio EBT, never used in the thesis):
+      keep as future work or remove.
 
-## 4. Code: optional reorganisation
+## 4. Code: optional reorganisation (decided against, 2026-11-16)
 
-- [ ] `attribute_control/`: move JSON/HTML data and `sweep_tables/` into `attribute_control/data/`; update paths.
-- [ ] `eval/`: split into `eval/plots/` and `eval/analysis/`. Thesis cites `eval/...` paths, so only do it if
-      those references may point at the tag.
-- [ ] `demo/app.py` (4.5k lines): split into modules only if the demo moves (see 6). Not worth it otherwise.
+- `attribute_control/` data files: the thesis (experiments.tex) and the demo cite
+  `attribute_control/corpus_stats.json` by path; moving it would break the submitted thesis's reference.
+- `eval/` split: the thesis cites `eval/...` script paths. Same reason.
+- `demo/app.py` split: only worth it if the demo moves (see 6).
 
 Other repos (tonic, listening-study, listening-archive, thesis, anticipation-musicEBT): nothing to do.
 Keep anticipation-musicEBT close to upstream.
 
-## 5. Cluster: optional further tidy
+## 5. Cluster: further tidy (2026-11-16)
 
-- [ ] `checkpoints/` (179 GB, 404 files): keep the 7 thesis checkpoints, the 5 demo extras and the saves
-      listed under "Also on disk" in STATUS.md (regressor pairings, stab+ 44,700, token-matched runs);
-      review the rest one by one before deleting. Never pick by `valid_loss` in the filename.
-- [ ] W&B local folders (`logs/wandb`, `wandb_demo`, `wandb_local`, `pool/music-EBT_wandb_runs`, `pool/wandb_cache`):
-      check the runs are synced online, then delete.
-- [ ] After the Mac copy is verified: delete `~/transfer/backup_2026-11-16/` if home space is needed.
+- [x] `checkpoints/`: removed 196 run folders that held no checkpoint, only `wandb_run_id.txt`
+      (from auto-requeued jobs). Their folder → W&B run ID mapping is saved in
+      `logs/empty_ckpt_folders_wandb_ids_2026-11-16.tsv`. 56 folders / 155 checkpoints remain, none deleted.
+- [ ] **Kept on purpose:** the 155 checkpoints (thesis runs' intermediate saves, token-matched runs, early
+      baselines, probes). Deleting is irreversible and space is not a concern. If ever needed: keep the 7 thesis
+      checkpoints, the 5 demo extras and the "Also on disk" saves in STATUS.md; never pick by `valid_loss`.
+- [ ] **Kept on purpose:** W&B local folders (993 runs, all online `run-*`, none offline). Confirming each
+      upload completed would need per-run W&B queries; the local copies are the fallback if one didn't.
+- [ ] Optional: delete `~/transfer/backup_2026-11-16/` (verified copy on the Mac since 2026-11-16).
 
 ## 6. Longevity (if cluster access ends)
 
