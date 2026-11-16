@@ -1,4 +1,6 @@
 > **Note:** This file was inherited from the original forked codebase and is no longer fully up to date. Directory structure, requirements files, and some referenced scripts have changed. Use it as a general orientation guide only.
+>
+> **Removed (2026-11-16):** the image, text and video code (`data/`, `inference/`, `model/` and `job_scripts/` subfolders `img/`, `nlp/`, `vid/`), `utils/dataloader_debugger.py` and the `--debug_dataloader` mode. The repository is now music-only; the full original code is at the `thesis-submission` tag.
 
 ## Tools/Software being used
 
@@ -20,7 +22,6 @@
 
 - [abbreviations.md](./abbreviations.md) contains, you guessed it, several abbreviations used in code throughout the repo!
   - Note that MCMC ~= optimization in the codebase, we avoid the term MCMC in the paper to avoid complexity but that's what it's commonly called in the codebase
-- There is a dataloader_debugger that you can invoke with the `--debug_dataloader` flag that calls `bash job_scripts/debug/debug_dataloader.sh`.
 - Unfortunately, not all hparams (or arguments) are implemented for all cases so I highly recommend using ctrl f to your advantage and potentially checking if a new hparam is implemented. This repo has evolved a lot over time.
 - For debugging quickly see the argparse arguments in `train_model.py` under the DEBUGGING header
   - Several of these can be used to increase the speed of debugging as well as debug NANs/dataloader issues/fitting issues/unused parameters (detect_anomaly, debug_dataloader, overfit_batches, debug_unused_parameters)

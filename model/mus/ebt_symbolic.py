@@ -1,7 +1,7 @@
 """
 Energy-Based Transformer for Music (Symbolic MIDI Tokens)
 
-Adapted from the NLP EBT (model/nlp/ebt.py) for symbolic music generation.
+Adapted from the NLP EBT (model/nlp/ebt.py, removed after the thesis; see the `thesis-submission` tag) for symbolic music generation.
 Uses MCMC-style iterative refinement over token distributions.
 """
 

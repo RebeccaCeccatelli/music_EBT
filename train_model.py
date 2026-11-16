@@ -16,16 +16,15 @@ import ast
 import math
 from tqdm import tqdm
 import json
+import shutil
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 
 # from torch.utils.tensorboard import SummaryWriter # need to implement, which involves maybe changing the forward function
 
-from utils.dataloader_debugger import debug_dataloader
-from model.model_utils import load_trained_pl_model, model_sizes, init_wandb_watch, call_style_gan_fvd
+from model.model_utils import load_trained_pl_model, model_sizes, init_wandb_watch
 from utils import text_logger
 from base_model_trainer import *
-from inference.nlp.eval import nlp_eval_acc
 
 def get_scratch_logs_dir():
     home = os.path.expanduser("~")
@@ -140,24 +139,7 @@ def main(args):
         args.num_transformer_blocks = args.override_transformer_blocks
     
     # hparam assertion sanity checks
-    if args.modality == "VID":
-        if args.backbone_type == "dinov2":
-            assert args.embedding_dim == 0, "embedding dim defined implicitly by encoder dimensionality"
-            vit_backbone_embed_dim_map = {"small": 384, "base": 768, "large": 1024, "giant": 1536} # gotten from dinov2 repo
-            args.vit_backbone_dim = vit_backbone_embed_dim_map[args.vit_backbone_size]
-            args.embedding_dim = args.vit_backbone_dim
-        elif args.backbone_type == "vae":
-            assert args.embedding_dim != 0, "must define embedding dim for vae"
-        else:
-            raise NotImplementedError(f"Unspported backbone type: {args.backbone_type}")
-    elif args.modality == "NLP":
-        assert args.embedding_dim != 0, "must define embedding dim for NLP models"
-        if args.vocab_to_embed_uses_prob_dist:
-            assert args.normalize_initial_condition, "if vocab_to_embed_uses_prob_dist is true must use normalize_initial_condition"
-    elif args.modality == "IMG":
-        args.backbone_type = "vae" # always uses vae
-        assert args.embedding_dim != 0, "must define embedding dim for IMG models"
-    elif args.modality in ["MUS_SYMB", "MUS_NEUR"]:
+    if args.modality in ["MUS_SYMB", "MUS_NEUR"]:
         # Music-specific validation handled in model initialization
         if args.modality == "MUS_SYMB":
             assert args.embedding_dim != 0, "must define embedding dim for symbolic music models"
@@ -211,8 +193,7 @@ def main(args):
     dt_string = dt_object.strftime("%Y-%m-%d_%H-%M-%S")
 
     if args.debug_dataloader:
-        debug_dataloader(args, model_trainer)
-        return
+        raise NotImplementedError("--debug_dataloader only supported the removed image/text/video datasets (see the `thesis-submission` tag)")
     if args.log_model_archi:
         print(str(model_trainer.model))
         print(str(args))
@@ -291,9 +272,6 @@ def main(args):
                 pretrained_hparams[key] = value
                 print(f"OVERRIDING PARAMETER IN PRETRAINED CHECKPOINT FOR INFERENCE: Using args set value for inference parameter '{key}': {value}")
 
-        if args.modality == "VID":
-            pretrained_hparams["modality"] = "VID" # this is just to test old models with a refactor of CV -> VID
-
         model = ModelTrainer(pretrained_hparams)
         model.load_state_dict(checkpoint['state_dict'])
         model.eval()
@@ -302,18 +280,7 @@ def main(args):
         trainer = set_trainer(args, wandb_logger, checkpoint_callback, stage = "test")
         model_trainer.model.eval()
         trainer.test(model_trainer)
-        if args.modality == "NLP": # can have modality specific logic here for inference
-            if args.execution_mode == "inference":
-                em_score, f1_score = nlp_eval_acc(os.path.join(args.save_generation_logs_dir, "results.jsonl"))
-                trainer.logger.experiment.log({"em_score": em_score, "f1_score": f1_score})
-        elif args.modality == "VID":
-            if args.infer_generate_video:
-                print("calling style gan FVD code on generated video dataset, NOTE THIS CODE MAY NOT WORK AS EXPECTED or get stuck")
-                fvd, fid = call_style_gan_fvd(args)
-                trainer.logger.experiment.log({"test_fvd": fvd, "test_fid": fid})
-        elif args.modality == "IMG":
-            pass # no post test code for denoising, for t2i could call FID code here if desired
-        elif args.modality in ["MUS_SYMB", "MUS_NEUR"]:
+        if args.modality in ["MUS_SYMB", "MUS_NEUR"]:
             # Music-specific post-test evaluation can be added here
             pass
 

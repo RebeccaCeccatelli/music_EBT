@@ -1,2 +1,0 @@
-- Clone my fork of [stylegan-v](https://github.com/alexiglad/stylegan-v/tree/master) into parent dir (i.e. if you are in the current repo `cd ../` and `git clone https://github.com/alexiglad/stylegan-v/tree/master`). Then cd inside the stylegan-v repo.
-- If you are using Ampere or newer GPUs,  `conda env create -f updated-environment-ampere.yaml -p env`, else `conda env create -f environment.yaml -p env` (make sure to do this with a nvidia driver available so torch gets packaged with cuda)
