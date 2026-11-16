@@ -3820,6 +3820,11 @@ def build_ui():
                                label="Song", filterable=True, elem_classes="song-pick",
                                info=f"{len(_SONG_CHOICES) - 1} songs, sorted A–Z. Click and type to search by "
                                     "title or artist; the first entry is a random excerpt instead.")
+        gr.HTML('<div class="hint copyright-note"><span class="i">i</span><span>Non-commercial research demo. '
+                'The songs come from a public MIDI dataset, and their rights stay with their owners. They are '
+                'used here only to show how the models continue music. If you hold the rights to a song and '
+                'want it removed, write to <a href="mailto:rebeccaceccatelli@gmail.com">'
+                'rebeccaceccatelli@gmail.com</a>.</span></div>')
 
         # ClickAudio's own `visible` prop can't be toggled after mount — a bug
         # in this custom component's build (confirmed via a headless-browser
