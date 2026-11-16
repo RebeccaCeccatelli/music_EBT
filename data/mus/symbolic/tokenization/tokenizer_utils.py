@@ -6,6 +6,7 @@ Supports:
 - Anticipation: Vanilla, Interarrival, Arrival-Time variants
 """
 
+import os
 from typing import Tuple, Any
 
 
@@ -218,6 +219,13 @@ def _load_miditok_tokenizer(
             f"Available: {available}"
         )
     
+    # Checkpoints store the cluster path of the REMI config. If it doesn't exist
+    # (e.g. on another machine), use the copy shipped with the repo.
+    if tokenizer_type == 'REMI' and tokenizer_config_path and not os.path.exists(tokenizer_config_path):
+        repo_copy = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'configs', 'remi_tokenizer.json')
+        print(f"Tokenizer config {tokenizer_config_path} not found; using repo copy {repo_copy}")
+        tokenizer_config_path = repo_copy
+
     # Instantiate tokenizer
     tokenizer_class = tokenizer_classes[tokenizer_type]
     try:
