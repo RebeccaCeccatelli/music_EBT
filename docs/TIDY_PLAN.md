@@ -21,7 +21,7 @@ Ground rules for every step:
 
 ## 1. Backup: finish
 
-- [ ] Copy `~/transfer/backup_2026-11-16/` to the Mac and run `shasum -a 256 -c SHA256SUMS` (all `OK`).
+- [x] Copy `~/transfer/backup_2026-11-16/` to the Mac and run `shasum -a 256 -c SHA256SUMS` (all `OK`).
 - [ ] Second copy somewhere else (external drive or ETH/MIT storage). Keep `survey_PRIVATE.tar` private.
 - [ ] When the survey closes: export the responses CSV again (the backup has the 13 Nov export, n = 66),
       rerun `eval/plot_survey.py` if numbers change, add the CSV to the backup.
@@ -29,7 +29,7 @@ Ground rules for every step:
       backup if the demo should run elsewhere. Patterns are in `demo/app.py` (~line 204).
 - [ ] Optional: `chmod 600 ~/music-EBT/.env`; revoke the HF/W&B tokens if no longer used.
 
-## 2. Git leftovers (only after the Mac copy of the bundles is verified)
+## 2. Git leftovers: done 2026-11-16
 
 All of these are inside `music_EBT_all_refs.bundle`.
 
