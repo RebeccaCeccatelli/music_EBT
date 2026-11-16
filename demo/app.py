@@ -112,6 +112,7 @@ WANDB_PROJECT = "music_inference_ebt"
 WANDB_ENTITY  = "rceccatelli-eth-z-rich"
 
 RANDOM_SONG_LABEL = "Random excerpt from the validation set"
+DEFAULT_SONG = "Billy Joel — Just The Way You Are"  # song shown on page load
 PROMPT_LENGTH = 256
 MAX_STEPS = 100_000
 
@@ -302,7 +303,105 @@ def _load_song_choices() -> list[str]:
     return [RANDOM_SONG_LABEL] + sorted(cleaned.keys())
 
 
+# ── User uploads ─────────────────────────────────────────────────────────────
+# A song a visitor uploads becomes one more entry for the three lookups below
+# (_song_midi_path, _tokens_for_song, _song_start_hint); everything downstream
+# (full-song waveform, click-to-start, preview, generation) works unchanged.
+# The label carries a hash of the file's bytes, so two uploads never share a
+# label and every cache keyed by the song name stays correct. Uploads are only
+# added to the uploader's own dropdown (a per-session gr.update), never to the
+# shared song list, and their files and renders live in a temp dir, not in the
+# persistent song cache.
+UPLOAD_PREFIX = "Your upload: "
+_UPLOAD_MAX_BYTES = 2 * 1024 * 1024
+_UPLOAD_MAX_SECONDS = 20 * 60
+_UPLOAD_KEEP = 200  # oldest uploads are forgotten past this many
+_UPLOAD_DIR = Path(tempfile.gettempdir()) / f"tonic_demo_uploads_{os.getuid()}"
+_uploads: dict[str, str] = {}  # label -> MIDI path (insertion-ordered: oldest first)
+
+
+def _wipe_upload_dir():
+    """Delete uploaded files and their cached renders when the demo stops. (Gradio's own
+    copy under its temp dir and the per-clip render dirs are not covered.)"""
+    import shutil
+    shutil.rmtree(_UPLOAD_DIR, ignore_errors=True)
+
+
+import atexit
+_wipe_upload_dir()  # leftovers from a run that was killed before atexit ran
+atexit.register(_wipe_upload_dir)
+
+
+def _is_upload(song_title: str | None) -> bool:
+    return bool(song_title) and song_title in _uploads
+
+
+def _song_shown(song_title: str) -> str:
+    """Song name for status text: an upload's label without its hash suffix."""
+    return song_title.rsplit(" · ", 1)[0] if _is_upload(song_title) else song_title
+
+
+def register_upload(file_path: str | None, my_uploads: list[str] | None):
+    """Validate an uploaded MIDI file and select it in this visitor's dropdown.
+    `my_uploads` is this session's earlier uploads (gr.State), kept in the list.
+    Returns (song_dd update, upload status markdown, updated my_uploads)."""
+    import hashlib
+    import shutil
+    if not file_path:
+        return gr.update(), "", my_uploads
+    my_uploads = [u for u in (my_uploads or []) if u in _uploads]
+    src = Path(file_path)
+    try:
+        if src.suffix.lower() not in (".mid", ".midi"):
+            return gr.update(), "⚠️ Please upload a MIDI file (.mid or .midi).", my_uploads
+        if src.stat().st_size > _UPLOAD_MAX_BYTES:
+            return gr.update(), "⚠️ This file is too large (2 MB at most).", my_uploads
+        data = src.read_bytes()
+        digest = hashlib.sha1(data).hexdigest()[:12]
+        name = re.sub(r"\s+", " ", src.stem.replace("_", " ")).strip()[:60] or "song"
+        label = f"{UPLOAD_PREFIX}{name} · {digest}"
+        if label not in _uploads:
+            import symusic
+            try:
+                score = symusic.Score(str(src)).to("second")
+            except Exception:
+                return gr.update(), "⚠️ This file could not be read as MIDI.", my_uploads
+            n_notes = sum(len(t.notes) for t in score.tracks)
+            if n_notes == 0:
+                return gr.update(), "⚠️ This file has no notes.", my_uploads
+            if score.end() > _UPLOAD_MAX_SECONDS:
+                return gr.update(), "⚠️ This song is too long (20 minutes at most).", my_uploads
+            if all(t.is_drum for t in score.tracks if t.notes):
+                return gr.update(), "⚠️ This file only has drums. The models need some pitched notes to continue.", my_uploads
+            _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            dest = _UPLOAD_DIR / f"{digest}.mid"
+            shutil.copyfile(src, dest)
+            try:
+                n_tokens = len(_get_tokenizer("REMI").encode(str(dest)).ids)
+            except Exception:
+                dest.unlink(missing_ok=True)
+                return gr.update(), "⚠️ This file could not be converted into tokens.", my_uploads
+            if n_tokens < PROMPT_LENGTH:
+                dest.unlink(missing_ok=True)
+                return gr.update(), "⚠️ This song is too short to use as a prompt. Try a longer one.", my_uploads
+            _uploads[label] = str(dest)
+            while len(_uploads) > _UPLOAD_KEEP:
+                old_label, old_path = next(iter(_uploads.items()))
+                del _uploads[old_label]
+                _song_tokens_cache.pop(old_path, None)
+                Path(old_path).unlink(missing_ok=True)
+        my_uploads = [label] + [u for u in my_uploads if u != label]
+        # (shown name, value): the dropdown hides the hash, the value keeps it.
+        upload_choices = [(_song_shown(u), u) for u in my_uploads]
+        return (gr.update(choices=_SONG_CHOICES[:1] + upload_choices + _SONG_CHOICES[1:], value=label),
+                f"Added **{name}**. Pick where the prompt starts below.", my_uploads)
+    except Exception as e:
+        return gr.update(), f"❌ Upload failed: {e}", my_uploads
+
+
 def _song_midi_path(song_title: str) -> str | None:
+    if _is_upload(song_title):
+        return _uploads[song_title]
     prompts = _prompts()
     entry = prompts.get(_song_display_to_raw.get(song_title, song_title))
     if entry is None:
@@ -392,7 +491,14 @@ def _tokens_for_song(song_title: str, prompts: dict) -> list[int]:
     REMI JSON — the only tokenizer with a per-song pre-tokenized cache.
     Anticipation songs are tokenized fresh, locally, around the requested
     start time instead (see _anticipation_window_tokens); a whole-song
-    tokenization isn't safe for it (see that function's docstring)."""
+    tokenization isn't safe for it (see that function's docstring).
+    Uploads have no token file and are tokenized live (identical ids to the
+    stored files: checked on two dataset songs, 2026-11-16)."""
+    if _is_upload(song_title):
+        midi_path = _uploads[song_title]
+        if midi_path not in _song_tokens_cache:
+            _song_tokens_cache[midi_path] = list(_get_tokenizer("REMI").encode(midi_path).ids)
+        return _song_tokens_cache[midi_path]
     entry = prompts[_song_display_to_raw.get(song_title, song_title)]
     midi_path = entry["path"] if isinstance(entry, dict) else entry
     token_path = _local(midi_path.replace("/midi/", "/tokens/miditok/").replace(".mid", ".json"))
@@ -403,6 +509,8 @@ def _tokens_for_song(song_title: str, prompts: dict) -> list[int]:
 
 
 def _song_start_hint(song_title: str, prompts: dict) -> int:
+    if _is_upload(song_title):
+        return 0
     entry = prompts.get(_song_display_to_raw.get(song_title, song_title), {})
     return entry.get("start_token", 0) if isinstance(entry, dict) else 0
 
@@ -1089,7 +1197,9 @@ def _song_cache_base(kind: str, tokenizer_type: str, song_choice: str, extra: st
     import hashlib
     version = _FULL_SONG_CACHE_VERSION if kind == "full" else _SONG_CACHE_VERSION
     key = hashlib.sha1(f"v{version}::{tokenizer_type}::{song_choice}::{extra}".encode()).hexdigest()[:20]
-    return _SONG_CACHE_DIR / kind / tokenizer_type / key
+    # Uploads are cached in the temp upload dir, never in the persistent song cache.
+    root = _UPLOAD_DIR / "cache" if _is_upload(song_choice) else _SONG_CACHE_DIR
+    return root / kind / tokenizer_type / key
 
 
 def _cache_read_json(path: Path):
@@ -1614,7 +1724,7 @@ def preview_prompt(tokenizer_type: str, song_choice: str, start_offset: float):
                     "the full song above is the original recording." if _is_triplet_tokenizer(tokenizer_type) else "")
             if _is_seconds_mode(tokenizer_type, song_choice):
                 actual_seconds = _token_index_to_seconds(tokenizer_type, song_choice, token_offset)
-                return (f'▶ **Now previewing** “{song_choice}”, from **{actual_seconds:.1f} s** '
+                return (f'▶ **Now previewing** “{_song_shown(song_choice)}”, from **{actual_seconds:.1f} s** '
                         f'· {_TOK_PRETTY.get(tokenizer_type, tokenizer_type)} format{flat}')
             return f"▶ **Now previewing** {label} · {_TOK_PRETTY.get(tokenizer_type, tokenizer_type)} format{flat}"
 
@@ -3197,6 +3307,19 @@ body, gradio-app {
 .gradio-container .opt-acc .nice-slider [data-testid="block-info"] + *, .gradio-container .opt-acc .nice-slider .info { color: #8a90a3 !important; font-size: 12.5px !important; }
 /* Song picker: a search field. */
 .gradio-container .song-pick input { font-size: 15px !important; }
+.upload-row { align-items: center !important; gap: 12px !important; margin: 4px 0 6px !important; }
+/* Same pill as "+ Add variant" (.variant-actions button.add-variant). */
+.gradio-container .upload-row button.upload-btn { flex: 0 0 auto !important; min-width: 0 !important; width: auto !important;
+  white-space: nowrap; border-radius: 999px !important; font-size: 13.5px !important; font-weight: 600 !important;
+  padding: 9px 18px !important; box-shadow: none !important; background: rgba(139,124,255,0.08) !important;
+  color: #c7bfff !important; border: 1px dashed rgba(139,124,255,0.6) !important; }
+.gradio-container .upload-row button.upload-btn:hover:not(:disabled) { background: rgba(139,124,255,0.16) !important; color: #fff !important; }
+.gradio-container .upload-row .upload-help-wrap { flex: 0 0 auto !important; width: auto !important; min-width: 0 !important;
+  background: transparent !important; border: 0 !important; padding: 0 !important; overflow: visible !important; }
+.upload-help { position: relative; display: flex; align-items: center; }
+.gradio-container .upload-row { overflow: visible !important; }
+.gradio-container .upload-row .upload-status { flex: 1 1 auto; min-width: 0; background: transparent !important;
+  border: 0 !important; padding: 0 2px !important; font-size: 13.5px !important; }
 .gradio-container .song-pick .wrap-inner { padding-left: 34px !important; position: relative;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239298ab' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") !important;
     background-repeat: no-repeat !important; background-position: 12px center !important; background-size: 16px !important; }
@@ -3816,15 +3939,31 @@ def build_ui():
             elem_classes="section-sub",
         )
         song_dd = gr.Dropdown(choices=_SONG_CHOICES,
-                               value=_SONG_CHOICES[1] if len(_SONG_CHOICES) > 1 else RANDOM_SONG_LABEL,
+                               value=(DEFAULT_SONG if DEFAULT_SONG in _SONG_CHOICES else
+                                      _SONG_CHOICES[1] if len(_SONG_CHOICES) > 1 else RANDOM_SONG_LABEL),
                                label="Song", filterable=True, elem_classes="song-pick",
                                info=f"{len(_SONG_CHOICES) - 1} songs, sorted A–Z. Click and type to search by "
                                     "title or artist; the first entry is a random excerpt instead.")
+        my_uploads_state = gr.State([])
+        with gr.Row(elem_classes="upload-row"):
+            upload_btn = gr.UploadButton("+ Upload your own MIDI file", file_types=[".mid", ".midi"],
+                                         file_count="single", type="filepath", size="sm", variant="secondary",
+                                         scale=0, elem_classes="upload-btn")
+            gr.HTML('<div class="upload-help"><details class="qhelp">'
+                    '<summary aria-label="Which files can I upload?" title="Which files can I upload?">?</summary>'
+                    '<div class="qhelp-box"><b>Which files work?</b> MIDI files (.mid or .midi), up to 2 MB. '
+                    'The models read notes, not sound, so MP3 or WAV files won\'t work.<br>'
+                    '<b>No MIDI file?</b> Many songs are available as free MIDI files online. You can also '
+                    'export one from MuseScore, GarageBand or most music software.</div></details></div>',
+                    elem_classes="upload-help-wrap")
+            # Hidden until there is a message: an empty Markdown block showed as a blank bar.
+            upload_status = gr.Markdown("", visible=False, elem_classes="upload-status")
         gr.HTML('<div class="hint copyright-note"><span class="i">i</span><span>Non-commercial research demo. '
                 'The songs come from a public MIDI dataset, and their rights stay with their owners. They are '
                 'used here only to show how the models continue music. If you hold the rights to a song and '
                 'want it removed, write to <a href="mailto:rebeccaceccatelli@gmail.com">'
-                'rebeccaceccatelli@gmail.com</a>.</span></div>')
+                'rebeccaceccatelli@gmail.com</a>. Only upload music you have the right to use. Your upload '
+                'is visible only to you and is never added to the song list.</span></div>')
 
         # ClickAudio's own `visible` prop can't be toggled after mount — a bug
         # in this custom component's build (confirmed via a headless-browser
@@ -4366,6 +4505,16 @@ def build_ui():
         start_offset.release(preview_prompt, inputs=[tokenizer_dd, song_dd, start_offset],
                               outputs=[preview_audio, preview_status], **_PROMPT_CHAIN_CONCURRENCY)
 
+        # Selecting the upload in song_dd fires song_dd.change, which runs the
+        # usual chain above (full-song waveform, start point, preview).
+        def _register_upload_ui(file_path, my_uploads):
+            dd, msg, my_uploads = register_upload(file_path, my_uploads)
+            return dd, gr.update(value=msg, visible=bool(msg)), my_uploads
+
+        upload_btn.upload(_register_upload_ui, inputs=[upload_btn, my_uploads_state],
+                          outputs=[song_dd, upload_status, my_uploads_state],
+                          **_PROMPT_CHAIN_CONCURRENCY)
+
         full_song_audio.seek(
             apply_seek_as_start, inputs=[tokenizer_dd, song_dd],
             outputs=[start_offset, preview_status],
@@ -4512,6 +4661,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     app = build_ui()
+    # scancel sends SIGTERM, which would skip atexit (and so the upload wipe).
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     # Gradio's own default (when .queue() is never called) caps the WHOLE
     # app at concurrency_limit=1 globally — meaning any lightweight UI event
     # (add/remove/copy variant, dropdown changes, etc.) silently queues
