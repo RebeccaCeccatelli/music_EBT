@@ -17,7 +17,6 @@ from data.mus.symbolic.dataloaders.custom_music_dataloader import CustomMusicDat
 from data.mus.symbolic.dataloaders.giga_midi_miditok_dataset import GigaMIDIMiditokDataset
 
 from model.mus.ebt_symbolic import EBT_MUS_SYMB
-from model.mus.ebt_neural import EBT_MUS_NEUR
 from model.mus.baseline_llama_transformer import Baseline_Llama_Transformer_MUS
 from model.mus.baseline_hf_gpt2_transformer import Baseline_HF_GPT2_Transformer_MUS
 
@@ -48,15 +47,15 @@ class ModelTrainer(L.LightningModule):
         else:
             self.hparams.update(vars(hparams))
         # self.txt_logger = hparams.txt_logger if txt_logger == None else txt_logger # txt_logger is no longer supported
-        if self.hparams.modality not in ["MUS_SYMB", "MUS_NEUR"]:
-            raise ValueError(f"Only music modalities (MUS_SYMB, MUS_NEUR) are supported, got {self.hparams.modality}. "
-                             "Image/text/video support lives at the `thesis-submission` tag.")
-        if self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+        if self.hparams.modality != "MUS_SYMB":
+            raise ValueError(f"Only symbolic music (MUS_SYMB) is supported, got {self.hparams.modality}. "
+                             "Image/text/video code and the MUS_NEUR placeholder live at the `thesis-submission` tag.")
+        if self.hparams.modality == "MUS_SYMB":
             if "execution_mode" in self.hparams and "save_generation_logs_dir" in self.hparams and self.hparams.execution_mode == "inference":
                 print("setting up music inference logger")
                 self.infer_logger = text_logger.setup_jsonl_logger(log_filename = "generations.jsonl", base_log_dir=self.hparams.save_generation_logs_dir)
                 self.num_generated_music_samples = 0
-        if self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+        if self.hparams.modality == "MUS_SYMB":
             # Music-specific setup handled in model initialization
             pass
 
@@ -69,19 +68,17 @@ class ModelTrainer(L.LightningModule):
             if self.hparams.model_name == "ebt":
                 if self.hparams.modality == "MUS_SYMB":
                     self.model = EBT_MUS_SYMB(self.hparams)
-                elif self.hparams.modality == "MUS_NEUR":
-                    self.model = EBT_MUS_NEUR(self.hparams)
                 else:
                     raise ValueError(f"Modality: {self.hparams.modality} not supported as a base model trainer model as of now")
             elif self.hparams.model_name == "baseline_transformer":
                 raise ValueError(f"For music, use --model_name baseline_llama_transformer or baseline_hf_gpt2_transformer instead of baseline_transformer")
             elif self.hparams.model_name == "baseline_llama_transformer":
-                if self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+                if self.hparams.modality == "MUS_SYMB":
                     self.model = Baseline_Llama_Transformer_MUS(self.hparams)
                 else:
                     raise ValueError(f"Baseline Llama transformer only supported for music modalities, got {self.hparams.modality}")
             elif self.hparams.model_name == "baseline_hf_gpt2_transformer":
-                if self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+                if self.hparams.modality == "MUS_SYMB":
                     self.model = Baseline_HF_GPT2_Transformer_MUS(self.hparams)
                 else:
                     raise ValueError(f"Baseline HF GPT2 transformer only supported for music modalities, got {self.hparams.modality}")
@@ -264,7 +261,7 @@ class ModelTrainer(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         if self.hparams.execution_mode == "inference":  
-            if self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+            if self.hparams.modality == "MUS_SYMB":
                 # Unified music generation (handles EBT, Baseline Llama, and Baseline HF GPT2)
                 outputs = generate_music(self.model, batch, self.hparams)
                 
@@ -306,7 +303,7 @@ class ModelTrainer(L.LightningModule):
         return self.model(batch)
 
     def configure_optimizers(self): # this is a PL hook that returns optimizer and lr scheduler
-        if self.hparams.modality in ["MUS_SYMB", "MUS_NEUR"]:
+        if self.hparams.modality == "MUS_SYMB":
             return self.configure_optimizers_mus()
         else:
             raise NotImplementedError(f"Modality {self.hparams.modality} does not have configure optimizers supported yet")
@@ -442,12 +439,6 @@ class ModelTrainer(L.LightningModule):
                 image = self.to_pil(value)
                 wandb_image = wandb.Image(image, mode="RGB")
                 self.logger.experiment.log({f'{phase}_{key}': wandb_image})
-
-            elif 'audio' in key and self.hparams.modality == "MUS_NEUR":  # audio for neural music modality only
-                audio_np = value.cpu().numpy() if isinstance(value, torch.Tensor) else value
-                sample_rate = self.hparams.get('audio_sample_rate', 16000)
-                wandb_audio = wandb.Audio(audio_np, sample_rate=sample_rate)
-                self.logger.experiment.log({f'{phase}_{key}': wandb_audio})
 
             elif isinstance(value, torch.Tensor) and value.numel() > 1: # histogram
                 self.logger.experiment.log({f"{phase}_{key}": wandb.Histogram(value.detach().cpu())})

@@ -139,12 +139,9 @@ def main(args):
         args.num_transformer_blocks = args.override_transformer_blocks
     
     # hparam assertion sanity checks
-    if args.modality in ["MUS_SYMB", "MUS_NEUR"]:
+    if args.modality == "MUS_SYMB":
         # Music-specific validation handled in model initialization
-        if args.modality == "MUS_SYMB":
-            assert args.embedding_dim != 0, "must define embedding dim for symbolic music models"
-        elif args.modality == "MUS_NEUR":
-            assert args.embedding_dim != 0, "must define embedding dim for neural music models"
+        assert args.embedding_dim != 0, "must define embedding dim for symbolic music models"
 
     else:
         raise ValueError(f"please add support for modality {args.modality}")
@@ -280,7 +277,7 @@ def main(args):
         trainer = set_trainer(args, wandb_logger, checkpoint_callback, stage = "test")
         model_trainer.model.eval()
         trainer.test(model_trainer)
-        if args.modality in ["MUS_SYMB", "MUS_NEUR"]:
+        if args.modality == "MUS_SYMB":
             # Music-specific post-test evaluation can be added here
             pass
 
@@ -352,7 +349,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--run_name", help="run name, should include model name in it for important runs (see slurm scripts)", default="test")
 
-    parser.add_argument("--modality", help="is the model being trained for NLP, VID, IMG, MUS_SYMB (symbolic MIDI), or MUS_NEUR (neural audio). default is VID, and most of the code has been designed around VID.", type=str, default="VID")
+    parser.add_argument("--modality", help="is the model being trained for NLP, VID, IMG, or MUS_SYMB (symbolic MIDI). Only MUS_SYMB is supported now; the other values and the VID default are kept because old checkpoints store them.", type=str, default="VID")
 
     parser.add_argument("--model_name", help="model_type/name", default='ebt')
 
@@ -411,7 +408,7 @@ if __name__ == '__main__':
     # MUS SPECIFIC PARAMS ########################################################################################################################
     parser.add_argument("--tokenizer_type", help="[Music] tokenizer type for symbolic music (e.g., REMI, MIDI-VAE)", type=str, default="REMI")
     parser.add_argument("--tokenizer_config_path", help="[Music] path to tokenizer config file for symbolic music", type=str, default=None)
-    parser.add_argument("--audio_sample_rate", help="[Music] sample rate for neural music audio (Hz)", type=int, default=16000)
+    parser.add_argument("--audio_sample_rate", help="[Music] sample rate for neural music audio (Hz); unused since MUS_NEUR was removed, kept for old checkpoints", type=int, default=16000)
 
     #EBT MCMC ##################################################################
     #NOTE in the code we broadly refer to MCMC/optimization interchangeably, although in the paper we refrain from the term mcmc

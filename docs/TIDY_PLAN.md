@@ -57,8 +57,8 @@ and 4 training setups).
 - [x] `docs/CODE_INFO.md` and `docs/CODE_STRUCTURE.md` updated for the music-only repo.
 - [ ] **Left as is on purpose:** `train_model.py` argparse flags for image/video/text. Old checkpoints store
       these hparams; removing them gains nothing and risks breaking loading.
-- [ ] **Your decision:** `MUS_NEUR` / `model/mus/ebt_neural.py` (neural-audio EBT, never used in the thesis):
-      keep as future work or remove.
+- [x] `MUS_NEUR` / `model/mus/ebt_neural.py` (neural-audio EBT placeholder, never used in the thesis): removed
+      2026-11-17; what it was is noted in `docs/CODE_STRUCTURE.md` ("Other").
 
 ## 4. Code: optional reorganisation (decided against, 2026-11-16)
 

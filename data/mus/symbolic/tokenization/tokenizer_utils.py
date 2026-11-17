@@ -1,5 +1,5 @@
 """
-Shared tokenizer loading utilities for symbolic and neural music models.
+Shared tokenizer loading utilities for the symbolic music models.
 
 Supports:
 - miditok: REMI, Octuple, CPWord, MuMIDI

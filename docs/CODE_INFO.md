@@ -1,6 +1,6 @@
 > **Note:** This file was inherited from the original forked codebase and is no longer fully up to date. Directory structure, requirements files, and some referenced scripts have changed. Use it as a general orientation guide only.
 >
-> **Removed (2026-11-16):** the image, text and video code (`data/`, `inference/`, `model/` and `job_scripts/` subfolders `img/`, `nlp/`, `vid/`), `utils/dataloader_debugger.py` and the `--debug_dataloader` mode; then `model/diffusion/`, `model/diffusion_transformer.py`, `model/bi_ebt_adaln.py` and the image/video/text helpers in `model/model_utils.py`. The repository is now music-only; the full original code is at the `thesis-submission` tag.
+> **Removed (2026-11-16):** the image, text and video code (`data/`, `inference/`, `model/` and `job_scripts/` subfolders `img/`, `nlp/`, `vid/`), `utils/dataloader_debugger.py` and the `--debug_dataloader` mode; then `model/diffusion/`, `model/diffusion_transformer.py`, `model/bi_ebt_adaln.py` and the image/video/text helpers in `model/model_utils.py`; on 2026-11-17 the unused `MUS_NEUR` (neural-audio) placeholder (see [CODE_STRUCTURE.md](CODE_STRUCTURE.md#other)). The repository is now music-only; the full original code is at the `thesis-submission` tag.
 
 ## Tools/Software being used
 

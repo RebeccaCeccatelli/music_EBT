@@ -33,7 +33,6 @@ checkpoint ──► inference/mus/generate_music.py ──► tokens ──► 
 | `ebt_symbolic.py` | **Tonic**, the EBT for symbolic music: energy over (context, candidate distribution) with MCMC refinement steps |
 | `baseline_llama_transformer.py` | Autoregressive Llama-style baseline |
 | `baseline_hf_gpt2_transformer.py` | Autoregressive GPT-2 baseline (HuggingFace) |
-| `ebt_neural.py` | Placeholder for a neural-audio EBT (unused) |
 
 ## Data and tokenization: `data/mus/symbolic/`
 
@@ -121,3 +120,12 @@ How it works: [attribute_control_mechanism.md](attribute_control_mechanism.md).
 - `utils/`: metrics, logging, data debugging
 - Local only, git-ignored: `eth-mit-master-thesis/` (thesis LaTeX, its own repo), `papers/`, `listening/`, `logs/`, `wandb/`
 - Upstream EBT text / image / video code (`model/{nlp,img,vid,diffusion}`, `data/{nlp,img,vid}`, `inference/{nlp,img,vid}`, `job_scripts/{nlp,img,vid}`): removed from `main` on 2026-11-16, available at the `thesis-submission` tag
+- Neural-audio EBT (`--modality MUS_NEUR`): removed from `main` on 2026-11-17, available at the `thesis-submission` tag.
+  It was only ever a placeholder, never trained or used in the thesis: an empty class `EBT_MUS_NEUR` in
+  `model/mus/ebt_neural.py` (a TODO saying it would likely follow the upstream video EBT), an empty
+  `data/mus/neural/` package with no dataloader, a draft 8-GPU job script `job_scripts/mus/pretrain/ebt_neural.sh`
+  (audio at 16 kHz, context 1024, W&B project `mus_neural_pretrain`), and a branch in
+  `base_model_trainer.log_metrics` that logged `audio` tensors to W&B. The idea, for future work: an EBT
+  that generates audio (raw or encoded waveforms) instead of symbolic tokens, along the lines of the
+  upstream video EBT. To restart it, use the upstream EBT video code (also at the tag) as the template.
+  The `--audio_sample_rate` flag is still in `train_model.py` because old checkpoints store it.
