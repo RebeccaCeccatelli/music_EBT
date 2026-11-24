@@ -106,7 +106,7 @@ Ant pitch_register verified: MAE 0.009, r 0.970 on real windows (old one: r 0.09
          low-λ accuracy and probably part of the up/down crossover.
 3. Demo freeze: **done 2026-10-08.** Defaults to the final checkpoints
    ("★ final"), and regressors are paired with the selected EBT checkpoint
-   (warns otherwise). Remaining: a final click-through of the running demo. 2026-11-16: copyright/takedown notice under the song picker; visitors can upload their own MIDI (per-session, temp storage, validated; tested headless, not yet in the browser).
+   (warns otherwise). Remaining: a final click-through of the running demo. 2026-11-16: copyright/takedown notice under the song picker; visitors can upload their own MIDI (per-session, temp storage, validated; tested headless, not yet in the browser). 2026-11-24: fixed λ slider stuck loading while dragging the target (diary).
    2026-11-11: EBT λ defaults = by-ear operating points (thesis_findings/2026-11-11_ear_operating_points.md; pitch register λ follows target direction).
    Static listening page: `demo/showcase/` (GitHub Pages via
    `.github/workflows/showcase-pages.yml`). Remaining: listen through the

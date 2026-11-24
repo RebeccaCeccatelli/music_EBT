@@ -4118,8 +4118,12 @@ def build_ui():
                                       outputs=[_row_target, _row_lambda]).then(
                         _sigma_annotation_html, inputs=[_row_attr, _row_target], outputs=[_row_sigma],
                     )
+                    # Target .change fires on every drag tick: keep only the latest
+                    # pending event and no loading overlay, else a drag queues
+                    # dozens of round-trips and the λ slider sits under a spinner.
+                    _TARGET_DRAG = dict(show_progress="hidden", trigger_mode="always_last")
                     _row_target.change(_sigma_annotation_html, inputs=[_row_attr, _row_target],
-                                        outputs=[_row_sigma])
+                                        outputs=[_row_sigma], **_TARGET_DRAG)
 
                     # EBT pitch register: switch λ between the by-ear "down" and
                     # "up" operating points as the target crosses the reference.
@@ -4136,7 +4140,7 @@ def build_ui():
                                         inputs=[_row_attr, _row_method, tokenizer_dd, _row_target, _row_lambda,
                                                 ebt_ref_velocity_state, ebt_ref_duration_state,
                                                 ebt_ref_pitch_register_state],
-                                        outputs=[_row_lambda])
+                                        outputs=[_row_lambda], **_TARGET_DRAG)
 
                     def _make_row_tokenizer_change():
                         def _on_row_tokenizer_change(tokenizer_type, current_attr, method_key):
